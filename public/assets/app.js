@@ -81,8 +81,8 @@ async function getQuotes(syms) {
 /* ================= Bevakningslista (sparas i webbläsaren) ================= */
 const WKEY = 'mk-bevakning-v3';
 const NKEY = 'mk-namn';
-const DEFAULT_WATCH = ['AAPL', 'MSFT', 'NVDA', 'VOLV-B.ST', 'EVO.ST'];
-const DEFAULT_NAMES = { AAPL: 'Apple', MSFT: 'Microsoft', NVDA: 'Nvidia', 'VOLV-B.ST': 'Volvo B', 'EVO.ST': 'Evolution', SPY: 'SPDR S&P 500 ETF', 'SAAB-B.ST': 'Saab B', 'INVE-B.ST': 'Investor B' };
+const DEFAULT_WATCH = ['AAPL', 'MSFT', 'NVDA', 'SPY', 'EWD'];
+const DEFAULT_NAMES = { AAPL: 'Apple', MSFT: 'Microsoft', NVDA: 'Nvidia', TSLA: 'Tesla', SPY: 'SPDR S&P 500 ETF', EWD: 'iShares MSCI Sweden ETF', QQQ: 'Invesco QQQ', 'VOLV-B.ST': 'Volvo B', 'EVO.ST': 'Evolution', 'SAAB-B.ST': 'Saab B', 'INVE-B.ST': 'Investor B' };
 const readLS = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fb; } catch { return fb; } };
 const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* privat läge */ } };
 const getWatch = () => { const v = readLS(WKEY, null); return Array.isArray(v) ? v : DEFAULT_WATCH.slice(); };
@@ -148,7 +148,7 @@ const footer = (extra = '') =>
 /* ================= Nyheter ================= */
 async function getNews(region) {
   const r = await api(`/api/news?region=${region}`, 5 * 60e3);
-  if (r?.items) return { ok: true, hamtad: r.hamtad, items: r.items.map(prepNews) };
+  if (r?.items) return { ok: true, hamtad: r.hamtad, items: r.items.map(prepNews), ingenAtkomst: !!r.ingenAtkomst };
   return { ok: false, error: r, items: [] };
 }
 const prepNews = (n) => ({ ...n, tidTxt: when(n.datum), bolagTxt: (n.bolag || []).join(', ') });
@@ -160,7 +160,7 @@ const sourceLink = (n) => `<a href="${esc(n.lank)}" target="_blank" rel="noopene
 
 function frontNewsHTML(data, region) {
   if (!data.ok) return `<div class="empty">${esc(errText(data.error))}</div>`;
-  if (!data.items.length) return `<div class="empty">${region === 'se' ? 'Inga nyheter om svenska bolag från datakällan just nu. Finnhubs gratisplan har främst nyheter om amerikanska bolag.' : 'Inga nyheter just nu.'}</div>`;
+  if (!data.items.length) return `<div class="empty">${region === 'se' ? 'Nyheter om svenska bolag ingår inte i Finnhubs gratisplan. Med en betalplan hos Finnhub dyker de upp här automatiskt.' : 'Inga nyheter just nu.'}</div>`;
   const [top, ...rest] = data.items;
   return `
   <div class="split" style="align-items:stretch">
@@ -249,7 +249,7 @@ async function mountOversikt() {
     const r = region;
     const data = await getNews(r);
     if (r !== region || !$('#frontnews')) return;
-    if (auto && r === 'se' && data.ok && !data.items.length) { region = 'world'; setTab('world'); return draw(false); }
+    if (auto && r === 'se' && !data.items.length) { region = 'world'; setTab('world'); return draw(false); }
     $('#frontnews').innerHTML = frontNewsHTML(data, r);
     $('#news-status').innerHTML = data.ok && data.items.length ? liveTag(data.hamtad) : '';
   };
@@ -290,9 +290,9 @@ const POPULAR = [
   { sym: 'AAPL', namn: 'Apple', typ: 'Aktie' },
   { sym: 'NVDA', namn: 'Nvidia', typ: 'Aktie' },
   { sym: 'MSFT', namn: 'Microsoft', typ: 'Aktie' },
-  { sym: 'VOLV-B.ST', namn: 'Volvo B', typ: 'Aktie' },
-  { sym: 'EVO.ST', namn: 'Evolution', typ: 'Aktie' },
-  { sym: 'SPY', namn: 'SPDR S&P 500 ETF', typ: 'ETF' }
+  { sym: 'TSLA', namn: 'Tesla', typ: 'Aktie' },
+  { sym: 'SPY', namn: 'SPDR S&P 500 ETF', typ: 'ETF' },
+  { sym: 'EWD', namn: 'iShares MSCI Sweden ETF', typ: 'ETF' }
 ];
 
 function viewSok(params) {
@@ -517,7 +517,7 @@ function mountNyheter() {
           ${n.text ? `<p>${esc(n.text)}</p>` : ''}
           <div class="meta">${sourceLink(n)}</div>
         </div>
-      </article>`).join('') || `<div class="empty">${region === 'se' ? 'Inga nyheter om svenska bolag från datakällan just nu. Finnhubs gratisplan har främst nyheter om amerikanska bolag.' : 'Inga nyheter just nu.'}</div>`;
+      </article>`).join('') || `<div class="empty">${region === 'se' ? 'Nyheter om svenska bolag ingår inte i Finnhubs gratisplan. Med en betalplan hos Finnhub dyker de upp här automatiskt.' : 'Inga nyheter just nu.'}</div>`;
   };
   const load = async () => {
     const r = region; $('#newslist').innerHTML = loading('Hämtar nyheter …');

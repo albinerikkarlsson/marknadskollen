@@ -23,6 +23,10 @@ export default async (req) => {
     } else {
       raw = await finnhub('/news', { category: 'general' });
     }
+    // Gratisplanen nekar nyheter om utländska bolag (403). Det är inget fel, bara tomt.
+    if (!raw.length && err?.status === 403) {
+      return cached({ region: one ? null : region, items: [], ingenAtkomst: true, hamtad: new Date().toISOString() }, 3600);
+    }
     if (!raw.length && err) throw err;
     const seen = new Set();
     const items = [];
