@@ -120,6 +120,20 @@ function viewOversikt() {
     <h1 class="title">Börsen i dag</h1>
   </div>
 
+  <section class="stack" style="gap:14px" aria-labelledby="nyh-h">
+    <div class="section-head" style="align-items:center">
+      <h2 class="section" id="nyh-h">Senaste nyheterna</h2>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="tabs" role="tablist" aria-label="Region">
+          <button role="tab" data-oregion="se" aria-selected="true">Sverige</button>
+          <button role="tab" data-oregion="world" aria-selected="false">Världen</button>
+        </div>
+        <a class="more" href="/nyheter" data-link>Alla nyheter →</a>
+      </div>
+    </div>
+    <div id="frontnews">${frontNews('se')}</div>
+  </section>
+
   <div class="grid g3">
     ${heroes.map((h, i) => `
       <div class="card hero ${i === 0 ? 'dark rings' : ''}">
@@ -156,14 +170,6 @@ function viewOversikt() {
   </div>
 
   <div class="grid g2">
-    <section class="card" aria-labelledby="vik-h">
-      <div class="section-head"><h2 class="section" id="vik-h" style="font-size:22px">Viktigast just nu</h2><a class="more" href="/nyheter" data-link>Alla nyheter →</a></div>
-      ${nyheter.se.slice(0, 3).map((n) => `
-        <div class="row-link" style="align-items:flex-start">
-          <span class="small muted num" style="width:46px;flex:none;padding-top:2px">${esc(n.tid)}</span>
-          <span class="grow"><span style="display:block;font-weight:500">${esc(n.rubrik)}</span><span class="small muted">${esc(n.kalla)}</span></span>
-        </div>`).join('')}
-    </section>
     <section class="card" aria-labelledby="mina-h">
       <div class="section-head"><h2 class="section" id="mina-h" style="font-size:22px">Mina aktier</h2><a class="more" href="/bevakning" data-link>Bevakning →</a></div>
       ${mine.length ? mine.map((m) => `
@@ -175,6 +181,40 @@ function viewOversikt() {
     </section>
   </div>
   ${footer()}`;
+}
+
+// Nyhetsblocket högst upp på startsidan: största nyheten som svart kort, resten i en lista
+function frontNews(region) {
+  const [top, ...rest] = nyheter[region];
+  const tonePill = (t) => `<span class="pill ${t === 'Positiv' ? 'up' : t === 'Negativ' ? 'down' : ''}">${esc(t)}</span>`;
+  return `
+  <div class="split" style="align-items:stretch">
+    <article class="wide card dark rings stack" style="gap:12px;padding:26px;justify-content:space-between;min-height:260px">
+      <div class="stack" style="gap:12px">
+        <div class="meta" style="color:rgba(255,255,255,0.62)"><span class="pill inv">${esc(top.kat)}</span><span class="num">${esc(top.tid)}</span><span>${esc(top.kalla)}</span></div>
+        <h3 style="margin:0;font-size:clamp(24px,3vw,32px);font-weight:400;letter-spacing:-0.01em;line-height:1.2">${esc(top.rubrik)}</h3>
+        <p style="margin:0;color:rgba(255,255,255,0.75);font-size:15.5px;max-width:620px">${esc(top.text)}</p>
+      </div>
+      <div class="meta" style="color:rgba(255,255,255,0.62)">${tonePill(top.ton)}<span>${esc(top.bolag)}</span></div>
+    </article>
+    <div class="narrow card" style="padding:10px 22px">
+      ${rest.slice(0, 4).map((n) => `
+        <a class="row-link" href="/nyheter" data-link style="align-items:flex-start;gap:14px">
+          <span class="news-icon" style="width:40px;height:40px;border-radius:14px">${svg(n.ikon, 18)}</span>
+          <span class="grow"><span style="display:block;font-weight:500;line-height:1.35">${esc(n.rubrik)}</span><span class="small muted num">${esc(n.tid)} · ${esc(n.kalla)}</span></span>
+        </a>`).join('')}
+    </div>
+  </div>`;
+}
+
+function mountOversikt() {
+  const tabs = document.querySelector('[aria-labelledby="nyh-h"] .tabs');
+  tabs.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-oregion]');
+    if (!b) return;
+    tabs.querySelectorAll('[data-oregion]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+    $('#frontnews').innerHTML = frontNews(b.dataset.oregion);
+  });
 }
 
 function viewSok(params) {
@@ -536,7 +576,7 @@ function viewNotFound() {
 function route() {
   const path = location.pathname.replace(/\/+$/, '') || '/';
   const params = new URLSearchParams(location.search);
-  if (path === '/') return { active: 'oversikt', title: 'Översikt', html: viewOversikt() };
+  if (path === '/') return { active: 'oversikt', title: 'Översikt', html: viewOversikt(), mount: mountOversikt };
   if (path === '/sok') return { active: 'sok', title: 'Sök och riskkoll', html: viewSok(params), mount: () => mountSok(params) };
   if (path === '/nyheter') return { active: 'nyheter', title: 'Nyheter', html: viewNyheter(), mount: mountNyheter };
   if (path === '/bevakning') return { active: 'bevakning', title: 'Bevakning', html: viewBevakning(), mount: mountBevakning };

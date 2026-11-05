@@ -207,5 +207,7 @@ tbody tr:hover { background: #FAFAFB; }
   .nav-link svg { display: none; }
   .main { padding: 18px 16px 40px; gap: 20px; }
   .searchbar { flex: 1 1 100%; }
+  .ticker { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; white-space: nowrap; margin: 0 -16px; padding: 10px 16px; }
+  .ticker::-webkit-scrollbar { display: none; }
   .score { font-size: 52px; }
 }
