@@ -4,10 +4,10 @@ Aktiesök med riskkoll och börsnyheter på enkel svenska. All data är riktig o
 
 ## Sidor
 - `/` Översikt: marknaden, senaste nyheterna och mina aktier
-- `/sok` Sök och riskkoll (`?q=volvo`, `?s=AAPL`)
+- `/sok` Sök (`?q=volvo`). Ett klick på en träff öppnar bolagssidan.
 - `/nyheter` Nyheter, Världen och Sverige
 - `/bevakning` Mina aktier (sparas i webbläsaren tills inloggning finns)
-- `/bolag/:ticker` Bolagssida, t.ex. `/bolag/AAPL` eller `/bolag/VOLV-B.ST`
+- `/bolag/:ticker` Bolagssida med allt samlat: kurs, nyckeltal, affärsidé, historia, kursutveckling, nyheter och full riskkoll. T.ex. `/bolag/AAPL`
 
 ## Teknik
 - `public/` statisk sida i ren HTML, CSS och JavaScript, utan byggsteg.
@@ -16,7 +16,8 @@ Aktiesök med riskkoll och börsnyheter på enkel svenska. All data är riktig o
   - `/api/quote?s=A,B` senaste kurser
   - `/api/stock?s=` kurs, bolagsfakta, nyckeltal och riskkoll
   - `/api/news?region=world|se` eller `?s=` nyheter
-- Svaren mellanlagras i Netlifys CDN (kurser 1 min, bolag och nyheter 15 min, sök 1 dygn) så att API-gränsen räcker.
+  - `/api/about?s=` affärsidé, historia och fakta från Wikipedia (CC BY-SA 4.0) och Wikidata, svenska i första hand
+- Svaren mellanlagras i Netlifys CDN (kurser 1 min, bolag och nyheter 15 min, sök 1 dygn, bolagsbeskrivning 1 vecka) så att API-gränsen räcker.
 
 ## Datakälla
 Finnhub (samma data som finsheet.io). Nyckeln ligger i Netlify som miljövariabeln `DATA_API_KEY`, aldrig i koden.

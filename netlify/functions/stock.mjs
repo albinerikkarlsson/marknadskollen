@@ -22,6 +22,7 @@ export default async (req) => {
       throw firstErr || new ApiError(404, 'ingen data för ' + sym);
     }
 
+    const bors = shortExchange(p?.exchange);
     const cur = p?.currency || (sym.endsWith('.ST') ? 'SEK' : 'USD');
     const kurs = q?.kurs ?? null;
     const namn = p?.name || sym;
@@ -34,7 +35,7 @@ export default async (req) => {
       ['Börsvärde', mcapM ? money(mcapM * 1e6, cur) : null],
       ['52 veckor', hi && lo ? `${fmt(lo)}–${fmt(hi)}` : null],
       ['Bransch', p?.finnhubIndustry ? (SECTOR_SV[p.finnhubIndustry] || p.finnhubIndustry) : null],
-      ['Börs', p?.exchange || null],
+      ['Börs', bors],
       ['Land', p?.country ? (COUNTRY_SV[p.country] || p.country) : null],
       ['Noterad', p?.ipo ? String(p.ipo).slice(0, 4) : null]
     ].filter((x) => x[1]);
@@ -42,7 +43,7 @@ export default async (req) => {
     return cached({
       sym, namn,
       kort: sym.split('.')[0].split('-')[0].slice(0, 4),
-      lista: [p?.exchange, p?.finnhubIndustry ? (SECTOR_SV[p.finnhubIndustry] || p.finnhubIndustry) : null].filter(Boolean).join(' · '),
+      lista: [bors, p?.finnhubIndustry ? (SECTOR_SV[p.finnhubIndustry] || p.finnhubIndustry) : null].filter(Boolean).join(' · '),
       logo: p?.logo || null,
       webb: p?.weburl || null,
       valuta: cur, kurs, d1: q?.d1 ?? null, kursTid: q?.tid || null,
@@ -58,6 +59,21 @@ export default async (req) => {
   } catch (e) { return fail(e); }
 };
 
+// Finnhub skriver t.ex. "NASDAQ NMS - GLOBAL MARKET". Vi visar kortare namn.
+function shortExchange(x) {
+  if (!x) return null;
+  const u = x.toUpperCase();
+  if (u.includes('STOCKHOLM')) return 'Nasdaq Stockholm';
+  if (u.includes('NASDAQ')) return 'Nasdaq';
+  if (u.includes('NEW YORK STOCK EXCHANGE') || u === 'NYSE') return 'NYSE';
+  if (u.includes('OTC')) return 'OTC';
+  if (u.includes('OSLO')) return 'Oslo Børs';
+  if (u.includes('COPENHAGEN')) return 'Nasdaq Köpenhamn';
+  if (u.includes('HELSINKI')) return 'Nasdaq Helsingfors';
+  if (u.includes('LONDON')) return 'London';
+  if (u.includes('XETRA') || u.includes('FRANKFURT')) return 'Frankfurt';
+  return x.length > 22 ? x.split(' - ')[0] : x;
+}
 const fmt = (n) => n.toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const SECTOR_SV = {
   'Technology': 'Teknik', 'Semiconductors': 'Halvledare', 'Software': 'Mjukvara', 'Machinery': 'Maskiner', 'Banking': 'Bank',

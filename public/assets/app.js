@@ -285,7 +285,7 @@ async function mountOversikt() {
   }).join('') : '<p class="muted">Du bevakar inga aktier än. Sök på ett bolag och tryck på Bevaka.</p>';
 }
 
-/* ================= Sök och riskkoll ================= */
+/* ================= Sök ================= */
 const POPULAR = [
   { sym: 'AAPL', namn: 'Apple', typ: 'Aktie' },
   { sym: 'NVDA', namn: 'Nvidia', typ: 'Aktie' },
@@ -300,90 +300,62 @@ function viewSok(params) {
   return `
   ${topbar([['Översikt', '/'], ['Sök och riskkoll', '/sok']], false)}
   <div class="stack" style="gap:6px">
-    <span class="eyebrow">Sök på en aktie, fond eller ETF och se hela riskbilden på enkel svenska</span>
+    <span class="eyebrow">Sök på en aktie, fond eller ETF. Du får affärsidé, historia, kursutveckling och en full riskkoll på samma sida.</span>
     <h1 class="title">Sök och riskkoll</h1>
   </div>
   <form class="big-search" role="search" data-sokform>
     ${svg('search', 22, '#6B6F76')}
     <label class="sr-only" for="sokq">Sök bolag eller ticker</label>
-    <input id="sokq" name="q" type="search" value="${esc(q)}" placeholder="Skriv ett bolag eller en ticker, till exempel Apple eller VOLV-B" autocomplete="off">
+    <input id="sokq" name="q" type="search" value="${esc(q)}" placeholder="Skriv ett bolag eller en ticker, till exempel Apple eller NVDA" autocomplete="off">
     <button class="btn" type="submit">Sök</button>
   </form>
-  <div class="split">
-    <section class="narrow stack" style="gap:10px" aria-label="Sökresultat" id="results"></section>
-    <section class="wide stack" style="gap:18px" aria-live="polite" id="panel"></section>
-  </div>
-  <details class="card" style="padding:18px 22px">
-    <summary style="cursor:pointer;font-weight:500">Så räknar vi fram riskkollen</summary>
-    <div class="stack" style="gap:6px;margin-top:12px;color:var(--ink-2);font-size:14px">
-      <span><b>Kurssvängningar:</b> beta (hur mycket aktien rör sig jämfört med börsen) och årets spann. Beta under 0,8 är låg, 0,8–1,3 medel, över 1,3 hög. Har kursen mer än fördubblats från årets botten räknas det som hög.</span>
-      <span><b>Skulder:</b> skulder delat med eget kapital. Under 0,5 låg, 0,5–1,5 medel, över 1,5 hög.</span>
-      <span><b>Värdering:</b> P/E-tal. Under 20 låg, 20–35 medel, över 35 hög. Ingen vinst räknas som hög.</span>
-      <span><b>Lönsamhet:</b> vinstmarginal. Över 8 % låg, 0–8 % medel, förlust hög.</span>
-      <span><b>Handel:</b> hur mycket som handlas per dag. Över 50 miljoner låg, 5–50 miljoner medel, under 5 miljoner hög.</span>
-      <span><b>Storlek:</b> börsvärde. Över 10 miljarder låg, 1–10 miljarder medel, under 1 miljard hög.</span>
-      <span>Varje del får 1–3 poäng. Medelvärdet räknas om till 1–10, och har bolaget minst en del med hög risk blir totalen minst 4. En total visas bara när minst tre delar finns. Det är en egen förenkling, inte ett råd.</span>
-    </div>
-  </details>
+  <section class="stack" style="gap:12px" aria-live="polite">
+    <span class="label-up" id="results-label">Populära</span>
+    <div class="results-grid" id="results"></div>
+  </section>
   ${footer()}`;
 }
 
-function resultsHTML(list, selSym, label) {
-  return `
-    <span class="small muted">${esc(label)}</span>
-    ${list.map((r) => `
-      <button type="button" class="result" data-pick="${esc(r.sym)}" data-namn="${esc(r.namn)}" aria-pressed="${r.sym === selSym}">
-        <span class="avatar">${esc(short(r.sym))}</span>
-        <span style="flex:1;min-width:0"><span style="display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.namn)}</span><span class="small muted">${esc([r.typ, r.sym].filter(Boolean).join(' · '))}</span></span>
-      </button>`).join('')}`;
+function resultsHTML(list) {
+  return list.map((r) => `
+    <a class="result" href="/bolag/${encodeURIComponent(r.sym)}" data-link data-namn="${esc(r.namn)}" data-sym="${esc(r.sym)}">
+      <span class="avatar">${esc(short(r.sym))}</span>
+      <span style="flex:1;min-width:0"><span style="display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.namn)}</span><span class="small muted">${esc([r.typ, r.sym].filter(Boolean).join(' · '))}</span></span>
+      <span class="muted" aria-hidden="true">→</span>
+    </a>`).join('');
 }
 
-function priceBlock(s, big = 36) {
-  if (s.saknarKurs) return `<span class="muted" style="font-size:18px">Kurs saknas</span><span class="small faint" style="flex-basis:100%">Datakällan har ingen kurs för ${esc(s.sym)} med nuvarande plan. Finnhubs gratisplan har bara amerikanska kurser.</span>`;
-  return `<span class="num" style="font-size:${big}px;letter-spacing:-0.02em">${kr(s.kurs)} <span class="muted" style="font-size:16px">${esc(cur(s.valuta))}</span></span>
-    ${s.d1 != null ? `<span class="pill ${tone(s.d1)}">${pct(s.d1)} i dag</span>` : ''}
-    ${liveTag(s.kursTid || s.hamtad)}`;
-}
-
-function panelHTML(s) {
-  const watched = getWatch().includes(s.sym);
-  const lvl = lvlOf(s.poang);
-  return `
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
-      <div class="card stack" style="padding:24px">
-        <div style="display:flex;align-items:center;gap:14px">
-          <span class="avatar" style="width:52px;height:52px">${esc(s.kort)}</span>
-          <div style="min-width:0"><div class="small muted">${esc(s.lista || s.sym)}</div><h2 class="section" style="font-size:28px;line-height:1.15">${esc(s.namn)}</h2></div>
-        </div>
-        <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">${priceBlock(s)}</div>
-        <p style="margin:0;color:#55595F">${esc(s.sammanfattning)}</p>
-        <div class="chips">
-          <a class="btn ghost small" href="/bolag/${encodeURIComponent(s.sym)}" data-link>Öppna bolagssidan →</a>
-          <button class="btn small ${watched ? 'ghost' : ''}" type="button" data-watch="${esc(s.sym)}" data-namn="${esc(s.namn)}" aria-pressed="${watched}">${watched ? 'Bevakas ✓' : 'Bevaka'}</button>
-        </div>
-      </div>
-      <div class="card dark rings stack" style="padding:24px;gap:14px">
-        <span class="small muted">Total risk</span>
-        ${s.poang != null ? `
-        <div style="display:flex;align-items:baseline;gap:8px"><span class="score num">${s.poang}</span><span class="muted" style="font-size:18px">/ 10</span></div>
-        <span class="pill inv" style="align-self:flex-start">${LV[lvl].t} risk</span>
-        <div class="meter" role="img" aria-label="Risk ${s.poang} av 10">${Array.from({ length: 10 }, (_, i) => `<span class="${i < s.poang ? 'on' : ''}"></span>`).join('')}</div>
-        <span class="small faint">Ett högre tal betyder mer risk, inte att aktien är dålig.</span>` : '<span style="font-size:18px">För lite data för att räkna en total.</span>'}
-        ${s.saknarNyckeltal ? '<span class="small faint">Datakällan har inga nyckeltal för det här värdepappret med nuvarande plan.</span>' : ''}
-      </div>
-    </div>
-    ${s.faktorer?.length ? `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px">
-      ${s.faktorer.map(([namn, l, varde, text]) => `
-        <div class="card factor">
-          <div class="hd"><span>${esc(namn)}</span><span class="pill ${LV[l].c}">${LV[l].t}</span></div>
-          <span class="small muted num">${esc(varde)}</span>
-          <span style="font-size:14px;color:var(--ink-2)">${esc(text)}</span>
-        </div>`).join('')}
-    </div>` : ''}
-    ${s.tank?.length ? `<div class="card stack" style="gap:10px">
-      <span style="font-weight:500">Tänk på det här</span>
-      ${s.tank.map((t) => `<span style="display:flex;gap:10px;font-size:14px;color:var(--ink-2)"><span aria-hidden="true">→</span>${esc(t)}</span>`).join('')}
-    </div>` : ''}`;
+function mountSok(params) {
+  let q = params.get('q') || '';
+  let timer;
+  const label = (t) => { $('#results-label').textContent = t; };
+  const show = (list, t) => { label(t); $('#results').innerHTML = resultsHTML(list); };
+  const search = async () => {
+    const term = q.trim();
+    history.replaceState(null, '', '/sok' + (term ? '?q=' + encodeURIComponent(term) : ''));
+    if (term.length < 2) { show(POPULAR, 'Populära'); return; }
+    label('Söker …');
+    const res = await api('/api/search?q=' + encodeURIComponent(term), 60 * 60e3);
+    if (term !== q.trim() || !$('#results')) return;
+    if (res?.results) {
+      show(res.results, res.results.length ? `${res.results.length} träffar för "${term}"` : `Inga träffar för "${term}"`);
+      if (!res.results.length) $('#results').innerHTML = '<div class="empty">Prova bolagets namn eller ticker, till exempel "AAPL" eller "Investor".</div>';
+    } else {
+      label('Sökningen fungerar inte just nu');
+      $('#results').innerHTML = `<div class="empty">${esc(errText(res))}</div>`;
+    }
+  };
+  if (q) search(); else show(POPULAR, 'Populära');
+  const input = $('#sokq');
+  input.addEventListener('input', () => { q = input.value; clearTimeout(timer); timer = setTimeout(search, 350); });
+  $('[data-sokform]').addEventListener('submit', (e) => {
+    e.preventDefault(); q = input.value; clearTimeout(timer);
+    // Enter med en träff i listan går direkt till första bolaget
+    const first = $('#results a.result');
+    if (first && q.trim().length >= 2 && $('#results-label').textContent.includes('träff')) { rememberName(first.dataset.sym, first.dataset.namn); navigate(first.getAttribute('href')); return; }
+    search();
+  });
+  $('#results').addEventListener('click', (e) => { const a = e.target.closest('a.result'); if (a) rememberName(a.dataset.sym, a.dataset.namn); });
 }
 
 async function getStock(sym) {
@@ -392,76 +364,6 @@ async function getStock(sym) {
   if (s.namn === sym) { s.namn = nameOf(sym); if (s.sammanfattning) s.sammanfattning = s.sammanfattning.replace(sym + ':', s.namn + ':'); }
   else rememberName(sym, s.namn);
   return s;
-}
-
-function mountSok(params) {
-  let q = params.get('q') || '';
-  let sel = params.get('s') || '';
-  let list = POPULAR;
-  let seq = 0;
-
-  const showPanel = async () => {
-    const el = $('#panel'); if (!el) return;
-    if (!sel) { el.innerHTML = '<div class="empty">Välj ett värdepapper i listan för att se riskkollen.</div>'; return; }
-    const my = ++seq;
-    el.innerHTML = loading('Räknar fram riskkollen …');
-    const s = await getStock(sel);
-    if (my !== seq || !$('#panel')) return;
-    if (!s.error) { el.innerHTML = panelHTML(s); return; }
-    // Saknas data för en utländsk ticker: föreslå samma bolag noterat i USA om det finns i träfflistan
-    const alt = sel.includes('.') ? list.find((r) => !r.sym.includes('.')) : null;
-    el.innerHTML = `<div class="empty stack" style="gap:10px"><span>Det gick inte att hämta data för ${esc(nameOf(sel))} (${esc(sel)}). ${esc(errText(s.error))}</span>
-      ${alt ? `<button type="button" class="btn small" data-pick="${esc(alt.sym)}" data-namn="${esc(alt.namn)}" style="align-self:flex-start">Visa ${esc(alt.namn)} (${esc(alt.sym)}), noterad i USA</button>` : ''}</div>`;
-  };
-  const showList = (label) => { $('#results').innerHTML = resultsHTML(list, sel, label); };
-  const syncUrl = () => {
-    const p = new URLSearchParams(); if (q.trim()) p.set('q', q.trim()); if (sel) p.set('s', sel);
-    history.replaceState(null, '', '/sok' + (p.toString() ? '?' + p : ''));
-  };
-  let timer;
-  const search = async () => {
-    const term = q.trim();
-    if (term.length < 2) { list = POPULAR; showList('Populära'); return; }
-    $('#results').innerHTML = '<span class="small muted">Söker …</span>';
-    const res = await api('/api/search?q=' + encodeURIComponent(term), 60 * 60e3);
-    if (term !== q.trim()) return;
-    if (res?.results) {
-      list = res.results;
-      if (list.length && !list.some((r) => r.sym === sel)) { sel = list[0].sym; rememberName(sel, list[0].namn); syncUrl(); showPanel(); }
-      showList(list.length ? `${list.length} träffar` : 'Inga träffar');
-      if (!list.length) $('#results').insertAdjacentHTML('beforeend', '<div class="empty">Inga träffar. Prova bolagets namn eller ticker, till exempel "AAPL" eller "Investor".</div>');
-    } else {
-      list = [];
-      $('#results').innerHTML = `<div class="empty">Sökningen fungerar inte just nu. ${esc(errText(res))}</div>`;
-    }
-  };
-
-  if (!sel && !q) sel = 'AAPL';
-  if (q) search(); else showList('Populära');
-  showPanel();
-
-  const input = $('#sokq');
-  input.addEventListener('input', () => { q = input.value; clearTimeout(timer); timer = setTimeout(() => { search(); syncUrl(); }, 350); });
-  $('[data-sokform]').addEventListener('submit', (e) => { e.preventDefault(); q = input.value; clearTimeout(timer); search(); syncUrl(); });
-  $('#results').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-pick]'); if (!b) return;
-    sel = b.dataset.pick; rememberName(sel, b.dataset.namn);
-    $('#results').querySelectorAll('[data-pick]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-    syncUrl(); showPanel();
-    if (window.innerWidth < 900) $('#panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
-  $('#panel').addEventListener('click', (e) => {
-    const pick = e.target.closest('[data-pick]');
-    if (pick) {
-      sel = pick.dataset.pick; rememberName(sel, pick.dataset.namn);
-      $('#results').querySelectorAll('[data-pick]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pick === sel)));
-      syncUrl(); showPanel(); return;
-    }
-    const w = e.target.closest('[data-watch]'); if (!w) return;
-    const on = toggleWatch(w.dataset.watch, w.dataset.namn);
-    w.textContent = on ? 'Bevakas ✓' : 'Bevaka'; w.setAttribute('aria-pressed', String(on)); w.classList.toggle('ghost', on);
-    refreshNav('sok');
-  });
 }
 
 /* ================= Nyheter ================= */
@@ -565,7 +467,7 @@ async function mountBevakning() {
       <div class="card ${i === 0 ? 'dark rings' : ''} stack" style="gap:8px">
         <span class="pill ${i === 0 ? 'inv' : tone(a.q.d1)}" style="align-self:flex-start">Larm · rörelse över 3 %</span>
         <span style="font-size:17px;font-weight:500">${esc(a.namn)} är ${a.q.d1 < 0 ? 'ner' : 'upp'} ${pct(Math.abs(a.q.d1), 1).replace('+', '')} i dag</span>
-        <a class="small" href="/sok?s=${encodeURIComponent(a.sym)}" data-link>Se riskkollen →</a>
+        <a class="small" href="/bolag/${encodeURIComponent(a.sym)}" data-link>Se riskkollen →</a>
       </div>`).join('')}</div>` : '';
     $('#watchtable').innerHTML = `<div class="table-wrap"><table>
       <thead><tr><th scope="col">Värdepapper</th><th scope="col" class="r">Kurs</th><th scope="col" class="r">I dag</th><th scope="col">Riskkoll</th><th scope="col"><span class="sr-only">Ta bort</span></th></tr></thead>
@@ -574,7 +476,7 @@ async function mountBevakning() {
           <td><a class="co" href="/bolag/${encodeURIComponent(r.sym)}" data-link><span class="avatar">${esc(short(r.sym))}</span><span><span style="display:block;font-weight:500">${esc(r.namn)}</span><span class="small muted">${esc(r.sym)}</span></span></a></td>
           <td class="r num">${r.q.kurs != null ? kr(r.q.kurs) : '<span class="faint">saknas</span>'}</td>
           <td class="r"><span class="pill ${tone(r.q.d1)}">${r.q.d1 != null ? pct(r.q.d1, 1) : '–'}</span></td>
-          <td><a href="/sok?s=${encodeURIComponent(r.sym)}" data-link class="small">Visa →</a></td>
+          <td><a href="/bolag/${encodeURIComponent(r.sym)}" data-link class="small">Visa →</a></td>
           <td class="r"><button class="btn ghost small" type="button" data-unwatch="${esc(r.sym)}" aria-label="Sluta bevaka ${esc(r.namn)}">Ta bort</button></td>
         </tr>`).join('')}</tbody>
     </table></div>
@@ -587,10 +489,18 @@ async function mountBevakning() {
   draw();
 }
 
-/* ================= Bolagssida ================= */
+/* ================= Bolagssida med riskkoll ================= */
+function priceBlock(s, big = 40) {
+  if (s.saknarKurs) return `<div class="stack" style="gap:4px;align-items:flex-end;text-align:right"><span class="muted" style="font-size:20px">Kurs saknas</span><span class="small faint" style="max-width:300px">Datakällan har ingen kurs för ${esc(s.sym)} med nuvarande plan. Finnhubs gratisplan har bara amerikanska kurser.</span></div>`;
+  return `<div class="stack" style="gap:8px;align-items:flex-end">
+    <span class="num" style="font-size:${big}px;letter-spacing:-0.02em;line-height:1">${kr(s.kurs)} <span class="muted" style="font-size:16px">${esc(cur(s.valuta))}</span></span>
+    <span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${s.d1 != null ? `<span class="pill ${tone(s.d1)}">${pct(s.d1)} i dag</span>` : ''}${liveTag(s.kursTid || s.hamtad)}</span>
+  </div>`;
+}
+
 function viewBolag(sym) {
   return `
-  ${topbar([['Bevakning', '/bevakning'], [nameOf(sym), '/bolag/' + encodeURIComponent(sym)]])}
+  ${topbar([['Sök', '/sok'], [nameOf(sym), '/bolag/' + encodeURIComponent(sym)]])}
   <div id="bolag">${loading('Hämtar bolaget …')}</div>
   ${footer()}`;
 }
@@ -598,68 +508,143 @@ function viewBolag(sym) {
 function bolagHTML(s) {
   const watched = getWatch().includes(s.sym);
   const max = Math.max(...(s.perf || []).map((p) => Math.abs(p[1])), 1);
-  const worst = (s.faktorer || []).filter((f) => f[1] === 3).map((f) => f[0]);
   const lvl = lvlOf(s.poang);
   return `
   <div class="stack" style="gap:24px">
-  <div class="section-head" style="align-items:flex-end;gap:20px">
-    <div style="display:flex;align-items:center;gap:16px;min-width:0">
-      <span class="avatar" style="width:64px;height:64px;font-size:14px">${esc(s.kort)}</span>
-      <div style="min-width:0"><div class="eyebrow">${esc(s.lista || s.sym)}</div><h1 class="title">${esc(s.namn)}</h1></div>
+    <header class="co-head">
+      <div style="display:flex;align-items:center;gap:18px;min-width:0">
+        <span class="avatar" style="width:68px;height:68px;font-size:14px">${esc(s.kort)}</span>
+        <div style="min-width:0">
+          <span class="label-up">${esc(s.lista || s.sym)}</span>
+          <h1 class="title" style="margin:2px 0 6px">${esc(s.namn)}</h1>
+          <div class="chips"><span class="pill outline num">${esc(s.sym)}</span>${s.webb ? `<a class="pill outline" href="${esc(s.webb)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Webbplats ${svg('ext', 13)}</a>` : ''}
+            <button class="btn small ${watched ? 'ghost' : ''}" type="button" data-watch="${esc(s.sym)}" data-namn="${esc(s.namn)}" aria-pressed="${watched}">${watched ? 'Bevakas ✓' : 'Bevaka'}</button></div>
+        </div>
+      </div>
+      ${priceBlock(s)}
+    </header>
+
+    ${s.fakta?.length ? `<div class="statbar card">${s.fakta.map(([k, v]) => `<div class="stat"><span class="small muted">${esc(k)}</span><span class="num">${esc(v)}</span></div>`).join('')}</div>` : ''}
+
+    <div class="co-grid">
+      <div class="co-main stack" style="gap:24px">
+        <section class="card co-section" aria-labelledby="om-h" id="about">
+          <span class="label-up">Om bolaget</span>
+          <h2 class="section" id="om-h">Affärsidé</h2>
+          <div id="about-body">${loading('Hämtar affärsidé och historia …')}</div>
+        </section>
+
+        <section class="card co-section" aria-labelledby="utv-h">
+          <span class="label-up">Aktien</span>
+          <div class="section-head"><h2 class="section" id="utv-h">Så har kursen gått</h2><span class="small muted">Förändring i procent</span></div>
+          <div class="stack" style="gap:12px">
+          ${(s.perf || []).map(([label, v]) => {
+            const w = (Math.abs(v) / max) * 50;
+            return `<div class="perf-row"><span class="muted">${esc(label)}</span>
+              <div class="perf-track" role="img" aria-label="${esc(label)} ${pct(v)}"><span class="zero"></span><span class="perf-bar ${v < 0 ? 'neg' : ''}" style="${v < 0 ? `right:50%;width:${w}%` : `left:50%;width:${w}%`}"></span></div>
+              <span class="num" style="text-align:right;color:var(--${tone(v)})">${pct(v)}</span></div>`;
+          }).join('') || '<span class="muted">Datakällan har ingen kursutveckling för det här värdepappret.</span>'}
+          </div>
+          <span class="small faint">Historisk utveckling säger inget om framtiden.</span>
+        </section>
+
+        <section class="card co-section" aria-labelledby="bnyh-h">
+          <span class="label-up">Nyheter</span>
+          <h2 class="section" id="bnyh-h">Senaste om ${esc(s.namn)}</h2>
+          <div id="bolagnews">${loading('Hämtar nyheter …')}</div>
+        </section>
+      </div>
+
+      <aside class="co-side" aria-label="Riskkoll">
+        <section class="card dark rings stack" style="gap:14px;padding:26px" aria-labelledby="risk-h">
+          <span class="label-up" style="color:rgba(255,255,255,0.6)">Riskkoll</span>
+          ${s.poang != null ? `
+          <div style="display:flex;align-items:baseline;gap:8px"><span class="score num">${s.poang}</span><span class="muted" style="font-size:18px">/ 10</span>
+            <span class="pill inv" style="margin-left:auto;align-self:center">${LV[lvl].t} risk</span></div>
+          <div class="meter" role="img" aria-label="Risk ${s.poang} av 10">${Array.from({ length: 10 }, (_, i) => `<span class="${i < s.poang ? 'on' : ''}"></span>`).join('')}</div>` : '<span style="font-size:20px">För lite data för att räkna en total.</span>'}
+          <h2 class="sr-only" id="risk-h">Riskkoll</h2>
+          <p style="margin:0;color:rgba(255,255,255,0.85);font-size:15px">${esc(s.sammanfattning)}</p>
+          ${s.saknarNyckeltal ? '<span class="small faint">Datakällan har inga nyckeltal för det här värdepappret med nuvarande plan.</span>' : ''}
+          <span class="small faint">Ett högre tal betyder mer risk, inte att aktien är dålig.</span>
+        </section>
+
+        ${s.faktorer?.length ? `<section class="card" style="padding:8px 22px" aria-label="Riskens delar">
+          ${s.faktorer.map(([namn, l, varde, text]) => `
+            <div class="factor-row">
+              <span style="font-weight:500">${esc(namn)}</span>
+              <span class="pill ${LV[l].c}">${LV[l].t}</span>
+              <span class="small muted num" style="grid-column:1/-1">${esc(varde)}</span>
+              <span style="grid-column:1/-1;font-size:14px;color:var(--ink-2)">${esc(text)}</span>
+            </div>`).join('')}
+        </section>` : ''}
+
+        ${s.tank?.length ? `<section class="card stack" style="gap:10px" aria-label="Tänk på det här">
+          <span class="label-up">Tänk på det här</span>
+          ${s.tank.map((t) => `<span style="display:flex;gap:10px;font-size:14px;color:var(--ink-2)"><span aria-hidden="true">→</span>${esc(t)}</span>`).join('')}
+        </section>` : ''}
+
+        <details class="card" style="padding:16px 22px">
+          <summary style="cursor:pointer;font-weight:500;font-size:14px">Så räknar vi fram riskkollen</summary>
+          <div class="stack" style="gap:6px;margin-top:12px;color:var(--ink-2);font-size:13.5px">
+            <span><b>Kurssvängningar:</b> beta och årets spann. Beta under 0,8 låg, 0,8–1,3 medel, över 1,3 hög.</span>
+            <span><b>Skulder:</b> skuld delat med eget kapital. Under 0,5 låg, 0,5–1,5 medel, över 1,5 hög.</span>
+            <span><b>Värdering:</b> P/E. Under 20 låg, 20–35 medel, över 35 hög. Ingen vinst räknas som hög.</span>
+            <span><b>Lönsamhet:</b> vinstmarginal. Över 8 % låg, 0–8 % medel, förlust hög.</span>
+            <span><b>Handel:</b> omsättning per dag. Över 50 miljoner låg, 5–50 miljoner medel, under 5 miljoner hög.</span>
+            <span><b>Storlek:</b> börsvärde. Över 10 miljarder låg, 1–10 miljarder medel, under 1 miljard hög.</span>
+            <span>Medelvärdet räknas om till 1–10. Minst en hög del ger minst 4. En egen förenkling, inte ett råd.</span>
+          </div>
+        </details>
+      </aside>
     </div>
-    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
-      ${priceBlock(s, 40)}
-      <button class="btn ${watched ? 'ghost' : ''}" type="button" data-watch="${esc(s.sym)}" data-namn="${esc(s.namn)}" aria-pressed="${watched}">${watched ? 'Bevakas ✓' : 'Bevaka'}</button>
-    </div>
-  </div>
-  ${s.fakta?.length ? `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px">
-    ${s.fakta.map(([k, v]) => `<div class="card" style="padding:14px 16px;border-radius:18px"><div class="small muted">${esc(k)}</div><div class="num" style="font-size:16px">${esc(v)}</div></div>`).join('')}
-  </div>` : ''}
-  <div class="split" style="align-items:stretch">
-    <section class="wide card stack" style="gap:16px" aria-labelledby="utv-h">
-      <div class="section-head"><h2 class="section" id="utv-h" style="font-size:22px">Så har kursen gått</h2><span class="small muted">Förändring i procent</span></div>
-      ${(s.perf || []).map(([label, v]) => {
-        const w = (Math.abs(v) / max) * 50;
-        return `<div class="perf-row"><span class="muted">${esc(label)}</span>
-          <div class="perf-track" role="img" aria-label="${esc(label)} ${pct(v)}"><span class="zero"></span><span class="perf-bar ${v < 0 ? 'neg' : ''}" style="${v < 0 ? `right:50%;width:${w}%` : `left:50%;width:${w}%`}"></span></div>
-          <span class="num" style="text-align:right;color:var(--${tone(v)})">${pct(v)}</span></div>`;
-      }).join('') || '<span class="muted">Datakällan har ingen kursutveckling för det här värdepappret.</span>'}
-      <span class="small faint">Historisk utveckling säger inget om framtiden.</span>
-    </section>
-    <section class="narrow card dark rings stack" style="gap:14px" aria-labelledby="risk-h">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 class="section" id="risk-h" style="font-size:22px">Riskkoll</h2>${s.poang != null ? `<span class="pill inv">${s.poang}/10 · ${LV[lvl].t} risk</span>` : ''}</div>
-      <p style="margin:0;color:rgba(255,255,255,0.85)">${esc(s.sammanfattning)}</p>
-      ${worst.length ? `<span class="small muted">Högst risk: ${esc(worst.join(', '))}</span>` : ''}
-      <a class="btn white" href="/sok?s=${encodeURIComponent(s.sym)}" data-link style="align-self:flex-start">Full riskkontroll →</a>
-    </section>
-  </div>
-  <section class="stack" aria-labelledby="bnyh-h">
-    <div class="section-head"><h2 class="section" id="bnyh-h">Nyheter om ${esc(s.namn)}</h2></div>
-    <div id="bolagnews">${loading('Hämtar nyheter …')}</div>
-  </section>
   </div>`;
+}
+
+function aboutHTML(a, s) {
+  if (!a || a.error || a.saknas) {
+    return `<p class="muted" style="margin:0">${a?.error ? esc(errText(a)) : 'Vi hittade ingen beskrivning av det här värdepappret. För fonder och mindre bolag saknas den ofta.'}</p>`;
+  }
+  const facts = a.fakta || [];
+  return `<div class="stack" style="gap:20px">
+    ${a.affarside ? `<p class="lead">${esc(a.affarside)}</p>` : ''}
+    ${facts.length ? `<dl class="facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
+    ${a.historia?.length ? `<div class="stack" style="gap:10px"><h3 class="sub">Historia</h3><div class="prose">${a.historia.map((p) => `<p>${esc(p)}</p>`).join('')}</div></div>` : ''}
+    <p class="small faint" style="margin:0">${a.sprak === 'en' ? 'Texten finns bara på engelska än. ' : ''}Källa: ${a.url ? `<a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">Wikipedia</a> (CC BY-SA 4.0)` : 'Wikipedia'} och <a href="${esc(a.wikidata)}" target="_blank" rel="noopener noreferrer">Wikidata</a>.</p></div>`;
 }
 
 async function mountBolag(sym) {
   const s = await getStock(sym);
   const el = $('#bolag'); if (!el) return;
-  if (s.error) { el.innerHTML = `<div class="card stack" style="max-width:600px"><h1 class="title" style="font-size:32px">Hittade ingen data</h1><p class="muted" style="margin:0">Det gick inte att hämta ${esc(sym)}. ${esc(errText(s.error))}</p><a class="btn" href="/sok" data-link style="align-self:flex-start">Till sök</a></div>`; return; }
+  if (s.error) {
+    el.innerHTML = `<div class="card stack" style="max-width:640px;padding:28px"><span class="label-up">${esc(sym)}</span><h1 class="title" style="font-size:34px">${esc(nameOf(sym))}</h1><p class="muted" style="margin:0">${esc(errText(s.error))}</p><div class="chips" id="alt"><a class="btn ghost" href="/sok" data-link>Till sök</a></div></div>`;
+    // Svenska bolag saknas på gratisplanen. Föreslå samma bolag noterat i USA om det finns.
+    if (sym.includes('.')) {
+      const term = nameOf(sym).replace(/\b(AB|ser\.?|Shs|[AB])\b|-[AB]\b|\(publ\)/gi, ' ').replace(/\s+/g, ' ').trim().split(' ')[0];
+      const r = term && term.length > 1 ? await api('/api/search?q=' + encodeURIComponent(term), 60 * 60e3) : null;
+      const alt = r?.results?.find((x) => !x.sym.includes('.'));
+      if (alt && $('#alt')) $('#alt').insertAdjacentHTML('afterbegin', `<a class="btn" href="/bolag/${encodeURIComponent(alt.sym)}" data-link>Visa ${esc(alt.namn)} (${esc(alt.sym)}), noterad i USA</a>`);
+    }
+    return;
+  }
   document.title = `${s.namn} · Marknadskollen`;
+  const crumb = $('.crumbs .here'); if (crumb) crumb.textContent = s.namn;
   el.innerHTML = bolagHTML(s);
   el.addEventListener('click', (e) => {
     const w = e.target.closest('[data-watch]'); if (!w) return;
     const on = toggleWatch(w.dataset.watch, w.dataset.namn);
     w.textContent = on ? 'Bevakas ✓' : 'Bevaka'; w.setAttribute('aria-pressed', String(on)); w.classList.toggle('ghost', on);
-    refreshNav('bevakning');
+    refreshNav('sok');
   });
+  // Affärsidé/historia och nyheter hämtas parallellt
+  api('/api/about?s=' + encodeURIComponent(sym), 60 * 60e3).then((a) => { const b = $('#about-body'); if (b) b.innerHTML = aboutHTML(a, s); });
   const n = await api('/api/news?s=' + encodeURIComponent(sym), 5 * 60e3);
   const box = $('#bolagnews'); if (!box) return;
   const items = (n?.items || []).map(prepNews);
-  box.innerHTML = items.length ? `<div class="card" style="padding:8px 22px">${items.slice(0, 8).map((it) => `
+  box.innerHTML = items.length ? `<div>${items.slice(0, 6).map((it) => `
     <div class="row-link" style="align-items:flex-start">
-      <span class="small muted num" style="width:92px;flex:none;padding-top:2px">${esc(it.tidTxt)}</span>
+      <span class="small muted num" style="width:96px;flex:none;padding-top:2px">${esc(it.tidTxt)}</span>
       <span class="grow"><span style="display:block;font-weight:500">${newsTitle(it)}</span><span class="small muted">${esc(it.kalla)}</span></span>
-    </div>`).join('')}</div>` : `<div class="empty">${n?.error ? esc(errText(n)) : 'Inga nyheter om det här bolaget de senaste två veckorna i datakällan.'}</div>`;
+    </div>`).join('')}</div>` : `<p class="muted" style="margin:0">${n?.error ? esc(errText(n)) : n?.ingenAtkomst ? 'Nyheter om det här bolaget ingår inte i datakällans gratisplan.' : 'Inga nyheter om bolaget de senaste två veckorna.'}</p>`;
 }
 
 function viewNotFound() {
@@ -678,6 +663,7 @@ function route() {
   const path = location.pathname.replace(/\/+$/, '') || '/';
   const params = new URLSearchParams(location.search);
   if (path === '/') return { active: 'oversikt', title: 'Översikt', html: viewOversikt(), mount: mountOversikt };
+  if (path === '/sok' && params.get('s')) { history.replaceState(null, '', '/bolag/' + encodeURIComponent(params.get('s'))); return route(); }
   if (path === '/sok') return { active: 'sok', title: 'Sök och riskkoll', html: viewSok(params), mount: () => mountSok(params) };
   if (path === '/nyheter') return { active: 'nyheter', title: 'Nyheter', html: viewNyheter(), mount: mountNyheter };
   if (path === '/bevakning') return { active: 'bevakning', title: 'Bevakning', html: viewBevakning(), mount: mountBevakning };
@@ -686,7 +672,7 @@ function route() {
     let sym = decodeURIComponent(m[1]);
     if (LEGACY[sym.toLowerCase()]) sym = LEGACY[sym.toLowerCase()];
     sym = sym.toUpperCase();
-    if (/^[A-Z0-9][A-Z0-9.\-_:^]{0,24}$/.test(sym)) return { active: 'bevakning', title: nameOf(sym), html: viewBolag(sym), mount: () => mountBolag(sym) };
+    if (/^[A-Z0-9][A-Z0-9.\-_:^]{0,24}$/.test(sym)) return { active: 'sok', title: nameOf(sym), html: viewBolag(sym), mount: () => mountBolag(sym) };
   }
   return { active: '', title: 'Sidan finns inte', html: viewNotFound() };
 }
