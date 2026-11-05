@@ -105,6 +105,10 @@ h2.section { margin: 0; font-size: 26px; font-weight: 400; letter-spacing: -0.01
 .card.dark .muted { color: rgba(255,255,255,0.62); }
 .card.dark .faint { color: rgba(255,255,255,0.5); }
 .card.dark a { color: #FFFFFF; }
+.card.dark .btn.white, .card.dark .btn.white:hover { color: var(--ink); }
+.hero-link, .hero-link:hover { text-decoration: none; color: var(--ink); }
+.hero-link.dark, .hero-link.dark:hover { color: #FFFFFF; }
+.hero-link:hover { border-color: #B9BBC0; }
 .rings::before, .rings::after { content: ''; position: absolute; border-radius: 50%; border: 1px solid rgba(255,255,255,0.12); pointer-events: none; }
 .rings::before { right: -70px; top: -70px; width: 220px; height: 220px; }
 .rings::after { right: -25px; top: -25px; width: 130px; height: 130px; border-color: rgba(255,255,255,0.08); }

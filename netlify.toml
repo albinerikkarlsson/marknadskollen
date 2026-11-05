@@ -1,8 +1,12 @@
 [build]
-  publish = "."
+  publish = "public"
   command = ""
 
-# Alla sidor (/sok, /bolag/evo …) visas av index.html
+[functions]
+  directory = "netlify/functions"
+
+# Alla sidor (/sok, /bolag/VOLV-B.ST …) visas av index.html.
+# API-funktionerna under /api/* har egna sökvägar och går före den här regeln.
 [[redirects]]
   from = "/*"
   to = "/index.html"
