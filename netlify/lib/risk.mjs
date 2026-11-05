@@ -37,7 +37,7 @@ export function buildFactors({ m = {}, price, cur, mcapM }) {
   if (de != null) {
     const l = de < 0 ? 3 : de < 0.5 ? 1 : de < 1.5 ? 2 : 3;
     out.push(['Skulder', l, de < 0 ? 'Negativt eget kapital' : `Skuld/eget kapital ${sv(de, 2)}`,
-      l === 1 ? 'Skulderna är små jämfört med vad ägarna har satt in.' : l === 2 ? 'Bolaget har en del lån, vanligt för många industribolag.' : de < 0 ? 'Bolaget är skyldigt mer än det äger.' : 'Mycket lån jämfört med eget kapital. Stiger räntorna eller faller vinsten blir det tungt.']);
+      l === 1 ? 'Skulderna är små jämfört med vad ägarna har satt in.' : l === 2 ? 'Bolaget har en del lån. Det är vanligt, men värt att följa om räntorna stiger.' : de < 0 ? 'Bolaget är skyldigt mer än det äger.' : 'Mycket lån jämfört med eget kapital. Stiger räntorna eller faller vinsten blir det tungt.']);
   }
 
   const pe = val(m.peTTM) ?? val(m.peBasicExclExtraTTM) ?? val(m.peExclExtraTTM);

@@ -27,6 +27,8 @@ const ICON = {
   logo: 'M4 17l5-6 4 3 7-9',
   ext: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'
 };
+// Bara vanliga webblänkar släpps igenom (inga javascript:- eller data:-länkar)
+const safeUrl = (u) => { try { const x = new URL(u); return x.protocol === 'https:' || x.protocol === 'http:' ? x.href : null; } catch { return null; } };
 const svg = (name, size = 20, stroke = 'currentColor') =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICON[name] || ICON.news}"></path></svg>`;
 
@@ -52,7 +54,7 @@ async function api(path, ttlMs = 60e3) {
 const liveTag = (iso) => `<span class="pill outline" title="Hämtat från Finnhub">● Live · ${esc(clock(iso))}</span>`;
 const ERR = {
   no_key: 'API-nyckeln saknas i Netlify.',
-  no_access: 'Datakällan ger inte åtkomst till det här med nuvarande plan.',
+  no_access: 'Det här värdepappret ingår inte i Finnhubs gratisplan, som främst har amerikanska aktier och fonder. Med en betalplan visas det automatiskt.',
   no_data: 'Datakällan har ingen data för det här med nuvarande plan. Finnhubs gratisplan har främst amerikanska aktier och fonder.',
   limit: 'Datakällans gräns för antal anrop är nådd. Vänta en minut och prova igen.'
 };
@@ -71,10 +73,17 @@ const MARKET = [
 
 async function getQuotes(syms) {
   const out = {};
-  if (!syms.length) return out;
-  const r = await api('/api/quote?s=' + syms.map(encodeURIComponent).join(','), 30e3);
-  if (r?.quotes) { out.__hamtad = r.hamtad; for (const q of r.quotes) out[q.sym] = q; }
-  else out.__error = r;
+  const list = [...new Set(syms)];
+  if (!list.length) return out;
+  // Servern tar max 12 tickers per anrop, så längre listor delas upp
+  const chunks = [];
+  for (let i = 0; i < list.length; i += 12) chunks.push(list.slice(i, i + 12));
+  const res = await Promise.all(chunks.map((c) => api('/api/quote?s=' + c.map(encodeURIComponent).join(','), 30e3)));
+  for (const r of res) {
+    if (r?.quotes) { out.__hamtad = out.__hamtad || r.hamtad; for (const q of r.quotes) out[q.sym] = q; }
+    else out.__error = out.__error || r;
+  }
+  if (out.__hamtad) delete out.__error;
   return out;
 }
 
@@ -143,7 +152,7 @@ function topbar(crumbs, withSearch = true) {
 }
 
 const footer = (extra = '') =>
-  `<footer class="foot">Ingen investeringsrådgivning. Kurser, nyckeltal och nyheter kommer från Finnhub. Riskkollen räknas fram med fasta regler, se <a href="/sok" data-link>Sök och riskkoll</a>. ${extra}</footer>`;
+  `<footer class="foot">Ingen investeringsrådgivning. Kurser, nyckeltal och nyheter kommer från Finnhub. Riskkollen räknas fram med fasta regler som förklaras på varje bolagssida. ${extra}</footer>`;
 
 /* ================= Nyheter ================= */
 async function getNews(region) {
@@ -154,9 +163,10 @@ async function getNews(region) {
 const prepNews = (n) => ({ ...n, tidTxt: when(n.datum), bolagTxt: (n.bolag || []).join(', ') });
 
 function newsTitle(n) {
-  return `<a href="${esc(n.lank)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${esc(n.rubrik)} <span class="sr-only">(öppnas i ny flik)</span></a>`;
+  const u = safeUrl(n.lank);
+  return u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${esc(n.rubrik)} <span class="sr-only">(öppnas i ny flik)</span></a>` : esc(n.rubrik);
 }
-const sourceLink = (n) => `<a href="${esc(n.lank)}" target="_blank" rel="noopener noreferrer" style="margin-left:auto;display:inline-flex;gap:6px;align-items:center">Läs hos källan ${svg('ext', 15)}</a>`;
+const sourceLink = (n) => { const u = safeUrl(n.lank); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" style="margin-left:auto;display:inline-flex;gap:6px;align-items:center">Läs hos källan ${svg('ext', 15)}</a>` : ''; };
 
 function frontNewsHTML(data, region) {
   if (!data.ok) return `<div class="empty">${esc(errText(data.error))}</div>`;
@@ -338,7 +348,8 @@ function mountSok(params) {
     const res = await api('/api/search?q=' + encodeURIComponent(term), 60 * 60e3);
     if (term !== q.trim() || !$('#results')) return;
     if (res?.results) {
-      show(res.results, res.results.length ? `${res.results.length} träffar för "${term}"` : `Inga träffar för "${term}"`);
+      const n = res.results.length;
+      show(res.results, n ? `${n} ${n === 1 ? 'träff' : 'träffar'} för "${term}"` : `Inga träffar för "${term}"`);
       if (!res.results.length) $('#results').innerHTML = '<div class="empty">Prova bolagets namn eller ticker, till exempel "AAPL" eller "Investor".</div>';
     } else {
       label('Sökningen fungerar inte just nu');
@@ -494,7 +505,7 @@ function priceBlock(s, big = 40) {
   if (s.saknarKurs) return `<div class="stack" style="gap:4px;align-items:flex-end;text-align:right"><span class="muted" style="font-size:20px">Kurs saknas</span><span class="small faint" style="max-width:300px">Datakällan har ingen kurs för ${esc(s.sym)} med nuvarande plan. Finnhubs gratisplan har bara amerikanska kurser.</span></div>`;
   return `<div class="stack" style="gap:8px;align-items:flex-end">
     <span class="num" style="font-size:${big}px;letter-spacing:-0.02em;line-height:1">${kr(s.kurs)} <span class="muted" style="font-size:16px">${esc(cur(s.valuta))}</span></span>
-    <span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${s.d1 != null ? `<span class="pill ${tone(s.d1)}">${pct(s.d1)} i dag</span>` : ''}${liveTag(s.kursTid || s.hamtad)}</span>
+    <span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${s.d1 != null ? `<span class="pill ${tone(s.d1)}">${pct(s.d1)} i dag</span>` : ''}<span class="pill outline" title="Tid för senaste affären enligt Finnhub">Senaste kurs ${esc(when(s.kursTid || s.hamtad))}</span></span>
   </div>`;
 }
 
@@ -517,7 +528,7 @@ function bolagHTML(s) {
         <div style="min-width:0">
           <span class="label-up">${esc(s.lista || s.sym)}</span>
           <h1 class="title" style="margin:2px 0 6px">${esc(s.namn)}</h1>
-          <div class="chips"><span class="pill outline num">${esc(s.sym)}</span>${s.webb ? `<a class="pill outline" href="${esc(s.webb)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Webbplats ${svg('ext', 13)}</a>` : ''}
+          <div class="chips"><span class="pill outline num">${esc(s.sym)}</span>${safeUrl(s.webb) ? `<a class="pill outline" href="${esc(safeUrl(s.webb))}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Webbplats ${svg('ext', 13)}</a>` : ''}
             <button class="btn small ${watched ? 'ghost' : ''}" type="button" data-watch="${esc(s.sym)}" data-namn="${esc(s.namn)}" aria-pressed="${watched}">${watched ? 'Bevakas ✓' : 'Bevaka'}</button></div>
         </div>
       </div>
@@ -609,7 +620,7 @@ function aboutHTML(a, s) {
     ${a.affarside ? `<p class="lead">${esc(a.affarside)}</p>` : ''}
     ${facts.length ? `<dl class="facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
     ${a.historia?.length ? `<div class="stack" style="gap:10px"><h3 class="sub">Historia</h3><div class="prose">${a.historia.map((p) => `<p>${esc(p)}</p>`).join('')}</div></div>` : ''}
-    <p class="small faint" style="margin:0">${a.sprak === 'en' ? 'Texten finns bara på engelska än. ' : ''}Källa: ${a.url ? `<a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">Wikipedia</a> (CC BY-SA 4.0)` : 'Wikipedia'} och <a href="${esc(a.wikidata)}" target="_blank" rel="noopener noreferrer">Wikidata</a>.</p></div>`;
+    <p class="small faint" style="margin:0">${a.sprak === 'en' ? 'Texten finns bara på engelska än. ' : ''}Källa: ${safeUrl(a.url) ? `<a href="${esc(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer">Wikipedia</a> (CC BY-SA 4.0)` : 'Wikipedia'}${safeUrl(a.wikidata) ? ` och <a href="${esc(safeUrl(a.wikidata))}" target="_blank" rel="noopener noreferrer">Wikidata</a>` : ''}.</p></div>`;
 }
 
 async function mountBolag(sym) {
@@ -621,7 +632,10 @@ async function mountBolag(sym) {
     if (sym.includes('.')) {
       const term = nameOf(sym).replace(/\b(AB|ser\.?|Shs|[AB])\b|-[AB]\b|\(publ\)/gi, ' ').replace(/\s+/g, ' ').trim().split(' ')[0];
       const r = term && term.length > 1 ? await api('/api/search?q=' + encodeURIComponent(term), 60 * 60e3) : null;
-      const alt = r?.results?.find((x) => !x.sym.includes('.'));
+      // Bara samma bolag: samma första ord i namnet och noterat som ADR (bolagets aktie i USA)
+      const STOP = new Set(['ab', 'the', 'inc', 'corp', 'co', 'ser', 'class', 'adr', 'ads', 'sponsored', 'unsponsored', 'unsp', 'shs', 'publ', 'a', 'b']);
+      const first = (t) => String(t).toLowerCase().replace(/[().,]/g, ' ').split(/[\s-]+/).filter((w) => w && !STOP.has(w))[0] || '';
+      const alt = r?.results?.find((x) => !x.sym.includes('.') && first(x.namn) === first(term) && (x.typ === 'ADR' || /\b(adr|sponsored|unsponsored)\b/i.test(x.namn)));
       if (alt && $('#alt')) $('#alt').insertAdjacentHTML('afterbegin', `<a class="btn" href="/bolag/${encodeURIComponent(alt.sym)}" data-link>Visa ${esc(alt.namn)} (${esc(alt.sym)}), noterad i USA</a>`);
     }
     return;
