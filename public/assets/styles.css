@@ -395,3 +395,27 @@ body.locked .main { align-items: center; justify-content: center; min-height: 10
 .auth-card > .card { box-shadow: 0 24px 60px -36px rgba(17,18,20,0.35); }
 .greet-mobile { display: none; font-size: 15px; color: var(--muted); }
 @media (max-width: 900px) { .greet-mobile { display: block; } body.locked .main { min-height: auto; padding-top: 28px; } }
+
+/* ================= Alla aktier ================= */
+.ak-filters { display: flex; flex-direction: column; gap: 16px; padding: 20px 22px; }
+.ak-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.ak-group { display: flex; flex-direction: column; gap: 8px; }
+.chip-n { font-size: 12px; opacity: 0.6; margin-left: 2px; font-variant-numeric: tabular-nums; }
+.chip-btn:disabled { opacity: 0.4; cursor: default; }
+.chip-btn:not([aria-pressed="true"]):not(:disabled):hover { border-color: var(--ink); }
+.ak-table { min-width: 0; }
+.ak-table td { vertical-align: middle; }
+.ak-name { display: flex; align-items: center; gap: 12px; color: inherit; text-decoration: none; min-width: 0; }
+.ak-name > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.ak-name b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 34ch; }
+.ak-name:hover b { text-decoration: underline; }
+.th-sort { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; white-space: nowrap; }
+.th-sort:hover { color: var(--ink); }
+th.r .th-sort { text-align: right; }
+.star-btn { width: 38px; height: 38px; border-radius: 50%; border: 1px solid transparent; background: none; color: var(--faint); cursor: pointer; display: inline-grid; place-items: center; }
+.star-btn:hover { border-color: var(--line); color: var(--ink); }
+.star-btn[aria-pressed="true"] { color: #C58A00; }
+.star-btn[aria-pressed="true"] svg path { fill: currentColor; }
+@media (max-width: 1100px) { .hide-sm { display: none; } }
+@media (max-width: 520px) { .hide-xs { display: none; } .ak-name .avatar { display: none; } .ak-name b { max-width: 20ch; } .ak-filters { padding: 16px; } }
+@media (max-width: 900px) { .ak-group .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px 2px; } .ak-group .chips::-webkit-scrollbar { display: none; } .ak-group .chip-btn { flex: none; } }

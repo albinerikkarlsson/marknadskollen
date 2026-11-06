@@ -27,6 +27,7 @@ const ICON = {
   logo: 'M4 17l5-6 4 3 7-9',
   ext: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
   compare: 'M8 4v16M16 4v16M4 9h8M12 15h8',
+  list: 'M4 6h16M4 12h16M4 18h10',
   user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0',
   bell: 'M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0'
 };
@@ -122,6 +123,7 @@ const NAV = [
   { group: 'Börsen', items: [
     { id: 'sok', href: '/sok', label: 'Sök och riskkoll', icon: 'search' },
     { id: 'nyheter', href: '/nyheter', label: 'Nyheter', icon: 'news' },
+    { id: 'aktier', href: '/aktier', label: 'Alla aktier', icon: 'list' },
     { id: 'jamfor', href: '/jamfor', label: 'Jämför', icon: 'compare' },
     { id: 'bevakning', href: '/bevakning', label: 'Bevakning', icon: 'star', badge: true }
   ] },
@@ -817,6 +819,173 @@ function viewNotFound() {
 
 /* ================= Router ================= */
 const LEGACY = { evo: 'EVO.ST', saab: 'SAAB-B.ST', volvo: 'VOLV-B.ST' };
+/* ================= Alla aktier: lista med filter ================= */
+const KATEGORIER = [
+  ['alla', 'Alla', () => true],
+  ['utdelare', 'Utdelare', (a) => a.utd != null && a.utd >= 3],
+  ['vinnare', 'Dagens vinnare', (a) => a.d1 != null && a.d1 >= 2],
+  ['forlorare', 'Dagens förlorare', (a) => a.d1 != null && a.d1 <= -2],
+  ['lagpe', 'Låg värdering', (a) => a.pe != null && a.pe > 0 && a.pe < 15],
+  ['aret', 'Årets vinnare', (a) => a.ar != null && a.ar >= 30],
+  ['forlust', 'Går med förlust', (a) => a.pe === -1],
+  ['bevakade', 'Mina bevakade', (a) => getWatch().includes(a.sym)]
+];
+// Storlek efter börsvärde. Gränserna gäller i respektive valuta (kronor för Sverige, dollar för USA).
+const STORLEK = {
+  se: [['alla', 'Alla storlekar'], ['stora', 'Stora · över 10 mdr kr', (v) => v >= 10e9], ['medel', 'Medel · 1–10 mdr kr', (v) => v >= 1e9 && v < 10e9], ['sma', 'Små · under 1 mdr kr', (v) => v < 1e9]],
+  us: [['alla', 'Alla storlekar'], ['stora', 'Stora · över 200 mdr $', (v) => v >= 200e9], ['medel', 'Medel · 10–200 mdr $', (v) => v >= 10e9 && v < 200e9], ['sma', 'Mindre · under 10 mdr $', (v) => v < 10e9]]
+};
+const SORTS = [['mcap', 'Börsvärde'], ['d1', 'I dag'], ['ar', '1 år'], ['pe', 'P/E'], ['utd', 'Utdelning'], ['oms', 'Omsättning'], ['namn', 'Namn']];
+const PAGE = 50;
+
+function viewAktier() {
+  return `
+  ${topbar([['Översikt', '/'], ['Alla aktier', '/aktier']])}
+  <div class="stack" style="gap:6px">
+    <span class="eyebrow" id="ak-status">Hämtar listan …</span>
+    <h1 class="title">Alla aktier</h1>
+  </div>
+  <section class="card ak-filters" aria-label="Filter">
+    <div class="ak-row">
+      <div class="tabs" role="tablist" aria-label="Marknad"><button role="tab" data-m="se">Sverige</button><button role="tab" data-m="us">USA</button></div>
+      <form class="searchbar" role="search" style="flex:1;min-width:200px;max-width:none" data-akform>
+        ${svg('search', 18, '#6B6F76')}
+        <label class="sr-only" for="ak-q">Filtrera på namn eller ticker</label>
+        <input id="ak-q" type="search" placeholder="Filtrera på namn eller ticker" autocomplete="off">
+      </form>
+      <label class="sr-only" for="ak-sort">Sortera</label>
+      <select class="select" id="ak-sort">${SORTS.map(([k, t]) => `<option value="${k}">Sortera: ${t}</option>`).join('')}</select>
+    </div>
+    <div class="ak-group"><span class="label-up">Kategori</span><div class="chips" id="ak-kat"></div></div>
+    <div class="ak-group"><span class="label-up">Bransch</span><div class="chips" id="ak-bransch"></div></div>
+    <div class="ak-group"><span class="label-up">Storlek</span><div class="chips" id="ak-storlek"></div></div>
+  </section>
+  <section class="card" style="padding:8px 8px 14px" aria-labelledby="ak-count">
+    <div class="section-head" style="padding:12px 14px 4px;align-items:center"><h2 class="section" id="ak-count" style="font-size:20px">Hämtar …</h2><button class="linkbtn small" type="button" data-reset hidden>Rensa filter</button></div>
+    <div id="ak-list">${loading('Hämtar alla aktier …')}</div>
+  </section>
+  ${footer('Listan visar aktier som datakällan klassar i en bransch. Kurser kan vara fördröjda upp till 15 minuter. P/E räknas på vinsten de senaste tolv månaderna, och utdelning är direktavkastningen det senaste året.')}`;
+}
+
+function mountAktier(params) {
+  const st = {
+    m: params.get('m') === 'us' ? 'us' : 'se',
+    q: params.get('q') || '',
+    k: KATEGORIER.some((x) => x[0] === params.get('k')) ? params.get('k') : 'alla',
+    b: params.get('b') || 'alla',
+    st: ['alla', 'stora', 'medel', 'sma'].includes(params.get('st')) ? params.get('st') : 'alla',
+    s: SORTS.some((x) => x[0] === params.get('s')) ? params.get('s') : 'mcap',
+    d: params.get('d') === 'asc' ? 'asc' : 'desc',
+    n: PAGE
+  };
+  let data = null;
+  const syncUrl = () => {
+    const p = new URLSearchParams();
+    if (st.m !== 'se') p.set('m', st.m); if (st.q) p.set('q', st.q); if (st.k !== 'alla') p.set('k', st.k);
+    if (st.b !== 'alla') p.set('b', st.b); if (st.st !== 'alla') p.set('st', st.st);
+    if (st.s !== 'mcap') p.set('s', st.s); if (st.d !== 'desc') p.set('d', st.d);
+    history.replaceState(null, '', '/aktier' + (p.toString() ? '?' + p : ''));
+  };
+  $('#ak-q').value = st.q; $('#ak-sort').value = st.s;
+  const tabs = () => document.querySelectorAll('[data-m]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.m === st.m)));
+  tabs();
+
+  // Filtrera i tur och ordning. Bransch-räknaren visar hur många som finns med övriga filter.
+  const pass = (a, skip) => {
+    if (st.q) { const q = st.q.toLowerCase(); if (!a.namn.toLowerCase().includes(q) && !a.sym.toLowerCase().includes(q)) return false; }
+    if (skip !== 'k' && !KATEGORIER.find((x) => x[0] === st.k)[2](a)) return false;
+    if (skip !== 'b' && st.b !== 'alla' && a.bransch !== st.b) return false;
+    if (skip !== 'st' && st.st !== 'alla') { const f = STORLEK[st.m].find((x) => x[0] === st.st)[2]; if (a.mcap == null || !f(a.mcap)) return false; }
+    return true;
+  };
+  const sorted = (list) => {
+    const dir = st.d === 'asc' ? 1 : -1; const k = st.s;
+    return list.slice().sort((x, y) => {
+      if (k === 'namn') return dir * -1 * x.namn.localeCompare(y.namn, 'sv');
+      const a = k === 'pe' && x.pe === -1 ? null : x[k]; const b = k === 'pe' && y.pe === -1 ? null : y[k];
+      if (a == null && b == null) return 0; if (a == null) return 1; if (b == null) return -1;
+      return dir * (a - b);
+    });
+  };
+
+  const drawChips = () => {
+    const base = data.aktier;
+    $('#ak-kat').innerHTML = KATEGORIER.map(([k, t]) => { const n = base.filter((a) => pass(a, 'k') && KATEGORIER.find((x) => x[0] === k)[2](a)).length; return `<button type="button" class="chip-btn" data-k="${k}" aria-pressed="${st.k === k}" ${n || st.k === k ? '' : 'disabled'}>${esc(t)} <span class="chip-n">${n}</span></button>`; }).join('');
+    const counts = {}; for (const a of base) if (pass(a, 'b')) counts[a.bransch] = (counts[a.bransch] || 0) + 1;
+    const all = [...new Set(base.map((a) => a.bransch))].sort((a, b) => a.localeCompare(b, 'sv'));
+    $('#ak-bransch').innerHTML = `<button type="button" class="chip-btn" data-b="alla" aria-pressed="${st.b === 'alla'}">Alla <span class="chip-n">${base.filter((a) => pass(a, 'b')).length}</span></button>` +
+      all.map((b) => `<button type="button" class="chip-btn" data-b="${esc(b)}" aria-pressed="${st.b === b}" ${counts[b] || st.b === b ? '' : 'disabled'}>${esc(b)} <span class="chip-n">${counts[b] || 0}</span></button>`).join('');
+    $('#ak-storlek').innerHTML = STORLEK[st.m].map(([k, t]) => `<button type="button" class="chip-btn" data-st="${k}" aria-pressed="${st.st === k}">${esc(t)}</button>`).join('');
+  };
+
+  const th = (k, t, cls = '') => `<th scope="col" class="${cls}" aria-sort="${st.s === k ? (st.d === 'asc' ? 'ascending' : 'descending') : 'none'}"><button type="button" class="th-sort" data-sort="${k}">${t}${st.s === k ? (st.d === 'asc' ? ' ↑' : ' ↓') : ''}</button></th>`;
+  const drawList = () => {
+    const list = sorted(data.aktier.filter((a) => pass(a)));
+    const filtered = st.q || st.k !== 'alla' || st.b !== 'alla' || st.st !== 'alla';
+    $('#ak-count').textContent = `${list.length.toLocaleString('sv-SE')} ${list.length === 1 ? 'aktie' : 'aktier'}`;
+    $('[data-reset]').hidden = !filtered;
+    if (!list.length) { $('#ak-list').innerHTML = '<div class="empty">Inga aktier matchar filtren. Prova att ta bort något filter.</div>'; return; }
+    const watch = new Set(getWatch());
+    const show = list.slice(0, st.n);
+    $('#ak-list').innerHTML = `<div class="table-wrap"><table class="ak-table">
+      <thead><tr>${th('namn', 'Bolag')}<th scope="col" class="hide-sm">Bransch</th>${th('d1', 'I dag', 'r')}${th('ar', '1 år', 'r hide-xs')}${th('pe', 'P/E', 'r hide-sm')}${th('utd', 'Utdelning', 'r hide-sm')}${th('mcap', 'Börsvärde', 'r hide-sm')}<th scope="col" class="r"><span class="sr-only">Bevaka</span></th></tr></thead>
+      <tbody>${show.map((a) => `<tr>
+        <td><a class="ak-name" href="/bolag/${encodeURIComponent(a.sym)}" data-link data-namn="${esc(a.namn)}"><span class="avatar">${esc(short(a.sym))}</span><span><b>${esc(a.namn)}</b><span class="small muted">${esc(a.sym)} · ${a.kurs != null ? esc(kr(a.kurs)) + ' ' + esc(cur(a.valuta)) : '–'}</span></span></a></td>
+        <td class="hide-sm small muted">${esc(a.bransch)}</td>
+        <td class="r"><span class="pill ${tone(a.d1)}">${a.d1 != null ? pct(a.d1, 1) : '–'}</span></td>
+        <td class="r num hide-xs" style="color:var(--${tone(a.ar)})">${a.ar != null ? pct(a.ar, 0) : '–'}</td>
+        <td class="r num hide-sm">${a.pe === -1 ? '<span class="small muted">Förlust</span>' : a.pe != null ? esc(nf(a.pe, 1)) : '–'}</td>
+        <td class="r num hide-sm">${a.utd ? esc(nf(a.utd, 1)) + ' %' : a.utd === 0 ? '0 %' : '–'}</td>
+        <td class="r num hide-sm">${a.mcap ? esc(mny(a.mcap, a.valuta)) : '–'}</td>
+        <td class="r"><button type="button" class="star-btn" data-star="${esc(a.sym)}" data-namn="${esc(a.namn)}" aria-pressed="${watch.has(a.sym)}" aria-label="${watch.has(a.sym) ? 'Sluta bevaka' : 'Bevaka'} ${esc(a.namn)}">${svg('star', 18)}</button></td>
+      </tr>`).join('')}</tbody></table></div>
+      ${list.length > show.length ? `<div style="display:flex;justify-content:center;padding:14px"><button class="btn ghost" type="button" data-more>Visa fler (${(list.length - show.length).toLocaleString('sv-SE')} kvar)</button></div>` : ''}`;
+  };
+  const draw = () => { if (!data) return; syncUrl(); drawChips(); drawList(); };
+
+  const load = async () => {
+    $('#ak-status').textContent = 'Hämtar listan …';
+    $('#ak-list').innerHTML = loading('Hämtar alla aktier …');
+    const m = st.m;
+    const d = await api('/api/aktier?m=' + m, 10 * 60e3);
+    if (!$('#ak-list') || m !== st.m) return;
+    if (!d || d.error || !d.aktier?.length) {
+      $('#ak-status').textContent = 'Listan kunde inte hämtas';
+      $('#ak-count').textContent = 'Inga aktier';
+      $('#ak-list').innerHTML = `<div class="empty">${esc(d?.error ? errText(d) : 'Datakällan svarade inte.')} Prova igen om en stund.</div>`;
+      return;
+    }
+    data = d;
+    if (st.b !== 'alla' && !d.aktier.some((a) => a.bransch === st.b)) st.b = 'alla';
+    $('#ak-status').textContent = `${d.aktier.length.toLocaleString('sv-SE')} aktier${d.urval ? ' (urval av de största)' : ''} · ${d.kalla} · hämtat kl ${clock(d.hamtad)}`;
+    draw();
+  };
+
+  let qt;
+  $('#ak-q').addEventListener('input', (e) => { clearTimeout(qt); qt = setTimeout(() => { st.q = e.target.value.trim(); st.n = PAGE; draw(); }, 150); });
+  $('[data-akform]').addEventListener('submit', (e) => e.preventDefault());
+  $('#ak-sort').addEventListener('change', (e) => { st.s = e.target.value; st.d = st.s === 'namn' ? 'asc' : st.s === 'pe' ? 'asc' : 'desc'; st.n = PAGE; draw(); });
+  $('.main').addEventListener('click', (e) => {
+    const t = e.target.closest('button');
+    if (!t) { const a = e.target.closest('.ak-name'); if (a) rememberName(decodeURIComponent(a.getAttribute('href').split('/').pop()), a.dataset.namn); return; }
+    if (t.dataset.m && t.dataset.m !== st.m) { st.m = t.dataset.m; st.b = 'alla'; st.st = 'alla'; st.n = PAGE; data = null; tabs(); syncUrl(); load(); return; }
+    if (t.dataset.k) { st.k = t.dataset.k; st.n = PAGE; draw(); return; }
+    if (t.dataset.b) { st.b = t.dataset.b; st.n = PAGE; draw(); return; }
+    if (t.dataset.st) { st.st = t.dataset.st; st.n = PAGE; draw(); return; }
+    if (t.dataset.sort) { const k = t.dataset.sort; if (st.s === k) st.d = st.d === 'asc' ? 'desc' : 'asc'; else { st.s = k; st.d = k === 'namn' || k === 'pe' ? 'asc' : 'desc'; } $('#ak-sort').value = st.s; st.n = PAGE; draw(); return; }
+    if (t.hasAttribute('data-more')) { st.n += PAGE * 2; drawList(); return; }
+    if (t.hasAttribute('data-reset')) { st.q = ''; st.k = 'alla'; st.b = 'alla'; st.st = 'alla'; $('#ak-q').value = ''; st.n = PAGE; draw(); return; }
+    if (t.dataset.star) {
+      rememberName(t.dataset.star, t.dataset.namn);
+      const on = toggleWatch(t.dataset.star, t.dataset.namn);
+      t.setAttribute('aria-pressed', String(!!on)); refreshNav('aktier'); drawChips();
+      if (st.k === 'bevakade' && !on) drawList();
+      toast(on ? `${t.dataset.namn} bevakas` : `${t.dataset.namn} bevakas inte längre`, '');
+    }
+  });
+  load();
+}
+
 /* ================= Konto (Supabase Auth via REST, utan extra bibliotek) ================= */
 // Bevakning, larm och namn sparas i kontots användardata. Ingen databastabell behövs.
 const ACC = { cfg: undefined, ai: false, session: readLS('mk-session', null), user: null };
@@ -1278,6 +1447,7 @@ function route() {
   if (path === '/sok') return { active: 'sok', title: 'Sök och riskkoll', html: viewSok(params), mount: () => mountSok(params) };
   if (path === '/nyheter') return { active: 'nyheter', title: 'Nyheter', html: viewNyheter(), mount: mountNyheter };
   if (path === '/bevakning') return { active: 'bevakning', title: 'Bevakning', html: viewBevakning(), mount: mountBevakning };
+  if (path === '/aktier') return { active: 'aktier', title: 'Alla aktier', html: viewAktier(), mount: () => mountAktier(params) };
   if (path === '/jamfor') return { active: 'jamfor', title: 'Jämför', html: viewJamfor(), mount: () => mountJamfor(params) };
   if (path === '/konto') return { active: 'konto', title: ACC.user ? 'Mitt konto' : 'Logga in', html: viewKonto(), mount: mountKonto };
   const m = path.match(/^\/bolag\/([^/]+)$/);

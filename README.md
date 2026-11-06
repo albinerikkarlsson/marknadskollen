@@ -8,6 +8,7 @@ Aktiesök med riskkoll och börsnyheter på enkel svenska. All data är riktig o
 - `/nyheter` Nyheter, Världen och Sverige
 - `/bevakning` Mina aktier (sparas i webbläsaren tills inloggning finns)
 - `/bolag/:ticker` Bolagssida med allt samlat: kursdiagram (1 mån–5 år), nyckeltal, affärsidé, historia, insynshandel, blankning, nyheter med AI-sammanfattning och full riskkoll. T.ex. `/bolag/VOLV-B.ST`
+- `/aktier` Alla aktier i Sverige eller USA med filter för kategori, bransch och storlek, sortering och sök. Filtren sparas i adressen så att man kan dela en vy, t.ex. `/aktier?b=Teknik&k=utdelare`
 - `/jamfor?a=VOLV-B.ST&b=AAPL` Jämför två bolag sida vid sida
 - `/konto` Logga in eller skapa konto (Supabase). Bevakning och prislarm följer då med mellan enheter
 
@@ -20,6 +21,7 @@ Aktiesök med riskkoll och börsnyheter på enkel svenska. All data är riktig o
   - `/api/news?region=world|se` eller `?s=` nyheter
   - `/api/insyn` eller `?namn=` insynshandel från Finansinspektionens insynsregister
   - `/api/blankning` eller `?namn=` blankning från Finansinspektionens blankningsregister
+  - `/api/aktier?m=se|us` alla aktier med bransch och nyckeltal (Yahoos aktiefilter, en gång per bransch)
   - `/api/chart?s=&r=1m|6m|1y|5y` kursdiagram
   - `/api/summary?s=&namn=` AI-sammanfattning på svenska av nyheterna (kräver `ANTHROPIC_API_KEY`)
   - `/api/config` offentliga inställningar (Supabase-adress och publik nyckel)

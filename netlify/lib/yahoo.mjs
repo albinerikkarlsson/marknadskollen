@@ -40,7 +40,7 @@ async function getSession(force = false) {
 }
 
 // GET mot Yahoo. withCrumb: lägg till cookie och crumb (krävs för quote/quoteSummary).
-export async function yahoo(path, params = {}, { withCrumb = false, timeoutMs = 8000 } = {}) {
+export async function yahoo(path, params = {}, { withCrumb = false, timeoutMs = 8000, body = null } = {}) {
   for (let attempt = 0; attempt < 2; attempt++) {
     const url = new URL(HOST + path);
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
@@ -50,7 +50,8 @@ export async function yahoo(path, params = {}, { withCrumb = false, timeoutMs = 
       url.searchParams.set('crumb', s.crumb);
       headers.cookie = s.cookie;
     }
-    const res = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+    if (body) headers['content-type'] = 'application/json';
+    const res = await fetch(url, { method: body ? 'POST' : 'GET', headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(timeoutMs) });
     const text = await res.text();
     if (withCrumb && attempt === 0 && (res.status === 401 || (res.status === 403 && /crumb|cookie/i.test(text)))) continue;
     if (!res.ok) throw new ApiError(res.status === 404 ? 404 : res.status === 429 ? 429 : 502, `Yahoo ${res.status} på ${path}: ${text.slice(0, 160)}`);
@@ -194,4 +195,16 @@ export function newsFromSearch(d, sym, keyword = '') {
     datetime: raw(n.providerPublishTime),
     _sym: sym
   }));
+}
+
+/* ---------- Aktiefilter (screener) ---------- */
+// Hämtar upp till 250 värdepapper per anrop som matchar ett filter, t.ex. alla svenska aktier i en bransch.
+export async function yScreen(operands, { size = 250, offset = 0, sortField = 'intradaymarketcap' } = {}) {
+  const d = await yahoo('/v1/finance/screener', { formatted: 'false', lang: 'en-US', region: 'US', corsDomain: 'finance.yahoo.com' }, {
+    withCrumb: true, timeoutMs: 9000,
+    body: { offset, size, sortField, sortType: 'DESC', quoteType: 'EQUITY', query: { operator: 'AND', operands }, userId: '', userIdType: 'guid' }
+  });
+  const r = d?.finance?.result?.[0];
+  if (!r) throw new ApiError(502, 'Yahoo gav inget filterresultat: ' + JSON.stringify(d?.finance?.error || d).slice(0, 160));
+  return { total: r.total ?? (r.quotes || []).length, quotes: r.quotes || [] };
 }
