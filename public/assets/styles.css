@@ -219,8 +219,8 @@ tbody tr:hover { background: #FAFAFB; }
 /* ---------- Bolagssida ---------- */
 .label-up { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .co-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px 32px; flex-wrap: wrap; }
-.statbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; padding: 0; background: var(--line); overflow: hidden; }
-.stat { background: var(--card); padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; }
+.statbar { display: flex; flex-wrap: wrap; gap: 1px; padding: 0; background: var(--line); overflow: hidden; }
+.stat { background: var(--card); padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; flex: 1 1 150px; }
 .stat .num { font-size: 16px; }
 .co-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 24px; align-items: start; }
 .co-side { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 16px; }
