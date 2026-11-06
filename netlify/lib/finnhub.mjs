@@ -51,10 +51,10 @@ export function fail(err) {
   });
 }
 
-// Tillåt bara vettiga tickers, t.ex. AAPL, VOLV-B.ST, BRK.B
+// Tillåt bara vettiga tickers, t.ex. AAPL, VOLV-B.ST, BRK.B och index som ^OMX
 export function cleanSymbol(s) {
   const v = String(s || '').trim().toUpperCase();
-  return /^[A-Z0-9][A-Z0-9.\-_:^]{0,24}$/.test(v) ? v : null;
+  return /^\^?[A-Z0-9][A-Z0-9.\-_:]{0,24}$/.test(v) ? v : null;
 }
 
 export const num = (v) => {

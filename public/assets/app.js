@@ -1,4 +1,4 @@
-/* Marknadskollen. All data hämtas live via våra API-funktioner (/api/*), som i sin tur hämtar från Finnhub.
+/* Marknadskollen. All data hämtas live via våra API-funktioner (/api/*), som i sin tur hämtar från Yahoo Finance, Finnhub och Finansinspektionen.
    Ingen exempeldata: saknas något visas det som saknat. */
 
 /* ================= Hjälpfunktioner ================= */
@@ -10,7 +10,7 @@ const cur = (c) => (c === 'SEK' ? 'kr' : c || '');
 const LV = { 1: { t: 'Låg', c: 'up' }, 2: { t: 'Medel', c: 'warn' }, 3: { t: 'Hög', c: 'down' } };
 const lvlOf = (p) => (p == null ? null : p <= 3 ? 1 : p <= 6 ? 2 : 3);
 const $ = (sel, root = document) => root.querySelector(sel);
-const short = (sym) => sym.split('.')[0].split('-')[0].slice(0, 4);
+const short = (sym) => sym.replace('^', '').split('.')[0].split('-')[0].slice(0, 4);
 const clock = (iso) => { try { return new Date(iso).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' }); } catch { return ''; } };
 const when = (iso) => {
   const d = new Date(iso); if (!iso || isNaN(d)) return '';
@@ -51,18 +51,24 @@ async function api(path, ttlMs = 60e3) {
   if (!v || v.error) memo.delete(path); // misslyckade svar sparas inte
   return v;
 }
-const liveTag = (iso) => `<span class="pill outline" title="Hämtat från Finnhub">● Live · ${esc(clock(iso))}</span>`;
+const liveTag = (iso) => `<span class="pill outline" title="Hämtat live från datakällan">● Live · ${esc(clock(iso))}</span>`;
 const ERR = {
   no_key: 'API-nyckeln saknas i Netlify.',
-  no_access: 'Det här värdepappret ingår inte i Finnhubs gratisplan, som främst har amerikanska aktier och fonder. Med en betalplan visas det automatiskt.',
-  no_data: 'Datakällan har ingen data för det här med nuvarande plan. Finnhubs gratisplan har främst amerikanska aktier och fonder.',
+  no_access: 'Datakällorna ger oss inte tillgång till det här värdepappret just nu.',
+  no_data: 'Vi hittade ingen data för det här värdepappret. Kontrollera tickern, till exempel VOLV-B.ST för Volvo B.',
   limit: 'Datakällans gräns för antal anrop är nådd. Vänta en minut och prova igen.'
 };
 const errText = (r) => ERR[r?.error] || 'Datakällan svarar inte just nu. Prova igen om en stund.';
 const loading = (txt = 'Hämtar …') => `<div class="empty" aria-busy="true">${esc(txt)}</div>`;
+const nf = (n, d) => Number(n).toLocaleString('sv-SE', { minimumFractionDigits: d, maximumFractionDigits: d });
+const mny = (n, c = 'SEK') => { if (n == null) return '–'; const a = Math.abs(n); const u = cur(c); return a >= 1e9 ? `${nf(n / 1e9, 1)} mdr ${u}` : a >= 1e6 ? `${nf(n / 1e6, 1)} mn ${u}` : `${nf(n, 0)} ${u}`; };
+const pc = (n) => (n == null ? '–' : nf(n, 2) + ' %');
+const dag = (d) => { try { return new Date(d + 'T12:00:00').toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', timeZone: 'Europe/Stockholm' }).replace('.', ''); } catch { return d || ''; } };
+const isSwedish = (sym) => /\.ST$/.test(sym);
 
 /* ================= Marknaden: börsfonder som följer index ================= */
 const MARKET = [
+  { sym: '^OMX', kort: 'OMX', namn: 'OMX Stockholm 30', sub: 'Stockholmsbörsen', enhet: 'poäng' },
   { sym: 'EWD', namn: 'Sverige', sub: 'iShares MSCI Sweden' },
   { sym: 'SPY', namn: 'USA, S&P 500', sub: 'SPDR S&P 500' },
   { sym: 'QQQ', namn: 'Nasdaq 100', sub: 'Invesco QQQ' },
@@ -90,8 +96,8 @@ async function getQuotes(syms) {
 /* ================= Bevakningslista (sparas i webbläsaren) ================= */
 const WKEY = 'mk-bevakning-v3';
 const NKEY = 'mk-namn';
-const DEFAULT_WATCH = ['AAPL', 'MSFT', 'NVDA', 'SPY', 'EWD'];
-const DEFAULT_NAMES = { AAPL: 'Apple', MSFT: 'Microsoft', NVDA: 'Nvidia', TSLA: 'Tesla', SPY: 'SPDR S&P 500 ETF', EWD: 'iShares MSCI Sweden ETF', QQQ: 'Invesco QQQ', 'VOLV-B.ST': 'Volvo B', 'EVO.ST': 'Evolution', 'SAAB-B.ST': 'Saab B', 'INVE-B.ST': 'Investor B' };
+const DEFAULT_WATCH = ['VOLV-B.ST', 'INVE-B.ST', 'AAPL', 'NVDA', 'SPY'];
+const DEFAULT_NAMES = { AAPL: 'Apple', MSFT: 'Microsoft', NVDA: 'Nvidia', TSLA: 'Tesla', SPY: 'SPDR S&P 500 ETF', EWD: 'iShares MSCI Sweden ETF', QQQ: 'Invesco QQQ', 'VOLV-B.ST': 'Volvo B', 'EVO.ST': 'Evolution', 'SAAB-B.ST': 'Saab B', 'INVE-B.ST': 'Investor B', 'ERIC-B.ST': 'Ericsson B', '^OMX': 'OMX Stockholm 30' };
 const readLS = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fb; } catch { return fb; } };
 const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* privat läge */ } };
 const getWatch = () => { const v = readLS(WKEY, null); return Array.isArray(v) ? v : DEFAULT_WATCH.slice(); };
@@ -132,7 +138,7 @@ function sidebar(active) {
             ${svg(it.icon)}<span>${it.label}</span>${it.badge && watchCount ? `<span class="nav-badge">${watchCount}</span>` : ''}
           </a>`).join('')}
       </div>`).join('')}
-    <div class="nav-foot">Kurser och nyheter från Finnhub. Ingen investeringsrådgivning.</div>
+    <div class="nav-foot">Data från Yahoo Finance, Finnhub och Finansinspektionen. Ingen investeringsrådgivning.</div>
   </nav>`;
 }
 
@@ -152,7 +158,7 @@ function topbar(crumbs, withSearch = true) {
 }
 
 const footer = (extra = '') =>
-  `<footer class="foot">Ingen investeringsrådgivning. Kurser, nyckeltal och nyheter kommer från Finnhub. Riskkollen räknas fram med fasta regler som förklaras på varje bolagssida. ${extra}</footer>`;
+  `<footer class="foot">Ingen investeringsrådgivning. Kurser, nyckeltal och nyheter kommer från Yahoo Finance och Finnhub, insynshandel och blankning från Finansinspektionen. Riskkollen räknas fram med fasta regler som förklaras på varje bolagssida. ${extra}</footer>`;
 
 /* ================= Nyheter ================= */
 async function getNews(region) {
@@ -170,7 +176,7 @@ const sourceLink = (n) => { const u = safeUrl(n.lank); return u ? `<a href="${es
 
 function frontNewsHTML(data, region) {
   if (!data.ok) return `<div class="empty">${esc(errText(data.error))}</div>`;
-  if (!data.items.length) return `<div class="empty">${region === 'se' ? 'Nyheter om svenska bolag ingår inte i Finnhubs gratisplan. Med en betalplan hos Finnhub dyker de upp här automatiskt.' : 'Inga nyheter just nu.'}</div>`;
+  if (!data.items.length) return `<div class="empty">${region === 'se' ? 'Inga nyheter om svenska bolag just nu.' : 'Inga nyheter just nu.'}</div>`;
   const [top, ...rest] = data.items;
   return `
   <div class="split" style="align-items:stretch">
@@ -190,6 +196,65 @@ function frontNewsHTML(data, region) {
     </div>
   </div>
   <p class="small faint" style="margin:8px 0 0">Nyheterna visas på originalspråket, oftast engelska. Klicka på en rubrik för att läsa hela artikeln hos källan.</p>`;
+}
+
+/* ================= Finansinspektionen: insynshandel och blankning ================= */
+const FI_DOWN = 'Finansinspektionens register svarar inte just nu. Prova igen om en stund.';
+const tradePill = (t) => `<span class="pill ${t === 'Köp' ? 'up' : t === 'Sälj' ? 'down' : ''}">${esc(t)}</span>`;
+
+function insynRows(list, withBolag) {
+  return list.map((a) => `
+    <div class="row-link" style="align-items:flex-start;gap:14px">
+      <span class="small muted num" style="width:58px;flex:none;padding-top:2px">${esc(dag(a.datum))}</span>
+      <span class="grow" style="min-width:0">
+        <span style="display:block;font-weight:500">${esc(withBolag ? a.bolag : a.person)}</span>
+        <span class="small muted">${esc([withBolag ? a.person : null, a.roll, a.narstaende ? 'närstående' : null, a.program ? 'aktieprogram' : null].filter(Boolean).join(' · '))}</span>
+      </span>
+      <span class="stack" style="gap:4px;align-items:flex-end;flex:none">${tradePill(a.typ)}<span class="small num muted">${a.varde != null ? esc(mny(a.varde, a.valuta)) : a.volym != null ? esc(nf(a.volym, 0)) + ' st' : ''}</span></span>
+    </div>`).join('');
+}
+
+function insynHTML(d) {
+  if (!d || d.error) return `<p class="muted" style="margin:0">${FI_DOWN}</p>`;
+  if (d.saknas) return '<p class="muted" style="margin:0">Vi hittade inte bolaget i Finansinspektionens insynsregister.</p>';
+  const list = d.affarer || [];
+  if (!list.length) return '<p class="muted" style="margin:0">Inga anmälda insynsaffärer de senaste tolv månaderna.</p>';
+  return `<div class="statbar" style="padding:0">
+      <div class="stat"><span class="small muted">Köp, 12 mån</span><span class="num">${d.kop.antal} st · ${esc(mny(d.kop.varde, d.valuta))}</span></div>
+      <div class="stat"><span class="small muted">Sälj, 12 mån</span><span class="num">${d.salj.antal} st · ${esc(mny(d.salj.varde, d.valuta))}</span></div>
+    </div>
+    <div>${insynRows(list.slice(0, 8), false)}</div>
+    <p class="small faint" style="margin:0">Källa: Finansinspektionens insynsregister${safeUrl(d.lank) ? `. <a href="${esc(safeUrl(d.lank))}" target="_blank" rel="noopener noreferrer">Se alla affärer hos FI</a>` : ''}. Värdet är antal gånger pris. Köp och sälj av insynspersoner kan ha många skäl och är inget råd.</p>`;
+}
+
+function blankHTML(d) {
+  if (!d || d.error) return `<p class="muted" style="margin:0">${FI_DOWN}</p>`;
+  const b = d.bolag;
+  if (!b) return '<p class="muted" style="margin:0">Ingen investerare har en anmäld blankning på 0,5 % eller mer i bolaget just nu.</p>';
+  return `<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><span class="num" style="font-size:34px;letter-spacing:-0.02em">${esc(pc(b.summa))}</span><span class="muted">av aktierna är blankade av ${b.positioner.length} ${b.positioner.length === 1 ? 'investerare' : 'investerare'} med minst 0,5 % var</span></div>
+    <div>${b.positioner.map((x) => `
+      <div class="row-link" style="gap:14px"><span class="grow">${esc(x.innehavare)}</span><span class="small muted num">${esc(x.datum ? dag(x.datum) : '')}</span><span class="pill num">${esc(pc(x.procent))}</span></div>`).join('')}</div>
+    <p class="small faint" style="margin:0">Blankning betyder att någon har lånat och sålt aktier för att tjäna på att kursen faller. Mindre positioner än 0,5 % syns inte, så den verkliga blankningen kan vara högre. Källa: <a href="${esc(safeUrl(d.lank) || 'https://www.fi.se')}" target="_blank" rel="noopener noreferrer">Finansinspektionens blankningsregister</a>.</p>`;
+}
+
+function insynOverviewHTML(d) {
+  if (!d || d.error) return `<p class="muted" style="margin:0">${FI_DOWN}</p>`;
+  const list = d.storsta?.length ? d.storsta : d.senaste || [];
+  if (!list.length) return '<p class="muted" style="margin:0">Inga insynsaffärer den senaste veckan.</p>';
+  return `<div>${insynRows(list.slice(0, 6), true)}</div><p class="small faint" style="margin:8px 0 0">Största köpen och försäljningarna i kronor de senaste sju dagarna. Källa: Finansinspektionen.</p>`;
+}
+
+function blankOverviewHTML(d) {
+  if (!d || d.error) return `<p class="muted" style="margin:0">${FI_DOWN}</p>`;
+  const list = d.topp || [];
+  if (!list.length) return '<p class="muted" style="margin:0">Inga anmälda blankningspositioner just nu.</p>';
+  const max = Math.max(...list.map((b) => b.summa), 1);
+  return `<div>${list.slice(0, 6).map((b) => `
+    <div class="row-link" style="gap:14px;flex-wrap:wrap">
+      <span class="grow" style="min-width:0"><span style="display:block;font-weight:500">${esc(b.emittent)}</span><span class="small muted">${b.positioner.length} ${b.positioner.length === 1 ? 'investerare' : 'investerare'}</span></span>
+      <span class="perf-track" style="width:90px;flex:none" aria-hidden="true"><span class="perf-bar neg" style="left:0;width:${(b.summa / max) * 100}%"></span></span>
+      <span class="pill num">${esc(pc(b.summa))}</span>
+    </div>`).join('')}</div><p class="small faint" style="margin:8px 0 0">Andel av aktierna som är blankade, räknat på positioner från 0,5 %. Källa: Finansinspektionen.</p>`;
 }
 
 /* ================= Översikt ================= */
@@ -220,14 +285,25 @@ function viewOversikt() {
 
   <div class="grid g3" id="heroes">
     ${MARKET.slice(0, 3).map((m, i) => `
-      <a class="card hero hero-link ${i === 0 ? 'dark rings' : ''}" href="/bolag/${m.sym}" data-link>
+      <a class="card hero hero-link ${i === 0 ? 'dark rings' : ''}" href="/bolag/${encodeURIComponent(m.sym)}" data-link>
         <div style="display:flex;align-items:center;gap:12px">
-          <span class="avatar">${esc(m.sym)}</span>
+          <span class="avatar">${esc(m.kort || m.sym)}</span>
           <div><div class="small muted">${esc(m.sub)}</div><div style="font-size:17px;font-weight:500">${esc(m.namn)}</div></div>
         </div>
-        <div><div class="small muted">Senast, USD</div><div class="big num" data-hero="${m.sym}">…</div></div>
+        <div><div class="small muted">Senast, ${esc(m.enhet || 'USD')}</div><div class="big num" data-hero="${m.sym}">…</div></div>
         <div class="chips"><span class="pill" data-hero-d="${m.sym}">…</span></div>
       </a>`).join('')}
+  </div>
+
+  <div class="grid g2">
+    <section class="card" aria-labelledby="insyn-o-h" style="padding:24px">
+      <div class="section-head" style="margin-bottom:6px"><h2 class="section" id="insyn-o-h" style="font-size:22px">Insynshandel i veckan</h2><span class="small muted">Sverige</span></div>
+      <div id="insyn-o">${loading('Hämtar från Finansinspektionen …')}</div>
+    </section>
+    <section class="card" aria-labelledby="blank-o-h" style="padding:24px">
+      <div class="section-head" style="margin-bottom:6px"><h2 class="section" id="blank-o-h" style="font-size:22px">Mest blankade</h2><span class="small muted">Sverige</span></div>
+      <div id="blank-o">${loading('Hämtar från Finansinspektionen …')}</div>
+    </section>
   </div>
 
   <div class="grid g2">
@@ -247,7 +323,7 @@ function viewOversikt() {
       <div id="mine">${loading('Hämtar kurser …')}</div>
     </section>
   </div>
-  ${footer('Marknaden visas med börsfonder (ETF:er) som följer respektive index, priser i USD.')}`;
+  ${footer('OMX Stockholm 30 visas i indexpoäng. Övriga marknader visas med börsfonder (ETF:er) som följer respektive index, priser i USD.')}`;
 }
 
 async function mountOversikt() {
@@ -270,6 +346,10 @@ async function mountOversikt() {
     draw(false);
   });
   draw(true);
+
+  // Finansinspektionen, parallellt med kurserna
+  api('/api/insyn', 30 * 60e3).then((d) => { const b = $('#insyn-o'); if (b) b.innerHTML = insynOverviewHTML(d); });
+  api('/api/blankning', 30 * 60e3).then((d) => { const b = $('#blank-o'); if (b) b.innerHTML = blankOverviewHTML(d); });
 
   // Marknaden och mina aktier i ett anrop
   const watch = getWatch().slice(0, 6);
@@ -297,10 +377,12 @@ async function mountOversikt() {
 
 /* ================= Sök ================= */
 const POPULAR = [
+  { sym: 'VOLV-B.ST', namn: 'Volvo B', typ: 'Aktie' },
+  { sym: 'INVE-B.ST', namn: 'Investor B', typ: 'Aktie' },
+  { sym: 'EVO.ST', namn: 'Evolution', typ: 'Aktie' },
+  { sym: 'ERIC-B.ST', namn: 'Ericsson B', typ: 'Aktie' },
   { sym: 'AAPL', namn: 'Apple', typ: 'Aktie' },
   { sym: 'NVDA', namn: 'Nvidia', typ: 'Aktie' },
-  { sym: 'MSFT', namn: 'Microsoft', typ: 'Aktie' },
-  { sym: 'TSLA', namn: 'Tesla', typ: 'Aktie' },
   { sym: 'SPY', namn: 'SPDR S&P 500 ETF', typ: 'ETF' },
   { sym: 'EWD', namn: 'iShares MSCI Sweden ETF', typ: 'ETF' }
 ];
@@ -316,7 +398,7 @@ function viewSok(params) {
   <form class="big-search" role="search" data-sokform>
     ${svg('search', 22, '#6B6F76')}
     <label class="sr-only" for="sokq">Sök bolag eller ticker</label>
-    <input id="sokq" name="q" type="search" value="${esc(q)}" placeholder="Skriv ett bolag eller en ticker, till exempel Apple eller NVDA" autocomplete="off">
+    <input id="sokq" name="q" type="search" value="${esc(q)}" placeholder="Skriv ett bolag eller en ticker, till exempel Volvo, Apple eller NVDA" autocomplete="off">
     <button class="btn" type="submit">Sök</button>
   </form>
   <section class="stack" style="gap:12px" aria-live="polite">
@@ -430,7 +512,7 @@ function mountNyheter() {
           ${n.text ? `<p>${esc(n.text)}</p>` : ''}
           <div class="meta">${sourceLink(n)}</div>
         </div>
-      </article>`).join('') || `<div class="empty">${region === 'se' ? 'Nyheter om svenska bolag ingår inte i Finnhubs gratisplan. Med en betalplan hos Finnhub dyker de upp här automatiskt.' : 'Inga nyheter just nu.'}</div>`;
+      </article>`).join('') || `<div class="empty">${region === 'se' ? 'Inga nyheter om svenska bolag just nu.' : 'Inga nyheter just nu.'}</div>`;
   };
   const load = async () => {
     const r = region; $('#newslist').innerHTML = loading('Hämtar nyheter …');
@@ -491,7 +573,7 @@ async function mountBevakning() {
           <td class="r"><button class="btn ghost small" type="button" data-unwatch="${esc(r.sym)}" aria-label="Sluta bevaka ${esc(r.namn)}">Ta bort</button></td>
         </tr>`).join('')}</tbody>
     </table></div>
-    <p class="small faint" style="margin:6px 14px 10px">${quotes.__hamtad ? `Kurser från Finnhub, hämtade kl ${esc(clock(quotes.__hamtad))}. "Saknas" betyder att datakällan inte har kursen med nuvarande plan.` : esc(errText(quotes.__error))}</p>`;
+    <p class="small faint" style="margin:6px 14px 10px">${quotes.__hamtad ? `Kurser hämtade kl ${esc(clock(quotes.__hamtad))}. "Saknas" betyder att ingen datakälla har kursen just nu.` : esc(errText(quotes.__error))}</p>`;
   };
   $('.main').addEventListener('click', (e) => {
     const b = e.target.closest('[data-unwatch]'); if (!b) return;
@@ -502,10 +584,10 @@ async function mountBevakning() {
 
 /* ================= Bolagssida med riskkoll ================= */
 function priceBlock(s, big = 40) {
-  if (s.saknarKurs) return `<div class="stack" style="gap:4px;align-items:flex-end;text-align:right"><span class="muted" style="font-size:20px">Kurs saknas</span><span class="small faint" style="max-width:300px">Datakällan har ingen kurs för ${esc(s.sym)} med nuvarande plan. Finnhubs gratisplan har bara amerikanska kurser.</span></div>`;
+  if (s.saknarKurs) return `<div class="stack" style="gap:4px;align-items:flex-end;text-align:right"><span class="muted" style="font-size:20px">Kurs saknas</span><span class="small faint" style="max-width:300px">Ingen datakälla har en kurs för ${esc(s.sym)} just nu.</span></div>`;
   return `<div class="stack" style="gap:8px;align-items:flex-end">
     <span class="num" style="font-size:${big}px;letter-spacing:-0.02em;line-height:1">${kr(s.kurs)} <span class="muted" style="font-size:16px">${esc(cur(s.valuta))}</span></span>
-    <span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${s.d1 != null ? `<span class="pill ${tone(s.d1)}">${pct(s.d1)} i dag</span>` : ''}<span class="pill outline" title="Tid för senaste affären enligt Finnhub">Senaste kurs ${esc(when(s.kursTid || s.hamtad))}</span></span>
+    <span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${s.d1 != null ? `<span class="pill ${tone(s.d1)}">${pct(s.d1)} i dag</span>` : ''}<span class="pill outline" title="Tid för senaste affären enligt ${esc(s.kalla || 'datakällan')}">Senaste kurs ${esc(when(s.kursTid || s.hamtad))}</span></span>
   </div>`;
 }
 
@@ -559,6 +641,20 @@ function bolagHTML(s) {
           <span class="small faint">Historisk utveckling säger inget om framtiden.</span>
         </section>
 
+        ${isSwedish(s.sym) ? `
+        <section class="card co-section" aria-labelledby="insyn-h">
+          <span class="label-up">Finansinspektionen</span>
+          <h2 class="section" id="insyn-h">Insynshandel</h2>
+          <p class="small muted" style="margin:0">Personer i bolagets ledning och styrelse måste anmäla sina affärer i aktien. Här är de senaste tolv månaderna.</p>
+          <div id="insyn-body" class="stack" style="gap:16px">${loading('Hämtar insynsaffärer …')}</div>
+        </section>
+
+        <section class="card co-section" aria-labelledby="blank-h">
+          <span class="label-up">Finansinspektionen</span>
+          <h2 class="section" id="blank-h">Blankning</h2>
+          <div id="blank-body" class="stack" style="gap:16px">${loading('Hämtar blankning …')}</div>
+        </section>` : ''}
+
         <section class="card co-section" aria-labelledby="bnyh-h">
           <span class="label-up">Nyheter</span>
           <h2 class="section" id="bnyh-h">Senaste om ${esc(s.namn)}</h2>
@@ -611,13 +707,18 @@ function bolagHTML(s) {
   </div>`;
 }
 
+const yahooDesc = (s) => `<div class="stack" style="gap:12px"><p class="lead">${esc(clipText(s.beskrivning, 700))}</p><p class="small faint" style="margin:0">Texten finns bara på engelska. Källa: ${esc(s.kalla || 'Yahoo Finance')}.</p></div>`;
+const clipText = (t, n) => (t.length > n ? t.slice(0, n).replace(/\s+\S*$/, '') + ' …' : t);
+
 function aboutHTML(a, s) {
   if (!a || a.error || a.saknas) {
+    if (s?.beskrivning) return yahooDesc(s);
     return `<p class="muted" style="margin:0">${a?.error ? esc(errText(a)) : 'Vi hittade ingen beskrivning av det här värdepappret. För fonder och mindre bolag saknas den ofta.'}</p>`;
   }
   const facts = a.fakta || [];
+  if (!a.affarside && !a.historia?.length && s?.beskrivning) return yahooDesc(s) + (facts.length ? `<dl class="facts" style="margin-top:20px">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : '');
   return `<div class="stack" style="gap:20px">
-    ${a.affarside ? `<p class="lead">${esc(a.affarside)}</p>` : ''}
+    ${a.affarside ? `<p class="lead">${esc(a.affarside)}</p>` : s?.beskrivning ? `<p class="lead">${esc(clipText(s.beskrivning, 520))}</p>` : ''}
     ${facts.length ? `<dl class="facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
     ${a.historia?.length ? `<div class="stack" style="gap:10px"><h3 class="sub">Historia</h3><div class="prose">${a.historia.map((p) => `<p>${esc(p)}</p>`).join('')}</div></div>` : ''}
     <p class="small faint" style="margin:0">${a.sprak === 'en' ? 'Texten finns bara på engelska än. ' : ''}Källa: ${safeUrl(a.url) ? `<a href="${esc(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer">Wikipedia</a> (CC BY-SA 4.0)` : 'Wikipedia'}${safeUrl(a.wikidata) ? ` och <a href="${esc(safeUrl(a.wikidata))}" target="_blank" rel="noopener noreferrer">Wikidata</a>` : ''}.</p></div>`;
@@ -651,6 +752,11 @@ async function mountBolag(sym) {
   });
   // Affärsidé/historia och nyheter hämtas parallellt
   api('/api/about?s=' + encodeURIComponent(sym), 60 * 60e3).then((a) => { const b = $('#about-body'); if (b) b.innerHTML = aboutHTML(a, s); });
+  if (isSwedish(sym)) {
+    const q = encodeURIComponent(s.namn);
+    api('/api/insyn?namn=' + q, 60 * 60e3).then((d) => { const b = $('#insyn-body'); if (b) b.innerHTML = insynHTML(d); });
+    api('/api/blankning?namn=' + q, 60 * 60e3).then((d) => { const b = $('#blank-body'); if (b) b.innerHTML = blankHTML(d); });
+  }
   const n = await api('/api/news?s=' + encodeURIComponent(sym), 5 * 60e3);
   const box = $('#bolagnews'); if (!box) return;
   const items = (n?.items || []).map(prepNews);
@@ -658,7 +764,7 @@ async function mountBolag(sym) {
     <div class="row-link" style="align-items:flex-start">
       <span class="small muted num" style="width:96px;flex:none;padding-top:2px">${esc(it.tidTxt)}</span>
       <span class="grow"><span style="display:block;font-weight:500">${newsTitle(it)}</span><span class="small muted">${esc(it.kalla)}</span></span>
-    </div>`).join('')}</div>` : `<p class="muted" style="margin:0">${n?.error ? esc(errText(n)) : n?.ingenAtkomst ? 'Nyheter om det här bolaget ingår inte i datakällans gratisplan.' : 'Inga nyheter om bolaget de senaste två veckorna.'}</p>`;
+    </div>`).join('')}</div>` : `<p class="muted" style="margin:0">${n?.error ? esc(errText(n)) : n?.ingenAtkomst ? 'Inga nyheter om bolaget hittades just nu.' : 'Inga nyheter om bolaget de senaste två veckorna.'}</p>`;
 }
 
 function viewNotFound() {
@@ -686,7 +792,7 @@ function route() {
     let sym = decodeURIComponent(m[1]);
     if (LEGACY[sym.toLowerCase()]) sym = LEGACY[sym.toLowerCase()];
     sym = sym.toUpperCase();
-    if (/^[A-Z0-9][A-Z0-9.\-_:^]{0,24}$/.test(sym)) return { active: 'sok', title: nameOf(sym), html: viewBolag(sym), mount: () => mountBolag(sym) };
+    if (/^\^?[A-Z0-9][A-Z0-9.\-_:]{0,24}$/.test(sym)) return { active: 'sok', title: nameOf(sym), html: viewBolag(sym), mount: () => mountBolag(sym) };
   }
   return { active: '', title: 'Sidan finns inte', html: viewNotFound() };
 }

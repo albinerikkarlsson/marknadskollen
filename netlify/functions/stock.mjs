@@ -1,90 +1,170 @@
 import { finnhub, cached, fail, cleanSymbol, num, quoteOrNull, ApiError } from '../lib/finnhub.mjs';
+import { ySummary, yChart, metricFromSummary, perfFromChart, raw } from '../lib/yahoo.mjs';
 import { buildFactors, perfFromMetric, riskScore, summarize, thinkAbout, money } from '../lib/risk.mjs';
 
-// GET /api/stock?s=AAPL  →  kurs, bolagsfakta, utveckling och riskkoll för ett värdepapper
+// GET /api/stock?s=VOLV-B.ST  →  kurs, bolagsfakta, utveckling och riskkoll för ett värdepapper
+// Yahoo Finance först (har även svenska aktier). Svarar Yahoo inte används Finnhub.
 export default async (req) => {
   try {
     const sym = cleanSymbol(new URL(req.url).searchParams.get('s'));
     if (!sym) throw new ApiError(400, 'ogiltig ticker');
-
-    // Tre oberoende anrop. Saknar planen något av dem visar vi det som finns.
-    const [qr, pr, mr] = await Promise.allSettled([
-      finnhub('/quote', { symbol: sym }),
-      finnhub('/stock/profile2', { symbol: sym }),
-      finnhub('/stock/metric', { symbol: sym, metric: 'all' })
-    ]);
-    const ok = (r) => (r.status === 'fulfilled' ? r.value : null);
-    const q = quoteOrNull(ok(qr));
-    const p = ok(pr) && Object.keys(ok(pr)).length ? ok(pr) : null;
-    const m = ok(mr)?.metric && Object.keys(ok(mr).metric).length ? ok(mr).metric : null;
-    if (!q && !p && !m) {
-      const firstErr = [qr, pr, mr].find((r) => r.status === 'rejected')?.reason;
-      throw firstErr || new ApiError(404, 'ingen data för ' + sym);
-    }
-
-    const bors = shortExchange(p?.exchange);
-    const cur = p?.currency || (sym.endsWith('.ST') ? 'SEK' : 'USD');
-    const kurs = q?.kurs ?? null;
-    const namn = p?.name || sym;
-    const mcapM = num(p?.marketCapitalization) ?? num(m?.marketCapitalization);
-    const faktorer = buildFactors({ m: m || {}, price: kurs, cur, mcapM });
-    // En total kräver minst tre delar, annars blir den missvisande
-    const poang = faktorer.length >= 3 ? riskScore(faktorer) : null;
-    const hi = num(m?.['52WeekHigh']); const lo = num(m?.['52WeekLow']);
-    const fakta = [
-      ['Börsvärde', mcapM ? money(mcapM * 1e6, cur) : null],
-      ['52 veckor', hi && lo ? `${fmt(lo)}–${fmt(hi)}` : null],
-      ['Bransch', p?.finnhubIndustry ? (SECTOR_SV[p.finnhubIndustry] || p.finnhubIndustry) : null],
-      ['Börs', bors],
-      ['Land', p?.country ? (COUNTRY_SV[p.country] || p.country) : null],
-      ['Noterad', p?.ipo ? String(p.ipo).slice(0, 4) : null]
-    ].filter((x) => x[1]);
-
-    return cached({
-      sym, namn,
-      kort: sym.split('.')[0].split('-')[0].slice(0, 4),
-      lista: [bors, p?.finnhubIndustry ? (SECTOR_SV[p.finnhubIndustry] || p.finnhubIndustry) : null].filter(Boolean).join(' · '),
-      logo: p?.logo || null,
-      webb: p?.weburl || null,
-      valuta: cur, kurs, d1: q?.d1 ?? null, kursTid: q?.tid || null,
-      fakta,
-      perf: perfFromMetric(m || {}, q?.d1 ?? null),
-      faktorer, poang,
-      sammanfattning: faktorer.length ? summarize(namn, faktorer) : 'Datakällan har inte tillräckligt med nyckeltal för att göra en riskkoll av det här värdepappret.',
-      tank: faktorer.length ? thinkAbout(faktorer, { price: kurs, hi, lo }) : [],
-      saknarKurs: !q,
-      saknarNyckeltal: !m,
-      hamtad: new Date().toISOString()
-    }, 900);
+    const y = await fromYahoo(sym).catch((e) => { console.warn('[stock] Yahoo:', e?.message); return null; });
+    if (y) return cached(y, 900);
+    return cached(await fromFinnhub(sym), 900);
   } catch (e) { return fail(e); }
 };
 
-// Finnhub skriver t.ex. "NASDAQ NMS - GLOBAL MARKET". Vi visar kortare namn.
-function shortExchange(x) {
+/* ---------- Yahoo ---------- */
+async function fromYahoo(sym) {
+  const [sr, cr, pr] = await Promise.allSettled([
+    ySummary(sym),
+    yChart(sym, '1y', '1d'),
+    // Finnhub har logga och noteringsår för amerikanska bolag. Bara ett tillägg.
+    /[.^]/.test(sym) ? Promise.resolve(null) : finnhub('/stock/profile2', { symbol: sym }, 4000)
+  ]);
+  const s = sr.status === 'fulfilled' ? sr.value : null;
+  const c = cr.status === 'fulfilled' ? cr.value : null;
+  if (!s && !c) throw (sr.reason || cr.reason || new ApiError(404, 'ingen data'));
+  const fp = pr.status === 'fulfilled' && pr.value && Object.keys(pr.value).length ? pr.value : null;
+
+  const price = s?.price || {};
+  const ap = s?.assetProfile || {};
+  const m = s ? metricFromSummary(s) : {};
+  const kurs = c?.quote?.kurs ?? raw(price.regularMarketPrice);
+  const d1 = c?.quote?.d1 ?? (raw(price.regularMarketChangePercent) != null ? Math.round(raw(price.regularMarketChangePercent) * 10000) / 100 : null);
+  const tidS = raw(price.regularMarketTime);
+  const kursTid = c?.quote?.tid || (tidS ? new Date(tidS * 1000).toISOString() : null);
+  const cur = price.currency || c?.meta?.currency || (sym.endsWith('.ST') ? 'SEK' : 'USD');
+  const namn = cleanTitle(price.longName || price.shortName || c?.meta?.longName || c?.meta?.shortName || fp?.name || sym);
+  const typ = price.quoteType || c?.meta?.instrumentType || '';
+  const bors = shortExchange(price.exchangeName || c?.meta?.fullExchangeName || c?.meta?.exchangeName || fp?.exchange);
+  const sektor = ap.sector ? (SECTOR_SV[ap.sector] || ap.sector) : fp?.finnhubIndustry ? (SECTOR_SV[fp.finnhubIndustry] || fp.finnhubIndustry) : null;
+  const mcapM = num(m.marketCapitalization);
+  const hi = num(m['52WeekHigh']) ?? (c?.points?.length ? Math.max(...c.points.map((p) => p[1])) : null);
+  const lo = num(m['52WeekLow']) ?? (c?.points?.length ? Math.min(...c.points.map((p) => p[1])) : null);
+  if (hi && lo && m['52WeekHigh'] == null) { m['52WeekHigh'] = hi; m['52WeekLow'] = lo; }
+
+  const faktorer = buildFactors({ m, price: kurs, cur, mcapM });
+  const poang = faktorer.length >= 3 ? riskScore(faktorer) : null;
+  const anst = raw(ap.fullTimeEmployees);
+  const fakta = [
+    ['Börsvärde', mcapM ? money(mcapM * 1e6, cur) : null],
+    ['52 veckor', hi && lo ? `${fmt(lo)}–${fmt(hi)}` : null],
+    ['Bransch', sektor],
+    ['Börs', bors],
+    ['Land', ap.country ? (COUNTRY_EN[ap.country] || ap.country) : fp?.country ? (COUNTRY_SV[fp.country] || fp.country) : null],
+    ['Anställda', anst ? anst.toLocaleString('sv-SE') : null],
+    ['Utdelning', raw(s?.summaryDetail?.dividendYield) ? `${(raw(s.summaryDetail.dividendYield) * 100).toFixed(1).replace('.', ',')} %` : null]
+  ].filter((x) => x[1]);
+
+  return {
+    sym, namn, kalla: 'Yahoo Finance',
+    typ: TYP[typ] || null,
+    kort: sym.replace('^', '').split('.')[0].split('-')[0].slice(0, 4),
+    lista: [bors, sektor].filter(Boolean).join(' · '),
+    logo: fp?.logo || null,
+    webb: ap.website || fp?.weburl || null,
+    beskrivning: ap.longBusinessSummary || null,
+    valuta: typ === 'INDEX' ? 'poäng' : cur, kurs, d1, kursTid,
+    fakta,
+    perf: perfFromChart(c?.points, kurs, d1),
+    faktorer, poang,
+    sammanfattning: faktorer.length ? summarize(namn, faktorer) : 'Datakällan har inte tillräckligt med nyckeltal för att göra en riskkoll av det här värdepappret.',
+    tank: faktorer.length ? thinkAbout(faktorer, { price: kurs, hi, lo }) : [],
+    saknarKurs: !kurs,
+    saknarNyckeltal: !s || !Object.keys(m).length,
+    hamtad: new Date().toISOString()
+  };
+}
+
+/* ---------- Finnhub (reserv) ---------- */
+async function fromFinnhub(sym) {
+  const [qr, pr, mr] = await Promise.allSettled([
+    finnhub('/quote', { symbol: sym }),
+    finnhub('/stock/profile2', { symbol: sym }),
+    finnhub('/stock/metric', { symbol: sym, metric: 'all' })
+  ]);
+  const ok = (r) => (r.status === 'fulfilled' ? r.value : null);
+  const q = quoteOrNull(ok(qr));
+  const p = ok(pr) && Object.keys(ok(pr)).length ? ok(pr) : null;
+  const m = ok(mr)?.metric && Object.keys(ok(mr).metric).length ? ok(mr).metric : null;
+  if (!q && !p && !m) {
+    const firstErr = [qr, pr, mr].find((r) => r.status === 'rejected')?.reason;
+    throw firstErr || new ApiError(404, 'ingen data för ' + sym);
+  }
+  const bors = shortExchange(p?.exchange);
+  const cur = p?.currency || (sym.endsWith('.ST') ? 'SEK' : 'USD');
+  const kurs = q?.kurs ?? null;
+  const namn = p?.name || sym;
+  const mcapM = num(p?.marketCapitalization) ?? num(m?.marketCapitalization);
+  const faktorer = buildFactors({ m: m || {}, price: kurs, cur, mcapM });
+  const poang = faktorer.length >= 3 ? riskScore(faktorer) : null;
+  const hi = num(m?.['52WeekHigh']); const lo = num(m?.['52WeekLow']);
+  const sektor = p?.finnhubIndustry ? (SECTOR_SV[p.finnhubIndustry] || p.finnhubIndustry) : null;
+  const fakta = [
+    ['Börsvärde', mcapM ? money(mcapM * 1e6, cur) : null],
+    ['52 veckor', hi && lo ? `${fmt(lo)}–${fmt(hi)}` : null],
+    ['Bransch', sektor],
+    ['Börs', bors],
+    ['Land', p?.country ? (COUNTRY_SV[p.country] || p.country) : null],
+    ['Noterad', p?.ipo ? String(p.ipo).slice(0, 4) : null]
+  ].filter((x) => x[1]);
+  return {
+    sym, namn, kalla: 'Finnhub',
+    kort: sym.replace('^', '').split('.')[0].split('-')[0].slice(0, 4),
+    lista: [bors, sektor].filter(Boolean).join(' · '),
+    logo: p?.logo || null,
+    webb: p?.weburl || null,
+    beskrivning: null,
+    valuta: cur, kurs, d1: q?.d1 ?? null, kursTid: q?.tid || null,
+    fakta,
+    perf: perfFromMetric(m || {}, q?.d1 ?? null),
+    faktorer, poang,
+    sammanfattning: faktorer.length ? summarize(namn, faktorer) : 'Datakällan har inte tillräckligt med nyckeltal för att göra en riskkoll av det här värdepappret.',
+    tank: faktorer.length ? thinkAbout(faktorer, { price: kurs, hi, lo }) : [],
+    saknarKurs: !q,
+    saknarNyckeltal: !m,
+    hamtad: new Date().toISOString()
+  };
+}
+
+// "Volvo, AB ser. B" → "Volvo AB ser. B". Bara små städningar.
+function cleanTitle(s) { return String(s).replace(/\s+/g, ' ').replace(/, AB\b/, ' AB').trim(); }
+
+// Visa kortare börsnamn
+export function shortExchange(x) {
   if (!x) return null;
   const u = x.toUpperCase();
-  if (u.includes('STOCKHOLM')) return 'Nasdaq Stockholm';
-  if (u.includes('NASDAQ')) return 'Nasdaq';
-  if (u.includes('NEW YORK STOCK EXCHANGE') || u === 'NYSE') return 'NYSE';
-  if (u.includes('OTC')) return 'OTC';
+  if (u.includes('STOCKHOLM') || u === 'STO') return 'Nasdaq Stockholm';
+  if (u.includes('FIRST NORTH')) return 'First North';
+  if (u.includes('NYSEARCA') || u.includes('NYSE ARCA') || u === 'PCX') return 'NYSE Arca';
+  if (u.includes('NASDAQ') || u === 'NMS' || u === 'NGM' || u === 'NCM') return 'Nasdaq';
+  if (u.includes('NEW YORK STOCK EXCHANGE') || u === 'NYSE' || u === 'NYQ') return 'NYSE';
+  if (u.includes('OTC') || u === 'PNK') return 'OTC';
   if (u.includes('OSLO')) return 'Oslo Børs';
   if (u.includes('COPENHAGEN')) return 'Nasdaq Köpenhamn';
   if (u.includes('HELSINKI')) return 'Nasdaq Helsingfors';
-  if (u.includes('LONDON')) return 'London';
-  if (u.includes('XETRA') || u.includes('FRANKFURT')) return 'Frankfurt';
+  if (u.includes('LONDON') || u === 'LSE') return 'London';
+  if (u.includes('XETRA') || u.includes('FRANKFURT') || u === 'GER') return 'Frankfurt';
   return x.length > 22 ? x.split(' - ')[0] : x;
 }
 const fmt = (n) => n.toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const TYP = { EQUITY: 'Aktie', ETF: 'ETF', MUTUALFUND: 'Fond', INDEX: 'Index' };
 const SECTOR_SV = {
-  'Technology': 'Teknik', 'Semiconductors': 'Halvledare', 'Software': 'Mjukvara', 'Machinery': 'Maskiner', 'Banking': 'Bank',
-  'Financial Services': 'Finans', 'Pharmaceuticals': 'Läkemedel', 'Biotechnology': 'Bioteknik', 'Health Care': 'Hälsovård',
+  // Yahoo
+  'Technology': 'Teknik', 'Industrials': 'Industri', 'Financial Services': 'Finans', 'Healthcare': 'Hälsovård',
+  'Consumer Cyclical': 'Sällanköpsvaror', 'Consumer Defensive': 'Dagligvaror', 'Communication Services': 'Kommunikation',
+  'Basic Materials': 'Råvaror', 'Energy': 'Energi', 'Utilities': 'Kraftförsörjning', 'Real Estate': 'Fastigheter',
+  // Finnhub
+  'Semiconductors': 'Halvledare', 'Software': 'Mjukvara', 'Machinery': 'Maskiner', 'Banking': 'Bank',
+  'Pharmaceuticals': 'Läkemedel', 'Biotechnology': 'Bioteknik', 'Health Care': 'Hälsovård',
   'Aerospace & Defense': 'Försvar och flyg', 'Automobiles': 'Fordon', 'Retail': 'Detaljhandel', 'Media': 'Media',
-  'Telecommunication': 'Telekom', 'Communications': 'Kommunikation', 'Energy': 'Energi', 'Utilities': 'Kraftförsörjning',
-  'Real Estate': 'Fastigheter', 'Metals & Mining': 'Gruvor och metaller', 'Hotels, Restaurants & Leisure': 'Hotell, restaurang och nöje',
+  'Telecommunication': 'Telekom', 'Communications': 'Kommunikation', 'Metals & Mining': 'Gruvor och metaller', 'Hotels, Restaurants & Leisure': 'Hotell, restaurang och nöje',
   'Insurance': 'Försäkring', 'Building': 'Bygg', 'Construction': 'Bygg', 'Chemicals': 'Kemi', 'Logistics & Transportation': 'Logistik och transport',
   'Beverages': 'Drycker', 'Food Products': 'Livsmedel', 'Consumer products': 'Konsumentprodukter', 'Electrical Equipment': 'Elutrustning',
   'Industrial Conglomerates': 'Industrikonglomerat', 'Airlines': 'Flyg', 'Textiles, Apparel & Luxury Goods': 'Kläder och lyx'
 };
 const COUNTRY_SV = { SE: 'Sverige', US: 'USA', NO: 'Norge', DK: 'Danmark', FI: 'Finland', DE: 'Tyskland', GB: 'Storbritannien', NL: 'Nederländerna', CH: 'Schweiz', FR: 'Frankrike', CN: 'Kina', JP: 'Japan', CA: 'Kanada', IE: 'Irland', TW: 'Taiwan' };
+const COUNTRY_EN = { Sweden: 'Sverige', 'United States': 'USA', Norway: 'Norge', Denmark: 'Danmark', Finland: 'Finland', Germany: 'Tyskland', 'United Kingdom': 'Storbritannien', Netherlands: 'Nederländerna', Switzerland: 'Schweiz', France: 'Frankrike', China: 'Kina', Japan: 'Japan', Canada: 'Kanada', Ireland: 'Irland', Taiwan: 'Taiwan', Luxembourg: 'Luxemburg', Israel: 'Israel' };
 
 export const config = { path: '/api/stock' };

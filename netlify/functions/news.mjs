@@ -1,8 +1,10 @@
 import { finnhub, cached, fail, cleanSymbol, dayIso } from '../lib/finnhub.mjs';
+import { ySearch, newsFromSearch } from '../lib/yahoo.mjs';
 
 // GET /api/news?region=world|se  eller  /api/news?s=AAPL
 // world: Finnhubs allmänna marknadsnyheter. se: nyheter om stora svenska bolag.
 // s: nyheter om ett bolag. Vi visar rubrik, kort ingress och länk till källan.
+// Finnhubs gratisplan saknar svenska bolag, så då hämtas rubrikerna från Yahoo Finance i stället.
 const SE = ['VOLV-B.ST', 'ERIC-B.ST', 'SAAB-B.ST', 'EVO.ST', 'INVE-B.ST', 'ATCO-A.ST', 'HM-B.ST', 'SEB-A.ST'];
 
 export default async (req) => {
@@ -22,6 +24,14 @@ export default async (req) => {
       }
     } else {
       raw = await finnhub('/news', { category: 'general' });
+    }
+    if (!raw.length && (one || region === 'se')) {
+      const syms = one ? [one] : SE;
+      const res = await Promise.allSettled(syms.map((s) => ySearch(s, { quotes: 0, news: one ? 10 : 4 })));
+      for (const [i, r] of res.entries()) {
+        if (r.status === 'fulfilled') raw.push(...newsFromSearch(r.value, syms[i]).filter((n) => !n.datetime || n.datetime * 1000 >= from.getTime() - (one ? 30 : 5) * 864e5));
+        else if (!err) err = r.reason;
+      }
     }
     // Gratisplanen nekar nyheter om utländska bolag (403). Det är inget fel, bara tomt.
     if (!raw.length && err?.status === 403) {

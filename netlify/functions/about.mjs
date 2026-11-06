@@ -1,4 +1,5 @@
 import { finnhub, cached, fail, cleanSymbol, ApiError } from '../lib/finnhub.mjs';
+import { yChart } from '../lib/yahoo.mjs';
 
 // GET /api/about?s=AAPL  →  affärsidé, historia och fakta om bolaget
 // Källor: Wikipedia (text, CC BY-SA 4.0) och Wikidata (fakta, CC0). Svenska i första hand, annars engelska.
@@ -8,8 +9,10 @@ export default async (req) => {
   try {
     const sym = cleanSymbol(new URL(req.url).searchParams.get('s'));
     if (!sym) throw new ApiError(400, 'ogiltig ticker');
-    const profile = await finnhub('/stock/profile2', { symbol: sym }).catch(() => null);
-    const name = profile?.name || '';
+    // Bolagsnamnet behövs för att hitta rätt artikel. Finnhub har amerikanska bolag, Yahoo även svenska.
+    const profile = /[.^]/.test(sym) ? null : await finnhub('/stock/profile2', { symbol: sym }).catch(() => null);
+    let name = profile?.name || '';
+    if (!name) name = await yChart(sym, '5d', '1d').then((c) => c.meta?.longName || c.meta?.shortName || '').catch(() => '');
 
     const item = await findItem(sym, name);
     if (!item) return cached({ saknas: true }, 7 * 86400);
@@ -77,11 +80,14 @@ function cleanName(n) {
     .replace(/\b(inc|incorporated|corp|corporation|co|company|ltd|limited|plc|ab|asa|oyj|a\/s|sa|nv|ag|se|holdings?|group|class [a-c]|ser\.? [a-c])\b\.?/gi, '')
     .replace(/[,.]/g, ' ').replace(/\s+/g, ' ').trim();
 }
-// Samma bolag om första ordet i det rensade namnet stämmer
+// Samma bolag om första ordet i det ena namnet finns i det andra,
+// t.ex. "Ericsson" och "Telefonaktiebolaget LM Ericsson"
 function sameCompany(a, b) {
-  const x = cleanName(a).toLowerCase().split(' ')[0];
-  const y = cleanName(b).toLowerCase().split(' ')[0];
-  return !!x && !!y && x.length > 1 && x === y;
+  const wa = cleanName(a).toLowerCase().split(' ').filter(Boolean);
+  const wb = cleanName(b).toLowerCase().split(' ').filter(Boolean);
+  const x = wa[0]; const y = wb[0];
+  if (!x || !y || x.length < 2) return false;
+  return x === y || (x.length > 3 && wb.includes(x)) || (y.length > 3 && wa.includes(y));
 }
 
 /* ---------- Text från Wikipedia ---------- */
