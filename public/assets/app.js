@@ -830,7 +830,8 @@ async function auth(path, body, method = 'POST', tok) {
   const c = await accCfg();
   if (!c) throw Object.assign(new Error('Inloggning är inte påslagen'), { code: 'off' });
   const res = await fetch(c.url + '/auth/v1' + path, {
-    method, headers: { apikey: c.anon, 'content-type': 'application/json', authorization: 'Bearer ' + (tok || c.anon) },
+    // Publika nycklar (sb_publishable_…) skickas bara som apikey. Inloggade anrop får dessutom sin egen token.
+    method, headers: { apikey: c.anon, 'content-type': 'application/json', ...(tok ? { authorization: 'Bearer ' + tok } : c.anon.startsWith('eyJ') ? { authorization: 'Bearer ' + c.anon } : {}) },
     body: body ? JSON.stringify(body) : undefined
   });
   const j = await res.json().catch(() => ({}));
