@@ -9,6 +9,9 @@ const SE = ['VOLV-B.ST', 'ERIC-B.ST', 'SAAB-B.ST', 'EVO.ST', 'INVE-B.ST', 'ATCO-
 
 const SE_NAMN = { 'VOLV-B.ST': 'Volvo', 'ERIC-B.ST': 'Ericsson', 'SAAB-B.ST': 'Saab', 'EVO.ST': 'Evolution Gaming', 'INVE-B.ST': 'Investor AB', 'ATCO-A.ST': 'Atlas Copco', 'HM-B.ST': 'H&M', 'SEB-A.ST': 'SEB' };
 
+// Bolag med liknande namn som lätt blandas ihop
+const NOT = { 'VOLV-B.ST': /Volvo Cars?\b|Volvo Car's/i, 'VOLV-A.ST': /Volvo Cars?\b|Volvo Car's/i };
+
 export default async (req) => {
   try {
     const p = new URL(req.url).searchParams;
@@ -42,7 +45,7 @@ export default async (req) => {
       const res = await Promise.allSettled(terms.map(([q]) => ySearch(q, { quotes: 1, news: one ? 10 : 5 })));
       const oldest = from.getTime() - (one ? 45 : 9) * 864e5;
       for (const [i, r] of res.entries()) {
-        if (r.status === 'fulfilled') raw.push(...newsFromSearch(r.value, terms[i][1], terms[i][2]).filter((n) => !n.datetime || n.datetime * 1000 >= oldest));
+        if (r.status === 'fulfilled') raw.push(...newsFromSearch(r.value, terms[i][1], terms[i][2]).filter((n) => (!n.datetime || n.datetime * 1000 >= oldest) && !(NOT[terms[i][1]]?.test(n.headline))));
         else if (!err) err = r.reason;
       }
       if (!raw.length) console.warn('[news] Yahoo gav inga nyheter för', syms.join(','));
