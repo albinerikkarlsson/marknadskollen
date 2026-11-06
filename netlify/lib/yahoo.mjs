@@ -175,8 +175,18 @@ export async function ySearch(q, { quotes = 12, news = 0 } = {}) {
   return yahoo('/v1/finance/search', { q, quotesCount: quotes, newsCount: news, enableFuzzyQuery: 'false', quotesQueryId: 'tss_match_phrase_query', newsQueryId: 'news_cie_vespa', listsCount: 0, lang: 'en-US', region: 'US' });
 }
 
-export function newsFromSearch(d, sym) {
-  return (d?.news || []).filter((n) => n?.title && n?.link).map((n) => ({
+// Yahoo blandar in artiklar om andra bolag. Behåll bara de som handlar om bolaget:
+// tickern finns bland artikelns bolag, eller nyckelordet (t.ex. "Volvo") står i rubriken.
+export function newsFromSearch(d, sym, keyword = '') {
+  const base = String(sym || '').toUpperCase();
+  const kw = String(keyword || '').trim();
+  const relevant = (n) => {
+    const rel = (n.relatedTickers || []).map((t) => String(t).toUpperCase());
+    if (base && rel.includes(base)) return true;
+    if (kw.length >= 3 && new RegExp(`(^|[^A-Za-zÅÄÖåäö])${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-zåäö])`).test(n.title)) return true;
+    return false;
+  };
+  return (d?.news || []).filter((n) => n?.title && n?.link && relevant(n)).map((n) => ({
     headline: n.title,
     summary: '',
     url: n.link,

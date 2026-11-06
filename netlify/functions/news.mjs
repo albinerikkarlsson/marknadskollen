@@ -32,15 +32,17 @@ export default async (req) => {
       // Sök på både ticker och bolagsnamn, Yahoo hittar olika artiklar
       const terms = [];
       for (const s of syms) {
-        terms.push([s, s]);
+        const kw = (SE_NAMN[s] || '').split(' ')[0];
+        terms.push([s, s, kw]);
         const nm = SE_NAMN[s] || (one ? await yChart(s, '5d', '1d').then((c) => cleanCo(c.meta?.longName || c.meta?.shortName)).catch(() => '') : '');
-        if (nm) terms.push([nm, s]);
+        if (nm) terms.push([nm, s, kwOf(nm)]);
+        if (!kw && nm) terms[terms.length - 2][2] = kwOf(nm);
         if (!one && terms.length >= 16) break;
       }
       const res = await Promise.allSettled(terms.map(([q]) => ySearch(q, { quotes: 1, news: one ? 10 : 5 })));
       const oldest = from.getTime() - (one ? 45 : 9) * 864e5;
       for (const [i, r] of res.entries()) {
-        if (r.status === 'fulfilled') raw.push(...newsFromSearch(r.value, terms[i][1]).filter((n) => !n.datetime || n.datetime * 1000 >= oldest));
+        if (r.status === 'fulfilled') raw.push(...newsFromSearch(r.value, terms[i][1], terms[i][2]).filter((n) => !n.datetime || n.datetime * 1000 >= oldest));
         else if (!err) err = r.reason;
       }
       if (!raw.length) console.warn('[news] Yahoo gav inga nyheter för', syms.join(','));
@@ -72,6 +74,8 @@ export default async (req) => {
   } catch (e) { return fail(e); }
 };
 
+// Det mest utmärkande ordet i namnet, t.ex. "Ericsson" ur "Telefonaktiebolaget LM Ericsson"
+const kwOf = (n) => String(n).split(' ').filter((w) => w.length >= 3 && !/aktiebolag|^the$|^group$|^holding/i.test(w))[0] || '';
 const cleanCo = (n) => String(n || '').replace(/\(publ\.?\)/gi, '').replace(/\b(AB|Aktiebolag|ser\.? [AB])\b/g, '').replace(/[,]/g, ' ').replace(/\s+/g, ' ').trim();
 function clip(s, n) { return s.length > n ? s.slice(0, n).replace(/\s+\S*$/, '') + ' …' : s; }
 function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return 'källa'; } }

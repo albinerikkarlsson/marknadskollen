@@ -180,7 +180,7 @@ function frontNewsHTML(data, region) {
   const [top, ...rest] = data.items;
   return `
   <div class="split" style="align-items:stretch">
-    <article class="wide card dark rings stack" style="gap:12px;padding:26px;justify-content:space-between;min-height:260px">
+    <article class="wide card dark rings stack" style="gap:12px;padding:26px;justify-content:space-between;min-height:${top.text ? 260 : 190}px">
       <div class="stack" style="gap:12px">
         <div class="meta" style="color:rgba(255,255,255,0.62)"><span class="pill inv">${esc(top.kalla)}</span><span class="num">${esc(top.tidTxt)}</span>${top.bolagTxt ? `<span>${esc(top.bolagTxt)}</span>` : ''}</div>
         <h3 style="margin:0;font-size:clamp(22px,3vw,30px);font-weight:400;letter-spacing:-0.01em;line-height:1.22">${newsTitle(top)}</h3>
