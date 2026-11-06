@@ -43,7 +43,6 @@ export default async (req) => {
     const text = (body?.content || []).filter((c) => c.type === 'text').map((c) => c.text || '').join('').trim();
     const punkter = parsePoints(text);
     if (!punkter.length) console.warn('[summary] kunde inte läsa AI-svaret:', JSON.stringify(body).slice(0, 400));
-    if (!punkter.length && p.get('debug') === '1') return new Response(JSON.stringify({ debug: JSON.stringify(body).slice(0, 1500) }), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
     if (!punkter.length) return cached({ saknas: 'no_ai_answer' }, 600);
     return cached({ punkter, antalNyheter: items.length, modell: 'Claude', hamtad: new Date().toISOString() }, 6 * 3600);
   } catch (e) { return fail(e); }
