@@ -3,7 +3,9 @@ import newsHandler from './news.mjs';
 
 // GET /api/summary?s=VOLV-B.ST&namn=AB Volvo  →  kort AI-sammanfattning på svenska av de senaste nyheterna
 // Kräver miljövariabeln ANTHROPIC_API_KEY i Netlify. Utan nyckel svarar funktionen { saknas: 'no_ai_key' }.
-const MODEL = 'claude-haiku-5-5';
+// Netlifys AI Gateway lägger själv in ANTHROPIC_API_KEY och ANTHROPIC_BASE_URL. Finns ingen gateway går anropet direkt till Anthropic.
+// Flera modeller provas i tur och ordning om gatewayen inte har den första.
+const MODELS = ['claude-haiku-5-5', 'claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-3-5-haiku-latest'];
 
 export default async (req) => {
   try {
@@ -22,14 +24,22 @@ export default async (req) => {
     const lista = items.map((n, i) => `${i + 1}. ${n.datum ? n.datum.slice(0, 10) : ''} | ${n.kalla} | ${n.rubrik}${n.text ? ' – ' + n.text : ''}`).join('\n');
     const prompt = `Här är de senaste nyhetsrubrikerna om ${namn} (${sym}):\n\n${lista}\n\nSammanfatta på enkel svenska vad nyheterna säger om bolaget, i 2 till 4 korta punkter. Regler:\n- Bara det som står i rubrikerna, inga egna antaganden.\n- Hoppa över rubriker som inte handlar om ${namn}.\n- Neutral ton. Inga råd om att köpa eller sälja och inga kursprognoser.\n- Använd aldrig ordet "säkert".\nSvara endast med JSON: {"punkter": ["...", "..."]}`;
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: MODEL, max_tokens: 500, messages: [{ role: 'user', content: prompt }] }),
-      signal: AbortSignal.timeout(20000)
-    });
-    const body = await res.json().catch(() => null);
-    if (!res.ok) throw new ApiError(res.status === 401 ? 503 : res.status === 429 ? 429 : 502, `AI ${res.status}: ${JSON.stringify(body?.error || body).slice(0, 200)}`);
+    const base = (Netlify.env.get('ANTHROPIC_BASE_URL') || 'https://api.anthropic.com').replace(/\/+$/, '');
+    let body = null; let lastErr = null;
+    for (const model of MODELS) {
+      const res = await fetch(`${base}/v1/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model, max_tokens: 500, messages: [{ role: 'user', content: prompt }] }),
+        signal: AbortSignal.timeout(20000)
+      });
+      const b = await res.json().catch(() => null);
+      if (res.ok) { body = b; break; }
+      lastErr = new ApiError(res.status === 429 ? 429 : 502, `AI ${res.status} (${model}): ${JSON.stringify(b?.error || b).slice(0, 200)}`);
+      // Fel modell eller modell som saknas: prova nästa. Annat fel: avbryt.
+      if (!(res.status === 400 || res.status === 404 || res.status === 403) || !/model|not.?found|not.?supported|not.?allowed/i.test(JSON.stringify(b || ''))) break;
+    }
+    if (!body) throw lastErr || new ApiError(502, 'AI svarade inte');
     const text = (body?.content || []).map((c) => c.text || '').join('');
     const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
     const punkter = (json.punkter || []).map((x) => String(x).trim()).filter(Boolean).slice(0, 4);

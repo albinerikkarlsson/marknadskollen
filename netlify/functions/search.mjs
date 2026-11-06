@@ -37,7 +37,7 @@ async function fromYahoo(q) {
       return {
         sym,
         namn: tidy(r.longname || r.shortname),
-        typ: k ? `${k}-aktie` : TYP[r.quoteType] || r.typeDisp || '',
+        typ: (k ? `${k}-aktie` : TYP[r.quoteType] || r.typeDisp || '') + (OTC.has(r.exchange) ? ' · OTC i USA' : ''),
         klass: k,
         borsen: OTC.has(r.exchange) ? 'OTC' : sym.includes('.') ? sym.split('.').pop() : 'US',
         lista: r.exchDisp || null
