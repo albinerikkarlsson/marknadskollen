@@ -137,7 +137,7 @@ function sidebar(active) {
       <span class="brand-mark">${svg('logo', 20, '#FFFFFF')}</span>
       <span class="brand-text"><span class="brand-name">Marknadskollen</span><span class="brand-sub">Trygg börskoll</span></span>
     </a>
-    <div class="welcome"><b>Välkommen tillbaka</b><span>${esc(today)}</span></div>
+    <div class="welcome"><b>Välkommen tillbaka${firstName() ? `, ${esc(firstName())}` : ''}</b><span>${esc(today)}</span></div>
     ${NAV.map((g) => `
       <div class="nav-group">
         <span class="nav-label">${g.group}</span>
@@ -273,6 +273,7 @@ function viewOversikt() {
     ${MARKET.map((m) => `<span><span class="muted">${esc(m.namn)}</span><span data-q="${m.sym}">…</span></span>`).join('')}
   </div>
   <div class="stack" style="gap:6px">
+    ${firstName() ? `<span class="greet-mobile">Välkommen tillbaka, ${esc(firstName())}</span>` : ''}
     <span class="eyebrow" id="market-status">Hämtar marknaden …</span>
     <h1 class="title">Börsen i dag</h1>
   </div>
@@ -819,6 +820,10 @@ const LEGACY = { evo: 'EVO.ST', saab: 'SAAB-B.ST', volvo: 'VOLV-B.ST' };
 /* ================= Konto (Supabase Auth via REST, utan extra bibliotek) ================= */
 // Bevakning, larm och namn sparas i kontots användardata. Ingen databastabell behövs.
 const ACC = { cfg: undefined, ai: false, session: readLS('mk-session', null), user: null };
+const fullName = () => String(ACC.user?.user_metadata?.full_name || '').trim();
+const firstName = () => fullName().split(/\s+/)[0] || '';
+// Hela sidan kräver inloggning när Supabase är påslaget
+const locked = () => !!ACC.cfg && !ACC.user;
 async function accCfg() {
   if (ACC.cfg === undefined) {
     const c = await api('/api/config', 5 * 60e3);
@@ -885,15 +890,16 @@ async function bootAccount() {
   if (h.get('access_token')) {
     setSession({ access_token: h.get('access_token'), refresh_token: h.get('refresh_token'), expires_in: h.get('expires_in') });
     recovery = h.get('type') === 'recovery';
+    ACC.fromLink = !recovery;
     history.replaceState(null, '', location.pathname + location.search);
   }
   if (h.get('error_description')) { toast('Länken fungerade inte', h.get('error_description').replace(/\+/g, ' ')); history.replaceState(null, '', location.pathname + location.search); }
   if (!(await accCfg()) || !ACC.session) return;
   const t = await token(); if (!t) return;
+  // Bekräftelselänken loggar in. Skicka vidare dit man var på väg.
   try { ACC.user = await auth('/user', null, 'GET', t); } catch { setSession(null); return; }
   applyCloud();
   if (recovery) { history.replaceState(null, '', '/konto?nytt=1'); }
-  render();
 }
 
 const AUTH_ERR = {
@@ -907,9 +913,25 @@ const AUTH_ERR = {
   validation_failed: 'Kontrollera e-postadressen.',
   same_password: 'Det nya lösenordet måste skilja sig från det gamla.'
 };
+// Efter inloggning: tillbaka till sidan man försökte öppna, annars översikten
+function goAfterLogin() {
+  let to = readLS('mk-efter-login', '/');
+  try { localStorage.removeItem('mk-efter-login'); } catch { /* privat läge */ }
+  if (typeof to !== 'string' || !to.startsWith('/') || to.startsWith('//') || to.startsWith('/konto')) to = '/';
+  navigate(to);
+}
 const authErr = (e) => AUTH_ERR[e?.code] || (e?.status === 400 ? 'Kontrollera uppgifterna och prova igen.' : 'Det gick inte att nå inloggningen just nu.');
 
 function viewKonto() {
+  if (locked()) {
+    return `<div class="auth-wrap">
+      <div class="auth-brand"><span class="brand-mark">${svg('logo', 22, '#FFFFFF')}</span><span><b>Marknadskollen</b><span class="small muted">Trygg börskoll</span></span></div>
+      <div class="auth-intro"><h1 class="title" style="font-size:clamp(30px,5vw,42px)">Börsen på enkel svenska</h1>
+        <p class="muted" style="margin:0;font-size:16px">Riskkoll, kursdiagram, nyheter med AI-sammanfattning, insynshandel och blankning. Logga in eller skapa ett gratis konto för att fortsätta.</p></div>
+      <div id="konto" class="auth-card">${loading('Hämtar …')}</div>
+      <p class="small faint" style="margin:0;text-align:center">Ingen investeringsrådgivning. Data från Yahoo Finance, Finnhub och Finansinspektionen.</p>
+    </div>`;
+  }
   return `
   ${topbar([['Översikt', '/'], [ACC.user ? 'Mitt konto' : 'Logga in', '/konto']])}
   <div class="stack" style="gap:6px">
@@ -945,14 +967,23 @@ async function mountKonto() {
   if (ACC.user) {
     const n = getWatch().length; const l = Object.keys(getLarm()).length;
     box.innerHTML = `<div class="card stack" style="gap:16px;padding:26px">
-      <div style="display:flex;align-items:center;gap:14px"><span class="avatar" style="width:52px;height:52px">${svg('user', 22)}</span><div><div style="font-weight:500">${esc(ACC.user.email)}</div><div class="small muted">Inloggad</div></div></div>
+      <div style="display:flex;align-items:center;gap:14px"><span class="avatar" style="width:52px;height:52px;font-size:16px">${firstName() ? esc(initials()) : svg('user', 22)}</span><div><div style="font-weight:500">${esc(fullName() || ACC.user.email)}</div><div class="small muted">${esc(ACC.user.email)}</div></div></div>
+      <form class="stack" style="gap:8px" data-nameform><label class="field"><span>Namn</span><input name="name" type="text" maxlength="60" autocomplete="name" value="${esc(fullName())}" required></label><div style="display:flex;gap:10px;align-items:center"><button class="btn ghost small" type="submit">Spara namn</button><span class="small muted" data-namemsg role="status"></span></div></form>
       <div class="statbar" style="padding:0"><div class="stat"><span class="small muted">Bevakar</span><span class="num">${n} st</span></div><div class="stat"><span class="small muted">Prislarm</span><span class="num">${l} st</span></div></div>
       <p class="small muted" style="margin:0">Din bevakning och dina larm sparas på kontot och syns när du loggar in på mobilen eller datorn.</p>
       <div class="chips"><a class="btn" href="/bevakning" data-link>Till bevakningen</a><button class="btn ghost" type="button" data-logout>Logga ut</button></div></div>`;
+    box.querySelector('[data-nameform]').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = String(new FormData(e.target).get('name') || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+      const m = box.querySelector('[data-namemsg]');
+      if (name.length < 2) { m.textContent = 'Skriv ditt namn.'; return; }
+      try { ACC.user = await auth('/user', { data: { full_name: name } }, 'PUT', await token()); m.textContent = 'Sparat'; refreshNav('konto'); }
+      catch (err) { m.textContent = authErr(err); }
+    });
     box.querySelector('[data-logout]').addEventListener('click', async () => {
       const t = ACC.session?.access; setSession(null); writeLS('mk-sync-user', null);
       if (t) auth('/logout', null, 'POST', t).catch(() => {});
-      toast('Du är utloggad', 'Listan finns kvar i den här webbläsaren.'); render();
+      toast('Du är utloggad', ''); navigate('/konto');
     });
     return;
   }
@@ -963,6 +994,7 @@ async function mountKonto() {
         <button type="button" role="tab" data-mode="login" aria-selected="${mode === 'login'}">Logga in</button>
         <button type="button" role="tab" data-mode="signup" aria-selected="${mode === 'signup'}">Skapa konto</button>
       </div>
+      ${mode === 'signup' ? '<label class="field"><span>Namn</span><input name="name" type="text" required maxlength="60" autocomplete="name" placeholder="Till exempel Albin Karlsson"></label>' : ''}
       <label class="field"><span>E-post</span><input name="email" type="email" required autocomplete="email" inputmode="email"></label>
       ${mode !== 'forgot' ? `<label class="field"><span>Lösenord${mode === 'signup' ? ' (minst 8 tecken)' : ''}</span><input name="password" type="password" minlength="${mode === 'signup' ? 8 : 1}" required autocomplete="${mode === 'signup' ? 'new-password' : 'current-password'}"></label>` : ''}
       <p class="small" role="status" data-msg style="margin:0;min-height:1em"></p>
@@ -974,6 +1006,8 @@ async function mountKonto() {
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(f); const email = String(fd.get('email') || '').trim(); const password = String(fd.get('password') || '');
+      const name = String(fd.get('name') || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+      if (mode === 'signup' && name.length < 2) { f.querySelector('[data-msg]').textContent = 'Skriv ditt namn.'; return; }
       const msg = f.querySelector('[data-msg]'); const btn = f.querySelector('[type=submit]');
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { msg.textContent = 'Skriv en giltig e-postadress.'; return; }
       if (mode === 'signup' && password.length < 8) { msg.textContent = 'Lösenordet behöver minst 8 tecken.'; return; }
@@ -984,13 +1018,14 @@ async function mountKonto() {
           await auth(`/recover?redirect_to=${back}`, { email });
           msg.textContent = 'Om det finns ett konto med den e-posten har vi skickat en länk för att välja nytt lösenord.';
         } else if (mode === 'signup') {
-          const j = await auth(`/signup?redirect_to=${back}`, { email, password });
-          if (j.access_token) { setSession(j); ACC.user = j.user; applyCloud(); toast('Välkommen!', 'Ditt konto är skapat.'); navigate('/bevakning'); return; }
-          msg.textContent = 'Klart! Vi har skickat ett mejl till dig. Klicka på länken i mejlet för att bekräfta, sedan är du inloggad.';
+          const j = await auth(`/signup?redirect_to=${back}`, { email, password, data: { full_name: name } });
+          if (j.access_token) { setSession(j); ACC.user = j.user; applyCloud(); toast(`Välkommen, ${name.split(' ')[0]}!`, 'Ditt konto är skapat.'); goAfterLogin(); return; }
+          f.innerHTML = `<div class="stack" style="gap:10px"><span class="label-up">Nästan klart</span><p style="margin:0;font-size:17px">Tack ${esc(name.split(' ')[0])}! Vi har skickat ett mejl till <b>${esc(email)}</b>.</p><p class="muted" style="margin:0">Klicka på länken i mejlet för att bekräfta din e-post. Då loggas du in automatiskt. Hittar du inte mejlet, titta i skräpposten.</p></div>`;
+          return;
         } else {
           const j = await auth('/token?grant_type=password', { email, password });
           setSession(j); ACC.user = j.user; applyCloud();
-          toast('Du är inloggad', 'Din bevakning sparas nu på kontot.'); navigate('/bevakning'); return;
+          toast(`Välkommen tillbaka${firstName() ? ', ' + firstName() : ''}!`, ''); goAfterLogin(); return;
         }
       } catch (err) { msg.textContent = authErr(err); }
       btn.disabled = false;
@@ -1009,6 +1044,7 @@ function toast(title, body = '', href = null) {
   wrap.append(t);
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, 6500);
 }
+const initials = () => fullName().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('');
 const notifyState = () => (!('Notification' in window) ? 'unsupported' : Notification.permission);
 async function askNotify() {
   if (notifyState() !== 'default') return notifyState();
@@ -1034,7 +1070,7 @@ async function showNotice(title, body, href) {
 }
 let checking = false;
 async function checkAlarms() {
-  if (checking) return; checking = true;
+  if (checking || locked() || ACC.cfg === undefined) return; checking = true;
   try {
     const larm = getLarm(); const watch = getWatch();
     const syms = Object.keys(larm).filter((x) => larm[x] > 0 && watch.includes(x));
@@ -1230,6 +1266,11 @@ function mountJamfor(params) {
 const cleanSym = (s) => { const v = String(s || '').trim().toUpperCase(); return /^\^?[A-Z0-9][A-Z0-9.\-_:]{0,24}$/.test(v) ? v : null; };
 
 function route() {
+  // Inte inloggad: spara vart man var på väg och visa inloggningen
+  if (locked() && !location.pathname.startsWith('/konto')) {
+    writeLS('mk-efter-login', location.pathname + location.search);
+    history.replaceState(null, '', '/konto');
+  }
   const path = location.pathname.replace(/\/+$/, '') || '/';
   const params = new URLSearchParams(location.search);
   if (path === '/') return { active: 'oversikt', title: 'Översikt', html: viewOversikt(), mount: mountOversikt };
@@ -1253,6 +1294,7 @@ function refreshNav(active) { $('#sidebar').innerHTML = sidebar(active); }
 
 function render() {
   const r = route();
+  document.body.classList.toggle('locked', locked());
   document.title = `${r.title} · Marknadskollen`;
   refreshNav(r.active);
   const main = $('#main');
@@ -1315,8 +1357,17 @@ document.addEventListener('submit', (e) => {
   navigate('/sok' + (q ? '?q=' + encodeURIComponent(q) : ''));
 });
 window.addEventListener('popstate', render);
-render();
-bootAccount();
+// Kolla inloggningen först så att ingenting av sidan syns innan
+(async () => {
+  document.body.classList.add('booting');
+  $('#main').innerHTML = loading('Laddar …');
+  await bootAccount().catch(() => {});
+  await accCfg().catch(() => {});
+  document.body.classList.remove('booting');
+  render();
+  // Kom man in via bekräftelselänken i mejlet: välkomna och gå vidare
+  if (ACC.user && ACC.fromLink) { toast(`Välkommen${firstName() ? ', ' + firstName() : ''}!`, 'Din e-post är bekräftad och du är inloggad.'); goAfterLogin(); }
+})();
 setTimeout(checkAlarms, 5000);
 setInterval(checkAlarms, 60e3);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
