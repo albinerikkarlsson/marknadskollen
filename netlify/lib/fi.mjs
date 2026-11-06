@@ -77,6 +77,12 @@ function splitCsvLine(line) {
 
 const KIND = { 'Förvärv': 'Köp', 'Avyttring': 'Sälj', 'Teckning': 'Teckning', 'Tilldelning': 'Tilldelning', 'Gåva lämnad': 'Gåva', 'Gåva mottagen': 'Gåva', 'Pantsättning': 'Pantsättning', 'Lån mottagen': 'Lån', 'Lån utlämnad': 'Lån', 'Lösen ökning': 'Lösen', 'Lösen minskning': 'Lösen', 'Utdelning mottagen': 'Utdelning' };
 
+// Bara aktier ska räknas i kronor. Obligationer anges i nominellt belopp och procent, så volym × pris blir fel.
+function isShare(typ, namn) {
+  if (typ) return /aktie|share|depåbevis/i.test(typ) && !/option|teckningsr|obligation|konvertib|warrant/i.test(typ);
+  return !/float|obl|bond|\d{2}\/\d{2}\/\d{2}|konv|opt|teckn|to\d|wrt/i.test(namn || '');
+}
+
 export function parseInsyn(text) {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (!lines.length) return [];
@@ -109,10 +115,12 @@ export function parseInsyn(text) {
       typ: KIND[karaktar] || karaktar || 'Övrigt',
       karaktar,
       instrument: g(r, 'instr'),
+      instrumentTyp: g(r, 'instrTyp'),
+      aktie: isShare(g(r, 'instrTyp'), g(r, 'instr')),
       isin: g(r, 'isin'),
       volym, pris,
       valuta: g(r, 'valuta') || null,
-      varde: volym != null && pris != null ? Math.round(volym * pris) : null,
+      varde: volym != null && pris != null && isShare(g(r, 'instrTyp'), g(r, 'instr')) ? Math.round(volym * pris) : null,
       program: /^ja$/i.test(g(r, 'program'))
     });
   }

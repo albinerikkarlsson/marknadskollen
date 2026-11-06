@@ -248,3 +248,92 @@ a.result:hover { color: var(--ink); }
   .co-section { padding: 20px; }
   .lead { font-size: 16.5px; }
 }
+
+/* ================= Rörelse och 3D =================
+   Bara transform och opacity, så att allt körs på grafikkortet och sidan förblir snabb.
+   Allt stängs av för den som valt "minska rörelse" i sitt system. */
+@keyframes mk-rise { from { opacity: 0; transform: translateY(14px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes mk-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mk-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes mk-fill { from { transform: scaleY(0.2); opacity: 0.2; } to { transform: none; opacity: 1; } }
+@keyframes mk-shimmer { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+@keyframes mk-pulse { 0% { box-shadow: 0 0 0 0 rgba(30,122,69,0.45); } 70% { box-shadow: 0 0 0 9px rgba(30,122,69,0); } 100% { box-shadow: 0 0 0 0 rgba(30,122,69,0); } }
+@keyframes mk-spin { to { transform: rotateY(360deg); } }
+@keyframes mk-float { 0%, 100% { transform: translateY(0) rotateX(64deg) rotateZ(0); } 50% { transform: translateY(-6px) rotateX(64deg) rotateZ(8deg); } }
+@keyframes mk-breathe { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.06); opacity: 0.7; } }
+@keyframes mk-flash-up { 0% { background: var(--up-bg); } 100% { background: transparent; } }
+@keyframes mk-flash-down { 0% { background: var(--down-bg); } 100% { background: transparent; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Innehållet glider in, kort för kort */
+  .main > * { animation: mk-rise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+  .main > *:nth-child(2) { animation-delay: 40ms; } .main > *:nth-child(3) { animation-delay: 80ms; }
+  .main > *:nth-child(4) { animation-delay: 120ms; } .main > *:nth-child(5) { animation-delay: 160ms; }
+  .main > *:nth-child(6) { animation-delay: 200ms; } .main > *:nth-child(n+7) { animation-delay: 240ms; }
+  #bolag .card, #results > *, .co-side > *, .grid > .card { animation: mk-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+  .grid > :nth-child(2), #results > :nth-child(2), .co-side > :nth-child(2) { animation-delay: 60ms; }
+  .grid > :nth-child(3), #results > :nth-child(3), .co-side > :nth-child(3) { animation-delay: 120ms; }
+  #results > :nth-child(n+4), .co-side > :nth-child(n+4) { animation-delay: 170ms; }
+  .co-main > :nth-child(2) { animation-delay: 70ms; } .co-main > :nth-child(3) { animation-delay: 130ms; } .co-main > :nth-child(n+4) { animation-delay: 180ms; }
+  .row-link, .factor-row { animation: mk-fade 0.45s ease backwards; }
+
+  /* Staplar och riskmätare växer fram */
+  .perf-bar { animation: mk-bar 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) 0.25s backwards; transform-origin: left center; }
+  .perf-bar.neg, .perf-bar[style*="right"] { transform-origin: right center; }
+  .meter span.on { animation: mk-fill 0.5s cubic-bezier(0.3, 1.4, 0.5, 1) backwards; animation-delay: calc(var(--i, 0) * 60ms + 200ms); transform-origin: bottom; }
+
+  /* Laddning: skimrande yta i stället för stillastående text */
+  .empty[aria-busy="true"] { border-style: solid; border-color: transparent; color: var(--muted);
+    background: linear-gradient(90deg, #F2F3F5 25%, #FAFAFB 50%, #F2F3F5 75%); background-size: 200% 100%; animation: mk-shimmer 1.4s linear infinite; }
+  .card.dark .empty[aria-busy="true"] { background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.05) 75%); background-size: 200% 100%; }
+
+  /* Pulserande livepunkt */
+  .dot { background: var(--up); animation: mk-pulse 2s ease-out infinite; }
+
+  /* Ringarna på mörka kort andas */
+  .rings::before { animation: mk-breathe 7s ease-in-out infinite; }
+  .rings::after { animation: mk-breathe 7s ease-in-out 1.2s infinite; }
+
+  /* Kort lyfter vid hovring */
+  .hero-link, a.result, .row-link[href] { transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.25s ease, border-color 0.2s ease, background-color 0.2s ease; }
+  a.result:hover, .hero-link:hover { box-shadow: 0 14px 34px -18px rgba(17,18,20,0.35); }
+  .row-link[href]:hover { transform: translateX(3px); }
+  .btn { transition: transform 0.15s ease, background-color 0.2s ease, color 0.2s ease; }
+  .btn:active { transform: scale(0.97); }
+
+  /* Kurser blinkar grönt eller rött när de uppdateras */
+  .flash-up { animation: mk-flash-up 1.2s ease-out; border-radius: 6px; }
+  .flash-down { animation: mk-flash-down 1.2s ease-out; border-radius: 6px; }
+}
+
+/* 3D-lutning med ljusreflex. Styrs av JavaScript via --rx, --ry, --mx och --my. */
+.tilt { transform-style: preserve-3d; will-change: transform; }
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .tilt { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateZ(0); transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.3s ease, border-color 0.2s ease; }
+  .tilt.is-tilting { transition: transform 0.08s linear, box-shadow 0.3s ease; box-shadow: 0 24px 50px -26px rgba(17,18,20,0.45); }
+  .tilt > * { transform: translateZ(18px); }
+  .tilt::marker { content: none; }
+  .glare { position: relative; isolation: isolate; }
+  .glare > .glare-layer { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 2; opacity: 0; transition: opacity 0.3s ease; transform: none;
+    background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,0.16), transparent 45%); }
+  .glare:not(.dark) > .glare-layer { background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgba(17,18,20,0.05), transparent 45%); }
+  .glare.is-tilting > .glare-layer { opacity: 1; }
+}
+
+/* 3D-klot av roterande ringar, rent i CSS */
+.orb { position: absolute; right: 22px; top: 22px; width: 92px; height: 92px; perspective: 600px; pointer-events: none; opacity: 0.9; }
+.orb .orb-tilt { position: absolute; inset: 0; transform-style: preserve-3d; transform: rotateX(64deg); }
+.orb i { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.35); transform-style: preserve-3d; }
+.orb i:nth-child(2) { transform: rotateY(60deg); border-color: rgba(255,255,255,0.22); }
+.orb i:nth-child(3) { transform: rotateY(120deg); border-color: rgba(255,255,255,0.14); }
+.orb b { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #FFFFFF, #8FD3A8 45%, #1E7A45); box-shadow: 0 0 22px rgba(143,211,168,0.55); }
+@media (prefers-reduced-motion: no-preference) {
+  .orb .orb-tilt { animation: mk-float 6s ease-in-out infinite; }
+  .orb .orb-spin { position: absolute; inset: 0; transform-style: preserve-3d; animation: mk-spin 14s linear infinite; }
+}
+@media (max-width: 900px) { .orb { width: 64px; height: 64px; right: 14px; top: 14px; } }
+
+/* Sidbyten med View Transitions där webbläsaren stöder det */
+::view-transition-old(root) { animation: 0.18s ease both mk-fade reverse; }
+::view-transition-new(root) { animation: 0.28s ease both mk-fade; }
+@media (prefers-reduced-motion: reduce) { ::view-transition-old(root), ::view-transition-new(root) { animation: none; } }

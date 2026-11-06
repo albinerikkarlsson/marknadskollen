@@ -172,7 +172,7 @@ export function metricFromSummary(r) {
 
 /* ---------- Sök och nyheter ---------- */
 export async function ySearch(q, { quotes = 12, news = 0 } = {}) {
-  return yahoo('/v1/finance/search', { q, quotesCount: quotes, newsCount: news, enableFuzzyQuery: 'false', listsCount: 0, lang: 'en-US', region: 'US' });
+  return yahoo('/v1/finance/search', { q, quotesCount: quotes, newsCount: news, enableFuzzyQuery: 'false', quotesQueryId: 'tss_match_phrase_query', newsQueryId: 'news_cie_vespa', listsCount: 0, lang: 'en-US', region: 'US' });
 }
 
 export function newsFromSearch(d, sym) {

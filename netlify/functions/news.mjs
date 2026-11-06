@@ -1,11 +1,13 @@
 import { finnhub, cached, fail, cleanSymbol, dayIso } from '../lib/finnhub.mjs';
-import { ySearch, newsFromSearch } from '../lib/yahoo.mjs';
+import { ySearch, newsFromSearch, yChart } from '../lib/yahoo.mjs';
 
 // GET /api/news?region=world|se  eller  /api/news?s=AAPL
 // world: Finnhubs allmänna marknadsnyheter. se: nyheter om stora svenska bolag.
 // s: nyheter om ett bolag. Vi visar rubrik, kort ingress och länk till källan.
 // Finnhubs gratisplan saknar svenska bolag, så då hämtas rubrikerna från Yahoo Finance i stället.
 const SE = ['VOLV-B.ST', 'ERIC-B.ST', 'SAAB-B.ST', 'EVO.ST', 'INVE-B.ST', 'ATCO-A.ST', 'HM-B.ST', 'SEB-A.ST'];
+
+const SE_NAMN = { 'VOLV-B.ST': 'Volvo', 'ERIC-B.ST': 'Ericsson', 'SAAB-B.ST': 'Saab', 'EVO.ST': 'Evolution Gaming', 'INVE-B.ST': 'Investor AB', 'ATCO-A.ST': 'Atlas Copco', 'HM-B.ST': 'H&M', 'SEB-A.ST': 'SEB' };
 
 export default async (req) => {
   try {
@@ -27,11 +29,21 @@ export default async (req) => {
     }
     if (!raw.length && (one || region === 'se')) {
       const syms = one ? [one] : SE;
-      const res = await Promise.allSettled(syms.map((s) => ySearch(s, { quotes: 0, news: one ? 10 : 4 })));
+      // Sök på både ticker och bolagsnamn, Yahoo hittar olika artiklar
+      const terms = [];
+      for (const s of syms) {
+        terms.push([s, s]);
+        const nm = SE_NAMN[s] || (one ? await yChart(s, '5d', '1d').then((c) => cleanCo(c.meta?.longName || c.meta?.shortName)).catch(() => '') : '');
+        if (nm) terms.push([nm, s]);
+        if (!one && terms.length >= 16) break;
+      }
+      const res = await Promise.allSettled(terms.map(([q]) => ySearch(q, { quotes: 1, news: one ? 10 : 5 })));
+      const oldest = from.getTime() - (one ? 45 : 9) * 864e5;
       for (const [i, r] of res.entries()) {
-        if (r.status === 'fulfilled') raw.push(...newsFromSearch(r.value, syms[i]).filter((n) => !n.datetime || n.datetime * 1000 >= from.getTime() - (one ? 30 : 5) * 864e5));
+        if (r.status === 'fulfilled') raw.push(...newsFromSearch(r.value, terms[i][1]).filter((n) => !n.datetime || n.datetime * 1000 >= oldest));
         else if (!err) err = r.reason;
       }
+      if (!raw.length) console.warn('[news] Yahoo gav inga nyheter för', syms.join(','));
     }
     // Gratisplanen nekar nyheter om utländska bolag (403). Det är inget fel, bara tomt.
     if (!raw.length && err?.status === 403) {
@@ -60,6 +72,7 @@ export default async (req) => {
   } catch (e) { return fail(e); }
 };
 
+const cleanCo = (n) => String(n || '').replace(/\(publ\.?\)/gi, '').replace(/\b(AB|Aktiebolag|ser\.? [AB])\b/g, '').replace(/[,]/g, ' ').replace(/\s+/g, ' ').trim();
 function clip(s, n) { return s.length > n ? s.slice(0, n).replace(/\s+\S*$/, '') + ' …' : s; }
 function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return 'källa'; } }
 

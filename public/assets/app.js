@@ -285,7 +285,7 @@ function viewOversikt() {
 
   <div class="grid g3" id="heroes">
     ${MARKET.slice(0, 3).map((m, i) => `
-      <a class="card hero hero-link ${i === 0 ? 'dark rings' : ''}" href="/bolag/${encodeURIComponent(m.sym)}" data-link>
+      <a class="card hero hero-link tilt glare ${i === 0 ? 'dark rings' : ''}" href="/bolag/${encodeURIComponent(m.sym)}" data-link><span class="glare-layer" aria-hidden="true"></span>
         <div style="display:flex;align-items:center;gap:12px">
           <span class="avatar">${esc(m.kort || m.sym)}</span>
           <div><div class="small muted">${esc(m.sub)}</div><div style="font-size:17px;font-weight:500">${esc(m.namn)}</div></div>
@@ -308,6 +308,7 @@ function viewOversikt() {
 
   <div class="grid g2">
     <div class="card dark rings stack" style="padding:24px;gap:14px;align-self:start">
+      <div class="orb" aria-hidden="true"><div class="orb-tilt"><div class="orb-spin"><i></i><i></i><i></i></div><b></b></div></div>
       <span class="small muted">Sök och riskkoll</span>
       <span style="font-size:28px;letter-spacing:-0.01em;line-height:1.2">Hur riskabel är aktien du funderar på?</span>
       <span class="muted" style="font-size:14.5px">Sök bland aktier och fonder och se svängningar, skulder, värdering och lönsamhet förklarat på enkel svenska.</span>
@@ -359,7 +360,7 @@ async function mountOversikt() {
     const q = quotes[m.sym];
     const el = $(`[data-q="${m.sym}"]`);
     if (el) el.outerHTML = q?.kurs != null ? `<span>${kr(q.kurs)}</span><span class="small" style="color:var(--${tone(q.d1)})">${pct(q.d1)}</span>` : '<span class="faint">saknas</span>';
-    const h = $(`[data-hero="${m.sym}"]`); if (h) h.textContent = q?.kurs != null ? kr(q.kurs) : 'Saknas';
+    const h = $(`[data-hero="${m.sym}"]`); if (h) { if (q?.kurs != null) { countUp(h, q.kurs, kr, 900); flash(h, q.d1); } else h.textContent = 'Saknas'; }
     const hd = $(`[data-hero-d="${m.sym}"]`); if (hd) { hd.className = 'pill ' + tone(q?.d1); hd.textContent = q?.d1 != null ? pct(q.d1) + ' i dag' : '–'; }
   }
   $('#market-status').innerHTML = quotes.__hamtad ? `<span style="display:inline-flex;align-items:center;gap:8px"><span class="dot"></span>Uppdaterad kl ${esc(clock(quotes.__hamtad))}</span>` : esc(errText(quotes.__error));
@@ -410,7 +411,7 @@ function viewSok(params) {
 
 function resultsHTML(list) {
   return list.map((r) => `
-    <a class="result" href="/bolag/${encodeURIComponent(r.sym)}" data-link data-namn="${esc(r.namn)}" data-sym="${esc(r.sym)}">
+    <a class="result tilt" href="/bolag/${encodeURIComponent(r.sym)}" data-link data-namn="${esc(r.namn)}" data-sym="${esc(r.sym)}">
       <span class="avatar">${esc(short(r.sym))}</span>
       <span style="flex:1;min-width:0"><span style="display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.namn)}</span><span class="small muted">${esc([r.typ, r.sym].filter(Boolean).join(' · '))}</span></span>
       <span class="muted" aria-hidden="true">→</span>
@@ -586,7 +587,7 @@ async function mountBevakning() {
 function priceBlock(s, big = 40) {
   if (s.saknarKurs) return `<div class="stack" style="gap:4px;align-items:flex-end;text-align:right"><span class="muted" style="font-size:20px">Kurs saknas</span><span class="small faint" style="max-width:300px">Ingen datakälla har en kurs för ${esc(s.sym)} just nu.</span></div>`;
   return `<div class="stack" style="gap:8px;align-items:flex-end">
-    <span class="num" style="font-size:${big}px;letter-spacing:-0.02em;line-height:1">${kr(s.kurs)} <span class="muted" style="font-size:16px">${esc(cur(s.valuta))}</span></span>
+    <span class="num price-big" style="font-size:${big}px;letter-spacing:-0.02em;line-height:1">${kr(s.kurs)} <span class="muted" style="font-size:16px">${esc(cur(s.valuta))}</span></span>
     <span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${s.d1 != null ? `<span class="pill ${tone(s.d1)}">${pct(s.d1)} i dag</span>` : ''}<span class="pill outline" title="Tid för senaste affären enligt ${esc(s.kalla || 'datakällan')}">Senaste kurs ${esc(when(s.kursTid || s.hamtad))}</span></span>
   </div>`;
 }
@@ -663,12 +664,12 @@ function bolagHTML(s) {
       </div>
 
       <aside class="co-side" aria-label="Riskkoll">
-        <section class="card dark rings stack" style="gap:14px;padding:26px" aria-labelledby="risk-h">
+        <section class="card dark rings stack tilt glare" style="gap:14px;padding:26px" aria-labelledby="risk-h"><span class="glare-layer" aria-hidden="true"></span>
           <span class="label-up" style="color:rgba(255,255,255,0.6)">Riskkoll</span>
           ${s.poang != null ? `
-          <div style="display:flex;align-items:baseline;gap:8px"><span class="score num">${s.poang}</span><span class="muted" style="font-size:18px">/ 10</span>
+          <div style="display:flex;align-items:baseline;gap:8px"><span class="score num" data-count="${s.poang}">${s.poang}</span><span class="muted" style="font-size:18px">/ 10</span>
             <span class="pill inv" style="margin-left:auto;align-self:center">${LV[lvl].t} risk</span></div>
-          <div class="meter" role="img" aria-label="Risk ${s.poang} av 10">${Array.from({ length: 10 }, (_, i) => `<span class="${i < s.poang ? 'on' : ''}"></span>`).join('')}</div>` : '<span style="font-size:20px">För lite data för att räkna en total.</span>'}
+          <div class="meter" role="img" aria-label="Risk ${s.poang} av 10">${Array.from({ length: 10 }, (_, i) => `<span class="${i < s.poang ? 'on' : ''}" style="--i:${i}"></span>`).join('')}</div>` : '<span style="font-size:20px">För lite data för att räkna en total.</span>'}
           <h2 class="sr-only" id="risk-h">Riskkoll</h2>
           <p style="margin:0;color:rgba(255,255,255,0.85);font-size:15px">${esc(s.sammanfattning)}</p>
           ${s.saknarNyckeltal ? '<span class="small faint">Datakällan har inga nyckeltal för det här värdepappret med nuvarande plan.</span>' : ''}
@@ -744,6 +745,8 @@ async function mountBolag(sym) {
   document.title = `${s.namn} · Marknadskollen`;
   const crumb = $('.crumbs .here'); if (crumb) crumb.textContent = s.namn;
   el.innerHTML = bolagHTML(s);
+  const sc = $('.score[data-count]', el); if (sc) countUp(sc, Number(sc.dataset.count), (v) => String(Math.round(v)), 700, 1);
+  const big = $('.co-head .price-big', el); if (big && s.kurs != null) { const n = big.firstChild; if (n && n.nodeType === 3) { const span = document.createElement('span'); big.replaceChild(span, n); countUp(span, s.kurs, (v) => kr(v) + ' ', 800); } }
   el.addEventListener('click', (e) => {
     const w = e.target.closest('[data-watch]'); if (!w) return;
     const on = toggleWatch(w.dataset.watch, w.dataset.namn);
@@ -812,10 +815,42 @@ function render() {
 
 function navigate(href) {
   history.pushState(null, '', href);
-  render();
-  window.scrollTo(0, 0);
-  $('#main').focus({ preventScroll: true });
+  const swap = () => { render(); window.scrollTo(0, 0); $('#main').focus({ preventScroll: true }); };
+  // Mjuk övergång mellan sidor i webbläsare som stöder det, annars direkt
+  if (document.startViewTransition && !REDUCED) document.startViewTransition(swap); else swap();
 }
+
+/* ================= Rörelse: 3D-lutning, ljusreflex och räkneverk ================= */
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const FINE = matchMedia('(hover: hover) and (pointer: fine)').matches;
+if (FINE && !REDUCED) {
+  let el = null; let frame = 0; let ev = null;
+  const apply = () => {
+    frame = 0; if (!el || !ev) return;
+    const r = el.getBoundingClientRect();
+    const x = (ev.clientX - r.left) / r.width; const y = (ev.clientY - r.top) / r.height;
+    const max = el.classList.contains('result') ? 5 : 7;
+    el.style.setProperty('--ry', ((x - 0.5) * 2 * max).toFixed(2) + 'deg');
+    el.style.setProperty('--rx', ((0.5 - y) * 2 * max).toFixed(2) + 'deg');
+    el.style.setProperty('--mx', (x * 100).toFixed(1) + '%');
+    el.style.setProperty('--my', (y * 100).toFixed(1) + '%');
+  };
+  const reset = (t) => { t.classList.remove('is-tilting'); t.style.setProperty('--rx', '0deg'); t.style.setProperty('--ry', '0deg'); };
+  document.addEventListener('pointermove', (e) => {
+    const t = e.target.closest?.('.tilt');
+    if (t !== el) { if (el) reset(el); el = t; if (el) el.classList.add('is-tilting'); }
+    ev = e; if (el && !frame) frame = requestAnimationFrame(apply);
+  }, { passive: true });
+  document.addEventListener('pointerleave', () => { if (el) reset(el); el = null; });
+}
+// Räknar upp ett tal till sitt värde. Text som inte är ett tal lämnas orörd.
+function countUp(node, to, fmt = (v) => String(Math.round(v)), ms = 700, start = null) {
+  if (!node || REDUCED || !Number.isFinite(to)) { if (node && Number.isFinite(to)) node.textContent = fmt(to); return; }
+  const from = start ?? to * 0.92; const t0 = performance.now();
+  const step = (t) => { const p = Math.min(1, (t - t0) / ms); const e = 1 - Math.pow(1 - p, 3); node.textContent = fmt(from + (to - from) * e); if (p < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+const flash = (node, d1) => { if (!node || d1 == null || REDUCED) return; node.classList.remove('flash-up', 'flash-down'); void node.offsetWidth; node.classList.add(d1 >= 0 ? 'flash-up' : 'flash-down'); };
 
 document.addEventListener('click', (e) => {
   const a = e.target.closest('a[data-link]');
