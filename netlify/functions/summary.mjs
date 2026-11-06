@@ -55,7 +55,7 @@ export function parsePoints(text) {
   if (a >= 0 && z > a) {
     try { const j = JSON.parse(t.slice(a, z + 1)); const arr = Array.isArray(j.punkter) ? j.punkter : Object.values(j).find(Array.isArray) || []; const out = arr.map((x) => String(x).trim()).filter(Boolean); if (out.length) return out.slice(0, 4); } catch { /* prova punktlista */ }
   }
-  const lines = t.split(/\n+/).map((l) => l.replace(/^\s*(?:[-•*]|\d+[.)])\s+/, '').trim()).filter((l) => l.length > 15 && !/^\{|\}$|^\[|\]$/.test(l));
+  const lines = t.split(/\n+/).map((l) => l.replace(/^\s*(?:[-•*]|\d+[.)])\s+/, '').trim()).filter((l) => l.length > 15 && !/:$/.test(l) && !/^\{|\}$|^\[|\]$/.test(l));
   return lines.slice(0, 4);
 }
 
