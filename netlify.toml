@@ -23,3 +23,8 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=300"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

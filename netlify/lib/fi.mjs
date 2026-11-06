@@ -233,3 +233,15 @@ export function parseBlankning(rows) {
   const bolag = [...by.values()].map((b) => ({ ...b, summa: Math.round(b.summa * 100) / 100, positioner: b.positioner.sort((a, z) => z.procent - a.procent) }));
   return bolag.sort((a, z) => z.summa - a.summa);
 }
+
+/* ---------- Gemensam inläsning av blankningsregistret ---------- */
+const URL_BLANK = 'https://www.fi.se/sv/vara-register/blankningsregistret/GetAktuellFile/';
+let blankMemo = null; // { t, bolag }
+export async function loadBlankning() {
+  if (blankMemo && Date.now() - blankMemo.t < 15 * 60e3) return blankMemo.bolag;
+  const buf = await fiFetch(`${URL_BLANK}?_=${Date.now()}`, 9500);
+  const bolag = parseBlankning(sheetRows(buf));
+  blankMemo = { t: Date.now(), bolag };
+  return bolag;
+}
+export const findBlank = (bolag, namn) => bolag.find((b) => sameName(b.emittent, namn)) || bolag.find((b) => nameMatch(b.emittent, namn)) || null;

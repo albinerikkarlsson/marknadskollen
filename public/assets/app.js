@@ -25,7 +25,10 @@ const ICON = {
   news: 'M5 5h11v14H6a1 1 0 0 1-1-1zM16 9h3v9a1 1 0 0 1-2 0V9M8 9h5M8 12h5M8 15h3',
   star: 'M12 4l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 16.4 7.2 18.9l.9-5.4-3.9-3.8 5.4-.8z',
   logo: 'M4 17l5-6 4 3 7-9',
-  ext: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'
+  ext: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
+  compare: 'M8 4v16M16 4v16M4 9h8M12 15h8',
+  user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0',
+  bell: 'M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0'
 };
 // Bara vanliga webblänkar släpps igenom (inga javascript:- eller data:-länkar)
 const safeUrl = (u) => { try { const x = new URL(u); return x.protocol === 'https:' || x.protocol === 'http:' ? x.href : null; } catch { return null; } };
@@ -99,7 +102,10 @@ const NKEY = 'mk-namn';
 const DEFAULT_WATCH = ['VOLV-B.ST', 'INVE-B.ST', 'AAPL', 'NVDA', 'SPY'];
 const DEFAULT_NAMES = { AAPL: 'Apple', MSFT: 'Microsoft', NVDA: 'Nvidia', TSLA: 'Tesla', SPY: 'SPDR S&P 500 ETF', EWD: 'iShares MSCI Sweden ETF', QQQ: 'Invesco QQQ', 'VOLV-B.ST': 'Volvo B', 'EVO.ST': 'Evolution', 'SAAB-B.ST': 'Saab B', 'INVE-B.ST': 'Investor B', 'ERIC-B.ST': 'Ericsson B', '^OMX': 'OMX Stockholm 30' };
 const readLS = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fb; } catch { return fb; } };
-const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* privat läge */ } };
+const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* privat läge */ } if ((k === WKEY || k === LKEY) && !SYNCING) saveCloud(); };
+let SYNCING = false;
+const LKEY = 'mk-larm';
+const getLarm = () => { const v = readLS(LKEY, {}); return v && typeof v === 'object' ? v : {}; };
 const getWatch = () => { const v = readLS(WKEY, null); return Array.isArray(v) ? v : DEFAULT_WATCH.slice(); };
 const nameOf = (sym) => readLS(NKEY, {})[sym] || DEFAULT_NAMES[sym] || sym;
 function rememberName(sym, namn) { if (!sym || !namn || namn === sym) return; const m = readLS(NKEY, {}); m[sym] = namn; writeLS(NKEY, m); }
@@ -116,8 +122,10 @@ const NAV = [
   { group: 'Börsen', items: [
     { id: 'sok', href: '/sok', label: 'Sök och riskkoll', icon: 'search' },
     { id: 'nyheter', href: '/nyheter', label: 'Nyheter', icon: 'news' },
+    { id: 'jamfor', href: '/jamfor', label: 'Jämför', icon: 'compare' },
     { id: 'bevakning', href: '/bevakning', label: 'Bevakning', icon: 'star', badge: true }
-  ] }
+  ] },
+  { group: 'Konto', items: [{ id: 'konto', href: '/konto', label: 'Logga in', icon: 'user' }] }
 ];
 
 function sidebar(active) {
@@ -135,7 +143,7 @@ function sidebar(active) {
         <span class="nav-label">${g.group}</span>
         ${g.items.map((it) => `
           <a class="nav-link" href="${it.href}" data-link ${it.id === active ? 'aria-current="page"' : ''}>
-            ${svg(it.icon)}<span>${it.label}</span>${it.badge && watchCount ? `<span class="nav-badge">${watchCount}</span>` : ''}
+            ${svg(it.icon)}<span>${it.id === 'konto' && ACC.user ? 'Mitt konto' : it.label}</span>${it.badge && watchCount ? `<span class="nav-badge">${watchCount}</span>` : ''}
           </a>`).join('')}
       </div>`).join('')}
     <div class="nav-foot">Data från Yahoo Finance, Finnhub och Finansinspektionen. Ingen investeringsrådgivning.</div>
@@ -411,7 +419,7 @@ function viewSok(params) {
 
 function resultsHTML(list) {
   return list.map((r) => `
-    <a class="result tilt" href="/bolag/${encodeURIComponent(r.sym)}" data-link data-namn="${esc(r.namn)}" data-sym="${esc(r.sym)}">
+    <a class="result tilt" href="/bolag/${encodeURIComponent(r.sym)}" data-link data-namn="${esc(r.klass ? `${r.namn}, ${r.typ}` : r.namn)}" data-sym="${esc(r.sym)}">
       <span class="avatar">${esc(short(r.sym))}</span>
       <span style="flex:1;min-width:0"><span style="display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.namn)}</span><span class="small muted">${esc([r.typ, r.sym].filter(Boolean).join(' · '))}</span></span>
       <span class="muted" aria-hidden="true">→</span>
@@ -456,7 +464,7 @@ async function getStock(sym) {
   const s = await api('/api/stock?s=' + encodeURIComponent(sym), 10 * 60e3);
   if (!s || s.error) return { error: s };
   if (s.namn === sym) { s.namn = nameOf(sym); if (s.sammanfattning) s.sammanfattning = s.sammanfattning.replace(sym + ':', s.namn + ':'); }
-  else rememberName(sym, s.namn);
+  else rememberName(sym, s.aktieslag ? `${s.namn}, ${s.aktieslag}` : s.namn);
   return s;
 }
 
@@ -534,7 +542,7 @@ function viewBevakning() {
   return `
   ${topbar([['Översikt', '/'], ['Bevakning', '/bevakning']])}
   <div class="stack" style="gap:6px">
-    <span class="eyebrow">Sparas i din webbläsare tills vi har inloggning</span>
+    <span class="eyebrow">${ACC.user ? `Sparas på ditt konto (${esc(ACC.user.email)}) och följer med till alla dina enheter` : 'Sparas i den här webbläsaren. <a href="/konto" data-link>Logga in</a> för att få listan på alla enheter.'}</span>
     <h1 class="title">Mina aktier</h1>
   </div>
   <div id="alarms"></div>
@@ -556,29 +564,40 @@ async function mountBevakning() {
     const quotes = await getQuotes(watch);
     if (!$('#watchtable')) return;
     const rows = watch.map((s) => ({ sym: s, namn: nameOf(s), q: quotes[s] || {} }));
-    const alarms = rows.filter((r) => r.q.d1 != null && Math.abs(r.q.d1) >= 3);
+    const larm = getLarm();
+    const alarms = rows.filter((r) => larm[r.sym] && r.q.d1 != null && Math.abs(r.q.d1) >= larm[r.sym]);
     $('#alarms').innerHTML = alarms.length ? `<div class="grid g3">${alarms.map((a, i) => `
       <div class="card ${i === 0 ? 'dark rings' : ''} stack" style="gap:8px">
-        <span class="pill ${i === 0 ? 'inv' : tone(a.q.d1)}" style="align-self:flex-start">Larm · rörelse över 3 %</span>
+        <span class="pill ${i === 0 ? 'inv' : tone(a.q.d1)}" style="align-self:flex-start">Larm · rörelse över ${larm[a.sym]} %</span>
         <span style="font-size:17px;font-weight:500">${esc(a.namn)} är ${a.q.d1 < 0 ? 'ner' : 'upp'} ${pct(Math.abs(a.q.d1), 1).replace('+', '')} i dag</span>
         <a class="small" href="/bolag/${encodeURIComponent(a.sym)}" data-link>Se riskkollen →</a>
       </div>`).join('')}</div>` : '';
-    $('#watchtable').innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th scope="col">Värdepapper</th><th scope="col" class="r">Kurs</th><th scope="col" class="r">I dag</th><th scope="col">Riskkoll</th><th scope="col"><span class="sr-only">Ta bort</span></th></tr></thead>
+    $('#watchtable').innerHTML = `${notifyBar()}<div class="table-wrap"><table>
+      <thead><tr><th scope="col">Värdepapper</th><th scope="col" class="r">Kurs</th><th scope="col" class="r">I dag</th><th scope="col">Prislarm</th><th scope="col">Riskkoll</th><th scope="col"><span class="sr-only">Ta bort</span></th></tr></thead>
       <tbody>${rows.map((r) => `
         <tr>
           <td><a class="co" href="/bolag/${encodeURIComponent(r.sym)}" data-link><span class="avatar">${esc(short(r.sym))}</span><span><span style="display:block;font-weight:500">${esc(r.namn)}</span><span class="small muted">${esc(r.sym)}</span></span></a></td>
           <td class="r num">${r.q.kurs != null ? kr(r.q.kurs) : '<span class="faint">saknas</span>'}</td>
           <td class="r"><span class="pill ${tone(r.q.d1)}">${r.q.d1 != null ? pct(r.q.d1, 1) : '–'}</span></td>
+          <td><label class="sr-only" for="larm-${esc(r.sym)}">Prislarm för ${esc(r.namn)}</label><select class="select" id="larm-${esc(r.sym)}" data-larm="${esc(r.sym)}">${[0, 2, 3, 5, 10].map((v) => `<option value="${v}" ${(larm[r.sym] || 0) === v ? 'selected' : ''}>${v ? `± ${v} %` : 'Av'}</option>`).join('')}</select></td>
           <td><a href="/bolag/${encodeURIComponent(r.sym)}" data-link class="small">Visa →</a></td>
           <td class="r"><button class="btn ghost small" type="button" data-unwatch="${esc(r.sym)}" aria-label="Sluta bevaka ${esc(r.namn)}">Ta bort</button></td>
         </tr>`).join('')}</tbody>
     </table></div>
     <p class="small faint" style="margin:6px 14px 10px">${quotes.__hamtad ? `Kurser hämtade kl ${esc(clock(quotes.__hamtad))}. "Saknas" betyder att ingen datakälla har kursen just nu.` : esc(errText(quotes.__error))}</p>`;
   };
-  $('.main').addEventListener('click', (e) => {
+  $('.main').addEventListener('click', async (e) => {
+    if (e.target.closest('[data-notify]')) { await askNotify(); draw(); return; }
     const b = e.target.closest('[data-unwatch]'); if (!b) return;
+    const l = getLarm(); delete l[b.dataset.unwatch]; writeLS(LKEY, l);
     toggleWatch(b.dataset.unwatch); refreshNav('bevakning'); draw();
+  });
+  $('.main').addEventListener('change', (e) => {
+    const sel = e.target.closest('[data-larm]'); if (!sel) return;
+    const l = getLarm(); const v = Number(sel.value);
+    if (v) l[sel.dataset.larm] = v; else delete l[sel.dataset.larm];
+    writeLS(LKEY, l);
+    if (v && 'Notification' in window && Notification.permission === 'default') askNotify().then(draw); else draw();
   });
   draw();
 }
@@ -611,7 +630,7 @@ function bolagHTML(s) {
         <div style="min-width:0">
           <span class="label-up">${esc(s.lista || s.sym)}</span>
           <h1 class="title" style="margin:2px 0 6px">${esc(s.namn)}</h1>
-          <div class="chips"><span class="pill outline num">${esc(s.sym)}</span>${safeUrl(s.webb) ? `<a class="pill outline" href="${esc(safeUrl(s.webb))}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Webbplats ${svg('ext', 13)}</a>` : ''}
+          <div class="chips"><span class="pill outline num">${esc(s.sym)}</span>${s.aktieslag ? `<span class="pill outline">${esc(s.aktieslag)}</span>` : ''}<a class="pill outline" href="/jamfor?a=${encodeURIComponent(s.sym)}" data-link style="text-decoration:none">${svg('compare', 13)} Jämför</a>${safeUrl(s.webb) ? `<a class="pill outline" href="${esc(safeUrl(s.webb))}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Webbplats ${svg('ext', 13)}</a>` : ''}
             <button class="btn small ${watched ? 'ghost' : ''}" type="button" data-watch="${esc(s.sym)}" data-namn="${esc(s.namn)}" aria-pressed="${watched}">${watched ? 'Bevakas ✓' : 'Bevaka'}</button></div>
         </div>
       </div>
@@ -622,6 +641,12 @@ function bolagHTML(s) {
 
     <div class="co-grid">
       <div class="co-main stack" style="gap:24px">
+        <section class="card co-section" aria-labelledby="chart-h">
+          <div class="section-head" style="align-items:center"><div><span class="label-up">Kursdiagram</span><h2 class="section" id="chart-h" style="margin-top:4px">Kursen över tid</h2></div>
+            <div class="tabs" role="tablist" aria-label="Period">${[['1m', '1 mån'], ['6m', '6 mån'], ['1y', '1 år'], ['5y', '5 år']].map(([k, t]) => `<button role="tab" data-range="${k}" aria-selected="${k === '1y'}">${t}</button>`).join('')}</div></div>
+          <div id="chart" class="chart">${loading('Hämtar kurser …')}</div>
+        </section>
+
         <section class="card co-section" aria-labelledby="om-h" id="about">
           <span class="label-up">Om bolaget</span>
           <h2 class="section" id="om-h">Affärsidé</h2>
@@ -659,6 +684,7 @@ function bolagHTML(s) {
         <section class="card co-section" aria-labelledby="bnyh-h">
           <span class="label-up">Nyheter</span>
           <h2 class="section" id="bnyh-h">Senaste om ${esc(s.namn)}</h2>
+          <div id="ai-sum"></div>
           <div id="bolagnews">${loading('Hämtar nyheter …')}</div>
         </section>
       </div>
@@ -700,6 +726,7 @@ function bolagHTML(s) {
             <span><b>Lönsamhet:</b> vinstmarginal. Över 8 % låg, 0–8 % medel, förlust hög.</span>
             <span><b>Handel:</b> omsättning per dag. Över 50 miljoner låg, 5–50 miljoner medel, under 5 miljoner hög.</span>
             <span><b>Storlek:</b> börsvärde. Över 10 miljarder låg, 1–10 miljarder medel, under 1 miljard hög.</span>
+            <span><b>Blankning</b> (svenska aktier): andel av aktierna som är blankade enligt Finansinspektionen. Under 2 % låg, 2–5 % medel, över 5 % hög.</span>
             <span>Medelvärdet räknas om till 1–10. Minst en hög del ger minst 4. En egen förenkling, inte ett råd.</span>
           </div>
         </details>
@@ -755,6 +782,13 @@ async function mountBolag(sym) {
   });
   // Affärsidé/historia och nyheter hämtas parallellt
   api('/api/about?s=' + encodeURIComponent(sym), 60 * 60e3).then((a) => { const b = $('#about-body'); if (b) b.innerHTML = aboutHTML(a, s); });
+  mountChart(sym, '1y');
+  el.querySelector('[aria-labelledby="chart-h"] .tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-range]'); if (!b) return;
+    b.parentElement.querySelectorAll('[data-range]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+    mountChart(sym, b.dataset.range);
+  });
+  aiSummary(sym, s.namn);
   if (isSwedish(sym)) {
     const q = encodeURIComponent(s.namn);
     api('/api/insyn?namn=' + q, 60 * 60e3).then((d) => { const b = $('#insyn-body'); if (b) b.innerHTML = insynHTML(d); });
@@ -782,6 +816,418 @@ function viewNotFound() {
 
 /* ================= Router ================= */
 const LEGACY = { evo: 'EVO.ST', saab: 'SAAB-B.ST', volvo: 'VOLV-B.ST' };
+/* ================= Konto (Supabase Auth via REST, utan extra bibliotek) ================= */
+// Bevakning, larm och namn sparas i kontots användardata. Ingen databastabell behövs.
+const ACC = { cfg: undefined, ai: false, session: readLS('mk-session', null), user: null };
+async function accCfg() {
+  if (ACC.cfg === undefined) {
+    const c = await api('/api/config', 5 * 60e3);
+    ACC.cfg = c?.supabase || false; ACC.ai = !!c?.ai;
+  }
+  return ACC.cfg;
+}
+async function auth(path, body, method = 'POST', tok) {
+  const c = await accCfg();
+  if (!c) throw Object.assign(new Error('Inloggning är inte påslagen'), { code: 'off' });
+  const res = await fetch(c.url + '/auth/v1' + path, {
+    method, headers: { apikey: c.anon, 'content-type': 'application/json', authorization: 'Bearer ' + (tok || c.anon) },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(j.msg || j.error_description || j.message || 'Något gick fel'), { code: j.error_code || j.code || j.error, status: res.status });
+  return j;
+}
+function setSession(j) {
+  ACC.session = j?.access_token ? { access: j.access_token, refresh: j.refresh_token, exp: Date.now() + (Number(j.expires_in) || 3600) * 1000 } : null;
+  writeLS('mk-session', ACC.session);
+  if (j?.user) ACC.user = j.user;
+  if (!ACC.session) ACC.user = null;
+}
+async function token() {
+  const s = ACC.session; if (!s) return null;
+  if (Date.now() < s.exp - 60e3) return s.access;
+  try { const j = await auth('/token?grant_type=refresh_token', { refresh_token: s.refresh }); setSession(j); return j.access_token; } catch { setSession(null); return null; }
+}
+// Kontot är facit. Första gången på en enhet slås den lokala listan ihop med kontots.
+function applyCloud() {
+  const d = ACC.user?.user_metadata || {};
+  const cloud = Array.isArray(d.bevakning) ? d.bevakning.filter((x) => typeof x === 'string') : null;
+  const first = readLS('mk-sync-user', null) !== ACC.user.id;
+  SYNCING = true;
+  try {
+    if (d.namn && typeof d.namn === 'object') writeLS(NKEY, { ...d.namn, ...readLS(NKEY, {}) });
+    // Bara aktier man själv har lagt till slås ihop, inte startlistan med exempel
+    const own = readLS(WKEY, null);
+    if (cloud) writeLS(WKEY, first && Array.isArray(own) ? [...new Set([...cloud, ...own])].slice(0, 60) : cloud);
+    if (d.larm && typeof d.larm === 'object') writeLS(LKEY, first ? { ...d.larm, ...getLarm() } : d.larm);
+  } finally { SYNCING = false; }
+  writeLS('mk-sync-user', ACC.user.id);
+  if (first || !cloud) saveCloud();
+}
+let saveTimer;
+function saveCloud() {
+  if (!ACC.user) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    const t = await token(); if (!t) return;
+    const watch = getWatch();
+    try {
+      const u = await auth('/user', { data: { bevakning: watch, larm: getLarm(), namn: Object.fromEntries(watch.map((x) => [x, nameOf(x)])) } }, 'PUT', t);
+      ACC.user = u;
+    } catch (e) { console.warn('Kunde inte spara till kontot', e.message); }
+  }, 500);
+}
+async function bootAccount() {
+  // Länkar från bekräftelse- och återställningsmejl kommer tillbaka med inloggningen i adressens #-del
+  const h = new URLSearchParams(location.hash.slice(1));
+  let recovery = false;
+  if (h.get('access_token')) {
+    setSession({ access_token: h.get('access_token'), refresh_token: h.get('refresh_token'), expires_in: h.get('expires_in') });
+    recovery = h.get('type') === 'recovery';
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+  if (h.get('error_description')) { toast('Länken fungerade inte', h.get('error_description').replace(/\+/g, ' ')); history.replaceState(null, '', location.pathname + location.search); }
+  if (!(await accCfg()) || !ACC.session) return;
+  const t = await token(); if (!t) return;
+  try { ACC.user = await auth('/user', null, 'GET', t); } catch { setSession(null); return; }
+  applyCloud();
+  if (recovery) { history.replaceState(null, '', '/konto?nytt=1'); }
+  render();
+}
+
+const AUTH_ERR = {
+  invalid_credentials: 'Fel e-post eller lösenord.',
+  email_not_confirmed: 'Du behöver bekräfta din e-post först. Klicka på länken i mejlet vi skickade.',
+  user_already_exists: 'Det finns redan ett konto med den e-posten. Logga in i stället.',
+  email_exists: 'Det finns redan ett konto med den e-posten. Logga in i stället.',
+  weak_password: 'Lösenordet är för svagt. Använd minst 8 tecken.',
+  over_email_send_rate_limit: 'För många mejl på kort tid. Vänta en stund och prova igen.',
+  over_request_rate_limit: 'För många försök. Vänta en minut och prova igen.',
+  validation_failed: 'Kontrollera e-postadressen.',
+  same_password: 'Det nya lösenordet måste skilja sig från det gamla.'
+};
+const authErr = (e) => AUTH_ERR[e?.code] || (e?.status === 400 ? 'Kontrollera uppgifterna och prova igen.' : 'Det gick inte att nå inloggningen just nu.');
+
+function viewKonto() {
+  return `
+  ${topbar([['Översikt', '/'], [ACC.user ? 'Mitt konto' : 'Logga in', '/konto']])}
+  <div class="stack" style="gap:6px">
+    <span class="eyebrow">Spara din bevakning och dina prislarm på alla enheter</span>
+    <h1 class="title">${ACC.user ? 'Mitt konto' : 'Logga in'}</h1>
+  </div>
+  <div id="konto" style="max-width:520px">${loading('Hämtar …')}</div>
+  ${footer()}`;
+}
+
+async function mountKonto() {
+  const box = $('#konto');
+  const cfg = await accCfg();
+  if (!$('#konto')) return;
+  const params = new URLSearchParams(location.search);
+  if (!cfg) {
+    box.innerHTML = `<div class="card stack" style="gap:10px;padding:26px"><span class="label-up">Inte påslaget än</span><p style="margin:0">Inloggning är inte påslagen på sidan än. Din bevakning och dina larm sparas i den här webbläsaren så länge.</p><a class="btn ghost" href="/bevakning" data-link style="align-self:flex-start">Till bevakningen</a></div>`;
+    return;
+  }
+  if (ACC.user && params.get('nytt')) {
+    box.innerHTML = `<form class="card stack" style="gap:14px;padding:26px" data-newpw>
+      <span class="label-up">Nytt lösenord</span>
+      <label class="field"><span>Nytt lösenord</span><input name="password" type="password" minlength="8" required autocomplete="new-password"></label>
+      <p class="small" role="status" data-msg></p>
+      <button class="btn" type="submit">Spara lösenord</button></form>`;
+    box.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault(); const msg = box.querySelector('[data-msg]');
+      try { await auth('/user', { password: new FormData(e.target).get('password') }, 'PUT', await token()); history.replaceState(null, '', '/konto'); toast('Lösenordet är sparat', ''); render(); }
+      catch (err) { msg.textContent = authErr(err); }
+    });
+    return;
+  }
+  if (ACC.user) {
+    const n = getWatch().length; const l = Object.keys(getLarm()).length;
+    box.innerHTML = `<div class="card stack" style="gap:16px;padding:26px">
+      <div style="display:flex;align-items:center;gap:14px"><span class="avatar" style="width:52px;height:52px">${svg('user', 22)}</span><div><div style="font-weight:500">${esc(ACC.user.email)}</div><div class="small muted">Inloggad</div></div></div>
+      <div class="statbar" style="padding:0"><div class="stat"><span class="small muted">Bevakar</span><span class="num">${n} st</span></div><div class="stat"><span class="small muted">Prislarm</span><span class="num">${l} st</span></div></div>
+      <p class="small muted" style="margin:0">Din bevakning och dina larm sparas på kontot och syns när du loggar in på mobilen eller datorn.</p>
+      <div class="chips"><a class="btn" href="/bevakning" data-link>Till bevakningen</a><button class="btn ghost" type="button" data-logout>Logga ut</button></div></div>`;
+    box.querySelector('[data-logout]').addEventListener('click', async () => {
+      const t = ACC.session?.access; setSession(null); writeLS('mk-sync-user', null);
+      if (t) auth('/logout', null, 'POST', t).catch(() => {});
+      toast('Du är utloggad', 'Listan finns kvar i den här webbläsaren.'); render();
+    });
+    return;
+  }
+  let mode = params.get('ny') ? 'signup' : 'login';
+  const draw = () => {
+    box.innerHTML = `<form class="card stack" style="gap:14px;padding:26px" novalidate>
+      <div class="tabs" role="tablist" aria-label="Logga in eller skapa konto" style="align-self:flex-start">
+        <button type="button" role="tab" data-mode="login" aria-selected="${mode === 'login'}">Logga in</button>
+        <button type="button" role="tab" data-mode="signup" aria-selected="${mode === 'signup'}">Skapa konto</button>
+      </div>
+      <label class="field"><span>E-post</span><input name="email" type="email" required autocomplete="email" inputmode="email"></label>
+      ${mode !== 'forgot' ? `<label class="field"><span>Lösenord${mode === 'signup' ? ' (minst 8 tecken)' : ''}</span><input name="password" type="password" minlength="${mode === 'signup' ? 8 : 1}" required autocomplete="${mode === 'signup' ? 'new-password' : 'current-password'}"></label>` : ''}
+      <p class="small" role="status" data-msg style="margin:0;min-height:1em"></p>
+      <button class="btn" type="submit">${mode === 'signup' ? 'Skapa konto' : mode === 'forgot' ? 'Skicka återställningslänk' : 'Logga in'}</button>
+      ${mode === 'login' ? '<button class="linkbtn small" type="button" data-mode="forgot">Glömt lösenordet?</button>' : mode === 'forgot' ? '<button class="linkbtn small" type="button" data-mode="login">Tillbaka till inloggning</button>' : '<p class="small faint" style="margin:0">Vi sparar bara din e-post, din bevakning och dina larm. Inga betaluppgifter.</p>'}
+    </form>`;
+    const f = box.querySelector('form');
+    f.addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (b) { mode = b.dataset.mode; draw(); } });
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(f); const email = String(fd.get('email') || '').trim(); const password = String(fd.get('password') || '');
+      const msg = f.querySelector('[data-msg]'); const btn = f.querySelector('[type=submit]');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { msg.textContent = 'Skriv en giltig e-postadress.'; return; }
+      if (mode === 'signup' && password.length < 8) { msg.textContent = 'Lösenordet behöver minst 8 tecken.'; return; }
+      btn.disabled = true; msg.textContent = 'Vänta …';
+      const back = encodeURIComponent(location.origin + '/konto');
+      try {
+        if (mode === 'forgot') {
+          await auth(`/recover?redirect_to=${back}`, { email });
+          msg.textContent = 'Om det finns ett konto med den e-posten har vi skickat en länk för att välja nytt lösenord.';
+        } else if (mode === 'signup') {
+          const j = await auth(`/signup?redirect_to=${back}`, { email, password });
+          if (j.access_token) { setSession(j); ACC.user = j.user; applyCloud(); toast('Välkommen!', 'Ditt konto är skapat.'); navigate('/bevakning'); return; }
+          msg.textContent = 'Klart! Vi har skickat ett mejl till dig. Klicka på länken i mejlet för att bekräfta, sedan är du inloggad.';
+        } else {
+          const j = await auth('/token?grant_type=password', { email, password });
+          setSession(j); ACC.user = j.user; applyCloud();
+          toast('Du är inloggad', 'Din bevakning sparas nu på kontot.'); navigate('/bevakning'); return;
+        }
+      } catch (err) { msg.textContent = authErr(err); }
+      btn.disabled = false;
+    });
+  };
+  draw();
+}
+
+/* ================= Notiser och prislarm ================= */
+function toast(title, body = '', href = null) {
+  let wrap = $('#toasts');
+  if (!wrap) { wrap = document.createElement('div'); wrap.id = 'toasts'; wrap.setAttribute('aria-live', 'polite'); document.body.append(wrap); }
+  const t = document.createElement(href ? 'a' : 'div');
+  t.className = 'toast'; if (href) { t.href = href; t.dataset.link = ''; }
+  t.innerHTML = `<b>${esc(title)}</b>${body ? `<span>${esc(body)}</span>` : ''}`;
+  wrap.append(t);
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, 6500);
+}
+const notifyState = () => (!('Notification' in window) ? 'unsupported' : Notification.permission);
+async function askNotify() {
+  if (notifyState() !== 'default') return notifyState();
+  try { return await Notification.requestPermission(); } catch { return notifyState(); }
+}
+function notifyBar() {
+  const st = notifyState(); const any = Object.keys(getLarm()).length;
+  const txt = st === 'granted' ? 'Notiser är på. Du får en notis när en aktie rör sig mer än gränsen du valt, så länge sidan är öppen i en flik.'
+    : st === 'denied' ? 'Notiser är blockerade i webbläsaren. Larmen visas ändå här på sidan. Du kan tillåta notiser i webbläsarens inställningar för sidan.'
+    : st === 'unsupported' ? 'Din webbläsare stöder inte notiser. Larmen visas här på sidan. På iPhone fungerar notiser när sidan är tillagd på hemskärmen.'
+    : 'Välj en gräns under Prislarm, så säger vi till när aktien rör sig mer än så under dagen.';
+  return `<div class="notify-bar">${svg('bell', 18)}<span class="grow small">${txt}</span>${st === 'default' && any ? '<button class="btn small" type="button" data-notify>Slå på notiser</button>' : ''}</div>`;
+}
+async function showNotice(title, body, href) {
+  toast(title, body, href);
+  if (notifyState() !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    if (reg) { await reg.showNotification(title, { body, tag: href, data: { href } }); return; }
+    const n = new Notification(title, { body, tag: href });
+    n.onclick = () => { window.focus(); navigate(href); n.close(); };
+  } catch { /* toasten räcker */ }
+}
+let checking = false;
+async function checkAlarms() {
+  if (checking) return; checking = true;
+  try {
+    const larm = getLarm(); const watch = getWatch();
+    const syms = Object.keys(larm).filter((x) => larm[x] > 0 && watch.includes(x));
+    if (!syms.length) return;
+    for (const x of syms) memo.delete('/api/quote?s=' + encodeURIComponent(x));
+    const q = await getQuotes(syms);
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
+    const sent = readLS('mk-larm-skickat', {});
+    for (const k of Object.keys(sent)) if (!k.startsWith(today)) delete sent[k];
+    for (const x of syms) {
+      const d1 = q[x]?.d1; if (d1 == null || Math.abs(d1) < larm[x]) continue;
+      const key = `${today}|${x}|${d1 < 0 ? 'ner' : 'upp'}`; if (sent[key]) continue;
+      sent[key] = 1;
+      showNotice(`${nameOf(x)} är ${d1 < 0 ? 'ner' : 'upp'} ${pct(Math.abs(d1), 1).replace('+', '')} i dag`, `Ditt larm är satt på ± ${larm[x]} %. Senaste kurs ${kr(q[x].kurs)}.`, '/bolag/' + encodeURIComponent(x));
+    }
+    try { localStorage.setItem('mk-larm-skickat', JSON.stringify(sent)); } catch { /* privat läge */ }
+  } finally { checking = false; }
+}
+
+/* ================= Kursdiagram ================= */
+const chartMemo = new Map();
+async function mountChart(sym, range) {
+  const box = $('#chart'); if (!box) return;
+  box.dataset.range = range;
+  if (!box.querySelector('svg')) box.innerHTML = loading('Hämtar kurser …');
+  else box.classList.add('is-loading');
+  const d = await api(`/api/chart?s=${encodeURIComponent(sym)}&r=${range}`, 10 * 60e3);
+  if (!$('#chart') || box.dataset.range !== range) return;
+  box.classList.remove('is-loading');
+  if (!d || d.error || !d.punkter?.length) { box.innerHTML = `<p class="muted" style="margin:0">${d?.error ? esc(errText(d)) : 'Det finns inget kursdiagram för det här värdepappret.'}</p>`; return; }
+  drawChart(box, [{ punkter: d.punkter, namn: nameOf(sym) }], { valuta: d.valuta, range });
+}
+
+// Ritar ett eller två linjediagram i en SVG. Med två serier visas förändring i procent så att de går att jämföra.
+function drawChart(box, series, { valuta = '', range = '1y', relative = false } = {}) {
+  const W = 1000; const H = 300; const PAD = 8;
+  const rel = relative || series.length > 1;
+  const S = series.map((s) => {
+    const base = s.punkter[0][1];
+    return { ...s, v: s.punkter.map(([t, c]) => [t, rel ? (c / base - 1) * 100 : c]) };
+  });
+  const all = S.flatMap((s) => s.v);
+  const t0 = Math.min(...all.map((p) => p[0])); const t1 = Math.max(...all.map((p) => p[0]));
+  let lo = Math.min(...all.map((p) => p[1])); let hi = Math.max(...all.map((p) => p[1]));
+  const pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+  const X = (t) => ((t - t0) / (t1 - t0 || 1)) * W;
+  const Y = (v) => PAD + (1 - (v - lo) / (hi - lo)) * (H - PAD * 2);
+  const COL = ['var(--ink)', '#3D63DD'];
+  const ch = (s) => s.v[s.v.length - 1][1] - (rel ? 0 : s.v[0][1]);
+  const one = S.length === 1;
+  const colorOf = (s, i) => (one ? (ch(s) >= 0 ? 'var(--up)' : 'var(--down)') : COL[i]);
+  const path = (s) => s.v.map(([t, v], i) => `${i ? 'L' : 'M'}${X(t).toFixed(1)},${Y(v).toFixed(1)}`).join('');
+  const fmtV = (v) => (rel ? pct(v, 1) : kr(v));
+  const fmtD = (t) => new Date(t * 1000).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: range === '1m' || range === '6m' ? undefined : 'numeric', timeZone: 'Europe/Stockholm' });
+  const zero = rel && lo < 0 && hi > 0 ? `<line x1="0" x2="${W}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="var(--line)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>` : '';
+  box.innerHTML = `
+    <div class="chart-head">${S.map((s, i) => `<span class="chart-key"><i style="background:${colorOf(s, i)}"></i>${esc(s.namn)} <b class="num" style="color:var(--${ch(s) >= 0 ? 'up' : 'down'})">${pct(rel ? ch(s) : (s.v[s.v.length - 1][1] / s.v[0][1] - 1) * 100, 1)}</b></span>`).join('')}<span class="small muted" style="margin-left:auto">${esc(fmtD(t0))} – ${esc(fmtD(t1))}</span></div>
+    <div class="chart-plot">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Kursdiagram ${esc(S.map((s) => s.namn).join(' och '))}">
+        <defs>${S.map((s, i) => `<linearGradient id="cg${i}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${colorOf(s, i)}" stop-opacity="${one ? 0.16 : 0}"/><stop offset="1" stop-color="${colorOf(s, i)}" stop-opacity="0"/></linearGradient>`).join('')}</defs>
+        ${zero}
+        ${S.map((s, i) => `${one ? `<path d="${path(s)}L${W},${H}L0,${H}Z" fill="url(#cg${i})"/>` : ''}<path class="chart-line" d="${path(s)}" fill="none" stroke="${colorOf(s, i)}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`).join('')}
+      </svg>
+      <span class="chart-y top num">${esc(fmtV(hi - pad))}</span><span class="chart-y bottom num">${esc(fmtV(lo + pad))}</span>
+      <span class="chart-cross" hidden></span>${S.map((s, i) => `<span class="chart-dot" data-i="${i}" hidden style="background:${colorOf(s, i)}"></span>`).join('')}
+      <div class="chart-tip" hidden></div>
+    </div>
+    ${rel ? '<p class="small faint" style="margin:8px 0 0">Visar förändring i procent från periodens början, så att olika kurser går att jämföra.</p>' : valuta ? `<p class="small faint" style="margin:8px 0 0">Stängningskurser i ${esc(cur(valuta) === 'kr' ? 'kronor' : valuta)}. Historisk utveckling säger inget om framtiden.</p>` : ''}`;
+  const plot = box.querySelector('.chart-plot'); const tip = box.querySelector('.chart-tip'); const cross = box.querySelector('.chart-cross');
+  const dots = [...box.querySelectorAll('.chart-dot')];
+  const near = (s, t) => { let b = s.v[0]; for (const p of s.v) { if (Math.abs(p[0] - t) < Math.abs(b[0] - t)) b = p; } return b; };
+  let frame = 0; let lastX = 0;
+  const move = () => {
+    frame = 0;
+    const r = plot.getBoundingClientRect(); const fx = Math.min(1, Math.max(0, (lastX - r.left) / r.width));
+    const t = t0 + fx * (t1 - t0);
+    const pts = S.map((s) => near(s, t));
+    const px = (X(pts[0][0]) / W) * r.width;
+    cross.hidden = false; cross.style.transform = `translateX(${px}px)`;
+    dots.forEach((d, i) => { d.hidden = false; d.style.transform = `translate(${(X(pts[i][0]) / W) * r.width}px, ${(Y(pts[i][1]) / H) * r.height}px)`; });
+    tip.hidden = false;
+    tip.innerHTML = `<span class="small muted">${esc(fmtD(pts[0][0]))}</span>${pts.map((p, i) => `<b class="num">${S.length > 1 ? `<i style="background:${colorOf(S[i], i)}"></i>` : ''}${esc(fmtV(p[1]))}</b>`).join('')}`;
+    const tw = tip.offsetWidth; tip.style.transform = `translateX(${Math.min(r.width - tw, Math.max(0, px - tw / 2))}px)`;
+  };
+  plot.addEventListener('pointermove', (e) => { lastX = e.clientX; if (!frame) frame = requestAnimationFrame(move); });
+  plot.addEventListener('pointerleave', () => { tip.hidden = true; cross.hidden = true; dots.forEach((d) => { d.hidden = true; }); });
+}
+
+/* ================= AI-sammanfattning ================= */
+async function aiSummary(sym, namn) {
+  await accCfg();
+  const box = $('#ai-sum'); if (!box || !ACC.ai) return;
+  box.innerHTML = `<div class="ai-box">${loading('AI sammanfattar nyheterna …')}</div>`;
+  const d = await api(`/api/summary?s=${encodeURIComponent(sym)}&namn=${encodeURIComponent(namn)}`, 60 * 60e3);
+  if (!$('#ai-sum')) return;
+  if (!d?.punkter?.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="ai-box"><span class="label-up">AI-sammanfattning på svenska</span>
+    <ul>${d.punkter.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>
+    <span class="small faint">Skriven av AI utifrån ${d.antalNyheter} rubriker. Kan innehålla fel, läs gärna artiklarna själv. Inget råd.</span></div>`;
+}
+
+/* ================= Jämför två bolag ================= */
+function viewJamfor() {
+  return `
+  ${topbar([['Översikt', '/'], ['Jämför', '/jamfor']])}
+  <div class="stack" style="gap:6px">
+    <span class="eyebrow">Välj två aktier eller fonder och se dem sida vid sida</span>
+    <h1 class="title">Jämför två bolag</h1>
+  </div>
+  <div class="grid g2" id="pickers">
+    ${['a', 'b'].map((k, i) => `
+    <div class="card picker" data-slot="${k}">
+      <span class="label-up">${i ? 'Andra' : 'Första'} bolaget</span>
+      <div class="picked" data-picked></div>
+      <form class="searchbar" role="search" style="flex:none;max-width:none" data-pickform>
+        ${svg('search', 18, '#6B6F76')}
+        <label class="sr-only" for="pick-${k}">Sök ${i ? 'andra' : 'första'} bolaget</label>
+        <input id="pick-${k}" type="search" placeholder="Till exempel Volvo eller Apple" autocomplete="off">
+      </form>
+      <div class="pick-results" data-results></div>
+    </div>`).join('')}
+  </div>
+  <div id="jamfor-res"></div>
+  ${footer()}`;
+}
+
+function mountJamfor(params) {
+  const sel = { a: cleanSym(params.get('a')), b: cleanSym(params.get('b')) };
+  const sync = () => { const p = new URLSearchParams(); if (sel.a) p.set('a', sel.a); if (sel.b) p.set('b', sel.b); history.replaceState(null, '', '/jamfor' + (p.toString() ? '?' + p : '')); };
+  const showPicked = () => {
+    for (const k of ['a', 'b']) {
+      const c = $(`[data-slot="${k}"] [data-picked]`); if (!c) continue;
+      c.innerHTML = sel[k] ? `<span class="avatar">${esc(short(sel[k]))}</span><span class="grow"><b style="display:block;font-weight:500">${esc(nameOf(sel[k]))}</b><span class="small muted">${esc(sel[k])}</span></span><button class="btn ghost small" type="button" data-clear="${k}">Byt</button>` : '<span class="muted">Inget valt än</span>';
+    }
+  };
+  for (const k of ['a', 'b']) {
+    const card = $(`[data-slot="${k}"]`); const input = card.querySelector('input'); const list = card.querySelector('[data-results]');
+    let timer;
+    const search = async () => {
+      const term = input.value.trim(); if (term.length < 2) { list.innerHTML = ''; return; }
+      const r = await api('/api/search?q=' + encodeURIComponent(term), 60 * 60e3);
+      if (term !== input.value.trim()) return;
+      list.innerHTML = (r?.results || []).slice(0, 6).map((x) => `<button type="button" class="pick" data-sym="${esc(x.sym)}" data-namn="${esc(x.klass ? `${x.namn}, ${x.typ}` : x.namn)}"><span class="avatar">${esc(short(x.sym))}</span><span class="grow" style="text-align:left"><span style="display:block;font-weight:500">${esc(x.namn)}</span><span class="small muted">${esc([x.typ, x.sym].filter(Boolean).join(' · '))}</span></span></button>`).join('') || (r?.results ? '<p class="small muted">Inga träffar.</p>' : `<p class="small muted">${esc(errText(r))}</p>`);
+    };
+    input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(search, 300); });
+    card.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); const f = list.querySelector('.pick'); if (f) f.click(); else search(); });
+    card.addEventListener('click', (e) => {
+      const p = e.target.closest('.pick');
+      if (p) { sel[k] = p.dataset.sym; rememberName(p.dataset.sym, p.dataset.namn); input.value = ''; list.innerHTML = ''; sync(); showPicked(); compare(); return; }
+      if (e.target.closest('[data-clear]')) { sel[k] = null; sync(); showPicked(); compare(); input.focus(); }
+    });
+  }
+  showPicked();
+  const compare = async () => {
+    const box = $('#jamfor-res'); if (!box) return;
+    if (!sel.a || !sel.b) { box.innerHTML = `<div class="empty">Välj ${!sel.a && !sel.b ? 'två bolag' : 'ett bolag till'} ovanför för att jämföra.</div>`; return; }
+    if (sel.a === sel.b) { box.innerHTML = '<div class="empty">Välj två olika värdepapper.</div>'; return; }
+    box.innerHTML = loading('Hämtar båda bolagen …');
+    const [A, B, ca, cb] = await Promise.all([getStock(sel.a), getStock(sel.b), api(`/api/chart?s=${encodeURIComponent(sel.a)}&r=1y`, 10 * 60e3), api(`/api/chart?s=${encodeURIComponent(sel.b)}&r=1y`, 10 * 60e3)]);
+    if (!$('#jamfor-res')) return;
+    showPicked();
+    const L = [A, B];
+    const bad = L.find((x) => x.error);
+    if (bad) { box.innerHTML = `<div class="empty">${esc(errText(bad.error))}</div>`; return; }
+    const head = L.map((s) => `<div class="card stack cmp-head" style="gap:10px">
+        <span class="label-up">${esc(s.lista || s.sym)}</span>
+        <a href="/bolag/${encodeURIComponent(s.sym)}" data-link style="color:inherit;text-decoration:none;font-size:22px;font-weight:500;line-height:1.2">${esc(s.namn)}</a>
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><span class="num" style="font-size:28px">${s.kurs != null ? kr(s.kurs) : '–'} <span class="muted" style="font-size:14px">${esc(cur(s.valuta))}</span></span>${s.d1 != null ? `<span class="pill ${tone(s.d1)}">${pct(s.d1)} i dag</span>` : ''}</div>
+        <div style="display:flex;align-items:center;gap:10px"><span class="small muted">Riskkoll</span>${s.poang != null ? `<b class="num" style="font-size:20px">${s.poang} / 10</b><span class="pill ${LV[lvlOf(s.poang)].c}">${LV[lvlOf(s.poang)].t}</span>` : '<span class="small muted">För lite data</span>'}</div>
+      </div>`).join('');
+    const names = [...new Set(L.flatMap((s) => (s.faktorer || []).map((f) => f[0])))];
+    const factorRow = (n) => `<tr><th scope="row">${esc(n)}</th>${L.map((s) => { const f = (s.faktorer || []).find((x) => x[0] === n); return `<td>${f ? `<span class="pill ${LV[f[1]].c}">${LV[f[1]].t}</span><span class="small muted cmp-sub">${esc(f[2])}</span>` : '<span class="faint">–</span>'}</td>`; }).join('')}</tr>`;
+    const factKeys = [...new Set(L.flatMap((s) => (s.fakta || []).map((f) => f[0])))];
+    const factRow = (k) => `<tr><th scope="row">${esc(k)}</th>${L.map((s) => `<td class="num">${esc((s.fakta || []).find((f) => f[0] === k)?.[1] || '–')}</td>`).join('')}</tr>`;
+    const perfKeys = [...new Set(L.flatMap((s) => (s.perf || []).map((p) => p[0])))];
+    const perfRow = (k) => `<tr><th scope="row">${esc(k)}</th>${L.map((s) => { const v = (s.perf || []).find((p) => p[0] === k)?.[1]; return `<td class="num" style="color:var(--${tone(v)})">${v != null ? pct(v) : '–'}</td>`; }).join('')}</tr>`;
+    const tbl = (title, rows) => rows.length ? `<section class="card" style="padding:8px 22px 14px"><div class="table-wrap"><table class="cmp"><caption class="label-up" style="text-align:left;padding:12px 0 4px">${title}</caption><thead><tr><th scope="col"><span class="sr-only">Mått</span></th>${L.map((s) => `<th scope="col">${esc(short(s.sym))}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div></section>` : '';
+    box.innerHTML = `<div class="stack" style="gap:20px">
+      <div class="grid g2">${head}</div>
+      <section class="card co-section"><span class="label-up">Senaste året</span><h2 class="section">Kursutveckling i procent</h2><div id="cmp-chart" class="chart"></div></section>
+      ${tbl('Riskkoll, del för del', names.map(factorRow))}
+      ${tbl('Nyckeltal', factKeys.map(factRow))}
+      ${tbl('Kursutveckling', perfKeys.map(perfRow))}
+      <p class="small faint" style="margin:0">Jämförelsen visar fakta och vår förenklade riskkoll. Den säger inte vilket bolag som är bäst att köpa.</p>
+    </div>`;
+    const cc = $('#cmp-chart');
+    if (ca?.punkter && cb?.punkter) drawChart(cc, [{ punkter: ca.punkter, namn: A.namn }, { punkter: cb.punkter, namn: B.namn }], { range: '1y', relative: true });
+    else cc.innerHTML = '<p class="muted" style="margin:0">Kursdiagram saknas för ett av bolagen.</p>';
+  };
+  compare();
+  if (!sel.a) $('#pick-a')?.focus(); else if (!sel.b) $('#pick-b')?.focus();
+}
+const cleanSym = (s) => { const v = String(s || '').trim().toUpperCase(); return /^\^?[A-Z0-9][A-Z0-9.\-_:]{0,24}$/.test(v) ? v : null; };
+
 function route() {
   const path = location.pathname.replace(/\/+$/, '') || '/';
   const params = new URLSearchParams(location.search);
@@ -790,6 +1236,8 @@ function route() {
   if (path === '/sok') return { active: 'sok', title: 'Sök och riskkoll', html: viewSok(params), mount: () => mountSok(params) };
   if (path === '/nyheter') return { active: 'nyheter', title: 'Nyheter', html: viewNyheter(), mount: mountNyheter };
   if (path === '/bevakning') return { active: 'bevakning', title: 'Bevakning', html: viewBevakning(), mount: mountBevakning };
+  if (path === '/jamfor') return { active: 'jamfor', title: 'Jämför', html: viewJamfor(), mount: () => mountJamfor(params) };
+  if (path === '/konto') return { active: 'konto', title: ACC.user ? 'Mitt konto' : 'Logga in', html: viewKonto(), mount: mountKonto };
   const m = path.match(/^\/bolag\/([^/]+)$/);
   if (m) {
     let sym = decodeURIComponent(m[1]);
@@ -867,3 +1315,7 @@ document.addEventListener('submit', (e) => {
 });
 window.addEventListener('popstate', render);
 render();
+bootAccount();
+setTimeout(checkAlarms, 5000);
+setInterval(checkAlarms, 60e3);
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

@@ -70,6 +70,14 @@ export function buildFactors({ m = {}, price, cur, mcapM }) {
   return out;
 }
 
+// Blankning: hur stor del av aktierna som professionella investerare har satsat på ska falla.
+// summa = summan av anmälda positioner i procent, null = ingen position över 0,5 %.
+export function blankFactor(summa) {
+  if (summa == null) return ['Blankning', 1, 'Ingen anmäld blankning över 0,5 %', 'Inga större investerare satsar öppet på att kursen ska falla.'];
+  const l = summa < 2 ? 1 : summa < 5 ? 2 : 3;
+  return ['Blankning', l, `${sv(summa, 2)} % av aktierna blankade`, l === 1 ? 'Lite blankning. Få satsar på att kursen ska falla.' : l === 2 ? 'En del investerare satsar på att kursen ska falla.' : 'Många professionella investerare satsar på att kursen ska falla.'];
+}
+
 export function perfFromMetric(m = {}, d1 = null) {
   const rows = [
     ['1 dag', d1], ['5 dagar', val(m['5DayPriceReturnDaily'])], ['Månaden', val(m.monthToDatePriceReturnDaily)],
@@ -105,6 +113,7 @@ export function thinkAbout(faktorer, { price, hi, lo } = {}) {
   if (get('Värdering')?.[1] === 3) t.push('Hög värdering gör aktien känslig för besvikelser i rapporter.');
   if (get('Skulder')?.[1] >= 2) t.push('Följ hur skulderna utvecklas i rapporterna, särskilt om räntorna stiger.');
   if (get('Handel')?.[1] === 3) t.push('Liten handel: lägg hellre en limitorder än att köpa till marknadspris.');
+  if (get('Blankning')?.[1] === 3) t.push('Hög blankning: ta reda på varför många tror att kursen ska falla innan du köper.');
   if (get('Storlek')?.[1] === 3) t.push('Var extra försiktig med tips om små bolag i chattar och sociala medier.');
   if (price && hi && lo && hi > lo) {
     const pos = Math.min(1, Math.max(0, (price - lo) / (hi - lo)));

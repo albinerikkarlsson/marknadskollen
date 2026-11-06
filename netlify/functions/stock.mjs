@@ -1,6 +1,7 @@
 import { finnhub, cached, fail, cleanSymbol, num, quoteOrNull, ApiError } from '../lib/finnhub.mjs';
 import { ySummary, yChart, metricFromSummary, perfFromChart, raw } from '../lib/yahoo.mjs';
-import { buildFactors, perfFromMetric, riskScore, summarize, thinkAbout, money } from '../lib/risk.mjs';
+import { buildFactors, perfFromMetric, riskScore, summarize, thinkAbout, money, blankFactor } from '../lib/risk.mjs';
+import { loadBlankning, findBlank } from '../lib/fi.mjs';
 
 // GET /api/stock?s=VOLV-B.ST  →  kurs, bolagsfakta, utveckling och riskkoll för ett värdepapper
 // Yahoo Finance först (har även svenska aktier). Svarar Yahoo inte används Finnhub.
@@ -16,11 +17,13 @@ export default async (req) => {
 
 /* ---------- Yahoo ---------- */
 async function fromYahoo(sym) {
-  const [sr, cr, pr] = await Promise.allSettled([
+  const [sr, cr, pr, br] = await Promise.allSettled([
     ySummary(sym),
     yChart(sym, '1y', '1d'),
     // Finnhub har logga och noteringsår för amerikanska bolag. Bara ett tillägg.
-    /[.^]/.test(sym) ? Promise.resolve(null) : finnhub('/stock/profile2', { symbol: sym }, 4000)
+    /[.^]/.test(sym) ? Promise.resolve(null) : finnhub('/stock/profile2', { symbol: sym }, 4000),
+    // Blankning från Finansinspektionen, bara svenska aktier
+    sym.endsWith('.ST') ? Promise.race([loadBlankning(), new Promise((_, no) => setTimeout(() => no(new Error('FI svarade inte i tid')), 3500))]) : Promise.resolve(null)
   ]);
   const s = sr.status === 'fulfilled' ? sr.value : null;
   const c = cr.status === 'fulfilled' ? cr.value : null;
@@ -45,6 +48,13 @@ async function fromYahoo(sym) {
   if (hi && lo && m['52WeekHigh'] == null) { m['52WeekHigh'] = hi; m['52WeekLow'] = lo; }
 
   const faktorer = buildFactors({ m, price: kurs, cur, mcapM });
+  // Blankning blir en sjunde del när registret svarar och det gäller en aktie
+  let blankning = null;
+  if (br.status === 'fulfilled' && br.value && (price.quoteType || 'EQUITY') === 'EQUITY') {
+    const b = findBlank(br.value, namn);
+    blankning = b ? { summa: b.summa, antal: b.positioner.length } : { summa: null, antal: 0 };
+    faktorer.push(blankFactor(blankning.summa));
+  }
   const poang = faktorer.length >= 3 ? riskScore(faktorer) : null;
   const anst = raw(ap.fullTimeEmployees);
   const fakta = [
@@ -68,7 +78,8 @@ async function fromYahoo(sym) {
     valuta: typ === 'INDEX' ? 'poäng' : cur, kurs, d1, kursTid,
     fakta,
     perf: perfFromChart(c?.points, kurs, d1),
-    faktorer, poang,
+    faktorer, poang, blankning,
+    aktieslag: shareClass(sym),
     sammanfattning: faktorer.length ? summarize(namn, faktorer) : 'Datakällan har inte tillräckligt med nyckeltal för att göra en riskkoll av det här värdepappret.',
     tank: faktorer.length ? thinkAbout(faktorer, { price: kurs, hi, lo }) : [],
     saknarKurs: !kurs,
@@ -127,6 +138,9 @@ async function fromFinnhub(sym) {
     hamtad: new Date().toISOString()
   };
 }
+
+// Aktieslag ur tickern: VOLV-B.ST → B-aktie
+export const shareClass = (sym) => { const m = String(sym).match(/-([A-D])\.ST$/i); return m ? `${m[1].toUpperCase()}-aktie` : null; };
 
 // "Volvo, AB ser. B" → "Volvo AB ser. B". Bara små städningar.
 function cleanTitle(s) { return String(s).replace(/\s+/g, ' ').replace(/, AB\b/, ' AB').trim(); }
