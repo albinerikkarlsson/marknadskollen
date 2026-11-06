@@ -40,12 +40,23 @@ export default async (req) => {
       if (!(res.status === 400 || res.status === 404 || res.status === 403) || !/model|not.?found|not.?supported|not.?allowed/i.test(JSON.stringify(b || ''))) break;
     }
     if (!body) throw lastErr || new ApiError(502, 'AI svarade inte');
-    const text = (body?.content || []).map((c) => c.text || '').join('');
-    const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
-    const punkter = (json.punkter || []).map((x) => String(x).trim()).filter(Boolean).slice(0, 4);
+    const text = (body?.content || []).filter((c) => c.type === 'text').map((c) => c.text || '').join('').trim();
+    const punkter = parsePoints(text);
+    if (!punkter.length) console.warn('[summary] kunde inte läsa AI-svaret:', JSON.stringify(body).slice(0, 400));
     if (!punkter.length) return cached({ saknas: 'no_news' }, 3600);
     return cached({ punkter, antalNyheter: items.length, modell: 'Claude', hamtad: new Date().toISOString() }, 6 * 3600);
   } catch (e) { return fail(e); }
 };
+
+// Svaret ska vara JSON, men om modellen skriver en vanlig punktlista tar vi den i stället
+export function parsePoints(text) {
+  const t = String(text || '').replace(/```(?:json)?/gi, '').trim();
+  const a = t.indexOf('{'); const z = t.lastIndexOf('}');
+  if (a >= 0 && z > a) {
+    try { const j = JSON.parse(t.slice(a, z + 1)); const arr = Array.isArray(j.punkter) ? j.punkter : Object.values(j).find(Array.isArray) || []; const out = arr.map((x) => String(x).trim()).filter(Boolean); if (out.length) return out.slice(0, 4); } catch { /* prova punktlista */ }
+  }
+  const lines = t.split(/\n+/).map((l) => l.replace(/^\s*(?:[-•*]|\d+[.)])\s+/, '').trim()).filter((l) => l.length > 15 && !/^\{|\}$|^\[|\]$/.test(l));
+  return lines.slice(0, 4);
+}
 
 export const config = { path: '/api/summary' };
