@@ -30,7 +30,7 @@ export default async (req) => {
       const res = await fetch(`${base}/v1/messages`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model, max_tokens: 500, messages: [{ role: 'user', content: prompt }] }),
+        body: JSON.stringify({ model, max_tokens: 3000, messages: [{ role: 'user', content: prompt }] }),
         signal: AbortSignal.timeout(20000)
       });
       const b = await res.json().catch(() => null);
