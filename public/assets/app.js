@@ -28,6 +28,8 @@ const ICON = {
   ext: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
   compare: 'M8 4v16M16 4v16M4 9h8M12 15h8',
   list: 'M4 6h16M4 12h16M4 18h10',
+  check: 'M5 12l5 5 9-10',
+  plus: 'M12 5v14M5 12h14',
   user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0',
   bell: 'M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0'
 };
@@ -168,7 +170,7 @@ function topbar(crumbs, withSearch = true) {
 }
 
 const footer = (extra = '') =>
-  `<footer class="foot">Ingen investeringsrådgivning. Kurser, nyckeltal och nyheter kommer från Yahoo Finance och Finnhub, insynshandel och blankning från Finansinspektionen. Riskkollen räknas fram med fasta regler som förklaras på varje bolagssida. ${extra}</footer>`;
+  `<footer class="foot"><nav class="foot-links" aria-label="Om sidan"><a href="/om" data-link>Om oss</a><a href="/integritet" data-link>Integritet</a><a href="/ordlista" data-link>Ordlista</a></nav>Ingen investeringsrådgivning. Kurser, nyckeltal och nyheter kommer från Yahoo Finance och Finnhub, insynshandel och blankning från Finansinspektionen. Riskkollen räknas fram med fasta regler som förklaras på varje bolagssida. ${extra}</footer>`;
 
 /* ================= Nyheter ================= */
 async function getNews(region) {
@@ -576,7 +578,7 @@ async function mountBevakning() {
         <a class="small" href="/bolag/${encodeURIComponent(a.sym)}" data-link>Se riskkollen →</a>
       </div>`).join('')}</div>` : '';
     $('#watchtable').innerHTML = `${notifyBar()}<div class="table-wrap"><table>
-      <thead><tr><th scope="col">Värdepapper</th><th scope="col" class="r">Kurs</th><th scope="col" class="r">I dag</th><th scope="col">Prislarm</th><th scope="col">Riskkoll</th><th scope="col"><span class="sr-only">Ta bort</span></th></tr></thead>
+      <thead><tr><th scope="col">Värdepapper</th><th scope="col" class="r">Kurs</th><th scope="col" class="r">I dag</th><th scope="col">Prislarm${tip('Prislarm')}</th><th scope="col">Riskkoll</th><th scope="col"><span class="sr-only">Ta bort</span></th></tr></thead>
       <tbody>${rows.map((r) => `
         <tr>
           <td><a class="co" href="/bolag/${encodeURIComponent(r.sym)}" data-link><span class="avatar">${esc(short(r.sym))}</span><span><span style="display:block;font-weight:500">${esc(r.namn)}</span><span class="small muted">${esc(r.sym)}</span></span></a></td>
@@ -640,7 +642,7 @@ function bolagHTML(s) {
       ${priceBlock(s)}
     </header>
 
-    ${s.fakta?.length ? `<div class="statbar card">${s.fakta.map(([k, v]) => `<div class="stat"><span class="small muted">${esc(k)}</span><span class="num">${esc(v)}</span></div>`).join('')}</div>` : ''}
+    ${s.fakta?.length ? `<div class="statbar card">${s.fakta.map(([k, v]) => `<div class="stat"><span class="small muted">${esc(k)}${tip(k)}</span><span class="num">${esc(v)}</span></div>`).join('')}</div>` : ''}
 
     <div class="co-grid">
       <div class="co-main stack" style="gap:24px">
@@ -673,14 +675,14 @@ function bolagHTML(s) {
         ${isSwedish(s.sym) ? `
         <section class="card co-section" aria-labelledby="insyn-h">
           <span class="label-up">Finansinspektionen</span>
-          <h2 class="section" id="insyn-h">Insynshandel</h2>
+          <h2 class="section" id="insyn-h">Insynshandel${tip('Insynshandel')}</h2>
           <p class="small muted" style="margin:0">Personer i bolagets ledning och styrelse måste anmäla sina affärer i aktien. Här är de senaste tolv månaderna.</p>
           <div id="insyn-body" class="stack" style="gap:16px">${loading('Hämtar insynsaffärer …')}</div>
         </section>
 
         <section class="card co-section" aria-labelledby="blank-h">
           <span class="label-up">Finansinspektionen</span>
-          <h2 class="section" id="blank-h">Blankning</h2>
+          <h2 class="section" id="blank-h">Blankning${tip('Blankning')}</h2>
           <div id="blank-body" class="stack" style="gap:16px">${loading('Hämtar blankning …')}</div>
         </section>` : ''}
 
@@ -694,7 +696,7 @@ function bolagHTML(s) {
 
       <aside class="co-side" aria-label="Riskkoll">
         <section class="card dark rings stack tilt glare" style="gap:14px;padding:26px" aria-labelledby="risk-h"><span class="glare-layer" aria-hidden="true"></span>
-          <span class="label-up" style="color:rgba(255,255,255,0.6)">Riskkoll</span>
+          <span class="label-up" style="color:rgba(255,255,255,0.6)">Riskkoll${tip('Riskkoll')}</span>
           ${s.poang != null ? `
           <div style="display:flex;align-items:baseline;gap:8px"><span class="score num" data-count="${s.poang}">${s.poang}</span><span class="muted" style="font-size:18px">/ 10</span>
             <span class="pill inv" style="margin-left:auto;align-self:center">${LV[lvl].t} risk</span></div>
@@ -708,7 +710,7 @@ function bolagHTML(s) {
         ${s.faktorer?.length ? `<section class="card" style="padding:8px 22px" aria-label="Riskens delar">
           ${s.faktorer.map(([namn, l, varde, text]) => `
             <div class="factor-row">
-              <span style="font-weight:500">${esc(namn)}</span>
+              <span style="font-weight:500">${esc(namn)}${tip(namn)}</span>
               <span class="pill ${LV[l].c}">${LV[l].t}</span>
               <span class="small muted num" style="grid-column:1/-1">${esc(varde)}</span>
               <span style="grid-column:1/-1;font-size:14px;color:var(--ink-2)">${esc(text)}</span>
@@ -918,7 +920,7 @@ function mountAktier(params) {
     $('#ak-storlek').innerHTML = STORLEK[st.m].map(([k, t]) => `<button type="button" class="chip-btn" data-st="${k}" aria-pressed="${st.st === k}">${esc(t)}</button>`).join('');
   };
 
-  const th = (k, t, cls = '') => `<th scope="col" class="${cls}" aria-sort="${st.s === k ? (st.d === 'asc' ? 'ascending' : 'descending') : 'none'}"><button type="button" class="th-sort" data-sort="${k}">${t}${st.s === k ? (st.d === 'asc' ? ' ↑' : ' ↓') : ''}</button></th>`;
+  const th = (k, t, cls = '') => `<th scope="col" class="${cls}" aria-sort="${st.s === k ? (st.d === 'asc' ? 'ascending' : 'descending') : 'none'}"><button type="button" class="th-sort" data-sort="${k}">${t}${st.s === k ? (st.d === 'asc' ? ' ↑' : ' ↓') : ''}</button>${tip(t)}</th>`;
   const drawList = () => {
     const list = sorted(data.aktier.filter((a) => pass(a)));
     const filtered = st.q || st.k !== 'alla' || st.b !== 'alla' || st.st !== 'alla';
@@ -985,6 +987,289 @@ function mountAktier(params) {
   });
   load();
 }
+
+/* ================= Ordförklaringar ================= */
+const ORD = {
+  'Riskkoll': 'Vår egen sammanvägning av sju saker som påverkar hur riskabel en aktie är, från 1 (låg) till 10 (hög). Ett högt tal betyder att värdet kan svänga mer, inte att aktien är dålig.',
+  'Börsvärde': 'Vad hela bolaget är värt på börsen just nu: aktiekursen gånger antalet aktier.',
+  '52 veckor': 'Lägsta och högsta kursen det senaste året. Visar hur mycket aktien har svängt.',
+  'Bransch': 'Vilken typ av verksamhet bolaget har, till exempel teknik, bank eller fastigheter.',
+  'Utdelning': 'Den del av vinsten som bolaget betalar ut till ägarna, räknat i procent av aktiekursen (direktavkastning). 3 % betyder ungefär 3 kr per år för varje 100 kr du äger, om utdelningen ligger kvar.',
+  'P/E': 'Pris delat med vinst per aktie. Visar hur många års vinst du betalar för aktien. Lågt tal betyder billigare i förhållande till vinsten, men kan också betyda att marknaden tror på sämre tider.',
+  'Kurssvängningar': 'Hur mycket och hur snabbt kursen brukar röra sig. Mäts med beta och årets högsta och lägsta kurs.',
+  'Beta': 'Jämför aktiens svängningar med börsen. Beta 1 betyder att den svänger som börsen, 1,5 betyder ungefär 50 % mer.',
+  'Skulder': 'Hur mycket bolaget har lånat jämfört med ägarnas egna pengar i bolaget (skuld/eget kapital). Mycket lån blir tungt om räntorna stiger.',
+  'Värdering': 'Hur dyr aktien är jämfört med vinsten (P/E). Dyra aktier kan falla mycket om bolaget gör besvikelse.',
+  'Lönsamhet': 'Hur stor del av försäljningen som blir vinst (vinstmarginal).',
+  'Handel': 'Hur mycket aktien köps och säljs per dag. Lite handel gör det svårare att sälja när man vill.',
+  'Storlek': 'Bolagets börsvärde. Små bolag svänger ofta mer och granskas mindre av analytiker och media.',
+  'Blankning': 'Att låna aktier och sälja dem för att tjäna pengar om kursen faller. Hög blankning betyder att många professionella investerare tror på ett fall. Det är en signal, inte ett facit.',
+  'Insynshandel': 'Köp och försäljningar av personer i bolagets ledning och styrelse, och deras närstående. De måste anmäla affärerna till Finansinspektionen.',
+  '1 år': 'Hur mycket kursen har gått upp eller ner det senaste året.',
+  'Ticker': 'Aktiens förkortning på börsen, till exempel VOLV-B.ST för Volvo B på Stockholmsbörsen.',
+  'Aktieslag': 'Många svenska bolag har A- och B-aktier. A-aktier har oftast mer rösträtt, B-aktier handlas oftast mest.',
+  'ETF': 'En fond som handlas på börsen som en aktie. Den följer ofta ett index, till exempel hela Stockholmsbörsen.',
+  'Prislarm': 'Du får en notis när en aktie du bevakar rör sig mer än gränsen du valt under dagen.'
+};
+const tip = (k) => (ORD[k] ? `<button type="button" class="tip" data-tip="${esc(k)}" aria-label="Vad betyder ${esc(k)}?" aria-expanded="false">?</button>` : '');
+// En gemensam förklaringsruta för hela sidan
+(() => {
+  let box = null; let owner = null;
+  const close = () => { if (box) { box.remove(); box = null; } if (owner) { owner.setAttribute('aria-expanded', 'false'); owner = null; } };
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest?.('.tip');
+    if (!b) { if (box && !e.target.closest('.tip-box')) close(); return; }
+    e.preventDefault(); e.stopPropagation();
+    if (owner === b) { close(); return; }
+    close(); owner = b; b.setAttribute('aria-expanded', 'true');
+    box = document.createElement('div'); box.className = 'tip-box'; box.setAttribute('role', 'tooltip');
+    box.innerHTML = `<b>${esc(b.dataset.tip)}</b><span>${esc(ORD[b.dataset.tip] || '')}</span><a href="/ordlista" data-link>Fler förklaringar</a>`;
+    document.body.append(box);
+    const r = b.getBoundingClientRect(); const w = Math.min(320, innerWidth - 24);
+    box.style.width = w + 'px';
+    box.style.left = Math.max(12, Math.min(innerWidth - w - 12, r.left + r.width / 2 - w / 2)) + 'px';
+    const below = r.bottom + 8 + box.offsetHeight < innerHeight;
+    box.style.top = (below ? r.bottom + 8 + scrollY : r.top - 8 - box.offsetHeight + scrollY) + 'px';
+  }, true);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  window.addEventListener('popstate', close);
+  document.addEventListener('mk-navigate', close);
+})();
+
+function viewOrdlista() {
+  return `${topbar([['Översikt', '/'], ['Ordlista', '/ordlista']], false)}
+  <div class="stack" style="gap:6px"><span class="eyebrow">Börsens ord på enkel svenska</span><h1 class="title">Ordlista</h1></div>
+  <section class="card" style="padding:8px 24px">
+    <dl class="glossary">${Object.entries(ORD).sort((a, b) => a[0].localeCompare(b[0], 'sv')).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
+  </section>
+  ${footer()}`;
+}
+
+/* ================= Om oss ================= */
+// Fylls i med Albins svar. Tomma fält visas inte.
+const OM = {
+  namn: 'Albin Karlsson',
+  roll: 'Grundare av Marknadskollen',
+  stad: '',
+  bild: '',
+  mejl: '',
+  orgnr: '',
+  ingress: 'Marknadskollen är byggt för dig som vill förstå börsen innan du sätter in pengar. Här ser du risken i ett bolag på enkel svenska, med fakta från öppna källor.',
+  historia: [],
+  forVem: '',
+  loften: [
+    'Vi ger aldrig köp- eller säljtips. Vi visar fakta och förklarar risken, du bestämmer själv.',
+    'Vi säljer aldrig dina uppgifter och visar ingen reklam som spårar dig.',
+    'Vi visar alltid varifrån informationen kommer och när den hämtades.',
+    'Saknas data säger vi det, i stället för att gissa.'
+  ],
+  vi: 'jag'
+};
+
+function viewOm() {
+  const p = OM.vi === 'vi';
+  return `${topbar([['Översikt', '/'], ['Om oss', '/om']], false)}
+  <div class="stack" style="gap:6px"><span class="eyebrow">Vem står bakom Marknadskollen?</span><h1 class="title">Om oss</h1></div>
+  <div class="om-grid">
+    <section class="card om-person">
+      ${OM.bild ? `<img src="${esc(OM.bild)}" alt="${esc(OM.namn)}" class="om-photo" width="120" height="120">` : `<span class="avatar om-photo" aria-hidden="true">${esc(OM.namn.split(' ').map((w) => w[0]).join('').slice(0, 2))}</span>`}
+      <div><b style="font-size:20px;font-weight:500">${esc(OM.namn)}</b><div class="muted">${esc([OM.roll, OM.stad].filter(Boolean).join(' · '))}</div></div>
+      ${OM.mejl ? `<a class="btn ghost" href="mailto:${esc(OM.mejl)}">Mejla ${p ? 'oss' : 'mig'}: ${esc(OM.mejl)}</a>` : ''}
+      <p class="small muted" style="margin:0">${OM.orgnr ? `Organisationsnummer ${esc(OM.orgnr)}.` : `Marknadskollen drivs av ${esc(OM.namn)} som privatperson.`}</p>
+    </section>
+    <div class="stack" style="gap:20px">
+      <section class="card co-section"><p class="lead" style="margin:0">${esc(OM.ingress)}</p>
+        ${OM.historia.map((t) => `<p style="margin:0;font-size:16px;line-height:1.6">${esc(t)}</p>`).join('')}
+        ${OM.forVem ? `<p style="margin:0;font-size:16px;line-height:1.6">${esc(OM.forVem)}</p>` : ''}
+      </section>
+      <section class="card co-section"><span class="label-up">${p ? 'Våra' : 'Mina'} löften till dig</span>
+        <ul class="om-list">${OM.loften.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
+      </section>
+      <section class="card co-section"><span class="label-up">Varifrån kommer informationen?</span>
+        <ul class="om-list">
+          <li><b>Kurser, nyckeltal och nyheter:</b> Yahoo Finance, med Finnhub som reserv.</li>
+          <li><b>Insynshandel och blankning:</b> Finansinspektionens öppna register.</li>
+          <li><b>Bolagsbeskrivningar och historia:</b> Wikipedia och Wikidata.</li>
+          <li><b>AI-sammanfattningar:</b> skrivs av Claude utifrån nyhetsrubrikerna och märks alltid som AI.</li>
+          <li><b>Riskkollen:</b> räknas med fasta regler som förklaras på varje bolagssida. Den är en förenkling och inte ett råd.</li>
+        </ul>
+      </section>
+      <section class="card co-section"><span class="label-up">Bra att veta</span>
+        <p style="margin:0">Marknadskollen ger ingen investeringsrådgivning. Allt du läser här är information, inte en rekommendation att köpa eller sälja. Har du frågor om ditt sparande, prata med din bank eller en rådgivare med tillstånd från Finansinspektionen.</p>
+        <p style="margin:0">Har någon kontaktat dig om en placering som låter för bra för att vara sann? Kolla <a href="https://www.fi.se/sv/vara-register/varningslistan/" target="_blank" rel="noopener noreferrer">Finansinspektionens varningslista</a> innan du gör något.</p>
+        <p class="small" style="margin:0"><a href="/integritet" data-link>Så hanterar vi dina uppgifter</a> · <a href="/ordlista" data-link>Ordlista</a></p>
+      </section>
+    </div>
+  </div>
+  ${footer()}`;
+}
+
+/* ================= Integritet ================= */
+const SUPA_REGION = ''; // fylls i när Albin svarat, t.ex. 'Stockholm (EU)'
+function viewIntegritet() {
+  return `${topbar([['Översikt', '/'], ['Integritet', '/integritet']], false)}
+  <div class="stack" style="gap:6px"><span class="eyebrow">Senast uppdaterad 7 november 2026</span><h1 class="title">Så hanterar vi dina uppgifter</h1></div>
+  <section class="card co-section prose-sec">
+    <h2 class="section">Kort sagt</h2>
+    <ul class="om-list">
+      <li>Vi sparar bara det som behövs för att ditt konto ska fungera: e-post, namn, din bevakning och dina prislarm.</li>
+      <li>Vi säljer aldrig dina uppgifter, visar ingen reklam och använder inga spårningscookies.</li>
+      <li>Du kan radera ditt konto och allt som hör till det när du vill, med en knapp under <a href="/konto" data-link>Mitt konto</a>.</li>
+    </ul>
+
+    <h2 class="section">Vilka uppgifter sparas?</h2>
+    <ul class="om-list">
+      <li><b>Konto:</b> din e-postadress, ditt namn och ett lösenord. Lösenordet sparas krypterat och kan inte läsas av någon, inte heller av oss.</li>
+      <li><b>Inställningar:</b> vilka aktier du bevakar, dina prislarm och om du har gått igenom startguiden.</li>
+      <li><b>I din webbläsare:</b> din inloggning, din bevakning och dina val sparas lokalt (localStorage) så att sidan går snabbt. Det är inte spårningscookies och försvinner om du rensar webbläsaren.</li>
+      <li><b>Tekniska loggar:</b> när du besöker sidan sparar vår webbhotell en kort logg med bland annat din IP-adress, för att kunna hitta fel och stoppa attacker. Loggarna rensas automatiskt.</li>
+    </ul>
+
+    <h2 class="section">Var sparas de?</h2>
+    <ul class="om-list">
+      <li><b>Konton</b> sparas hos Supabase${SUPA_REGION ? `, på servrar i ${esc(SUPA_REGION)}` : ''}.</li>
+      <li><b>Sidan</b> körs hos Netlify. Deras servrar kan finnas utanför EU, och överföringen sker då med EU:s standardavtalsklausuler.</li>
+    </ul>
+
+    <h2 class="section">Delar vi något med andra?</h2>
+    <ul class="om-list">
+      <li>Kurser, nyheter och register hämtas av vår server från Yahoo Finance, Finnhub, Finansinspektionen och Wikipedia. Din IP-adress och dina uppgifter skickas inte till dem.</li>
+      <li>AI-sammanfattningarna skapas av Anthropic (Claude). Bara nyhetsrubriker skickas dit, aldrig något om dig.</li>
+      <li>Typsnittet ligger på vår egen server, så inget skickas till Google.</li>
+    </ul>
+
+    <h2 class="section">Notiser</h2>
+    <p style="margin:0">Prislarmen räknas ut i din webbläsare. Notiserna skickas inte via någon annan tjänst, och du kan stänga av dem i webbläsarens inställningar.</p>
+
+    <h2 class="section">Dina rättigheter</h2>
+    <p style="margin:0">Enligt dataskyddsförordningen (GDPR) har du rätt att få veta vilka uppgifter vi har om dig, få fel rättade och få allt raderat. Det mesta ser du själv under Mitt konto, där du också kan radera kontot. ${OM.mejl ? `Har du frågor, mejla <a href="mailto:${esc(OM.mejl)}">${esc(OM.mejl)}</a>.` : ''} Tycker du att vi hanterar dina uppgifter fel kan du klaga hos <a href="https://www.imy.se" target="_blank" rel="noopener noreferrer">Integritetsskyddsmyndigheten (IMY)</a>.</p>
+
+    <h2 class="section">Vem ansvarar?</h2>
+    <p style="margin:0">${esc(OM.namn)}${OM.orgnr ? `, organisationsnummer ${esc(OM.orgnr)}` : ''} ansvarar för behandlingen av dina personuppgifter. Läs mer <a href="/om" data-link>om oss</a>.</p>
+  </section>
+  ${footer()}`;
+}
+
+/* ================= Radera konto ================= */
+// Använder databasfunktionen delete_my_account i Supabase. Den raderar bara den inloggade användaren.
+async function deleteAccount() {
+  const c = await accCfg(); const t = await token();
+  if (!c || !t) throw new Error('Inte inloggad');
+  const res = await fetch(c.url + '/rest/v1/rpc/delete_my_account', { method: 'POST', headers: { apikey: c.anon, authorization: 'Bearer ' + t, 'content-type': 'application/json' }, body: '{}' });
+  if (res.status === 404) throw Object.assign(new Error('saknas'), { code: 'missing' });
+  if (!res.ok) throw new Error('Radering misslyckades (' + res.status + ')');
+  for (const k of ['mk-session', 'mk-sync-user', WKEY, LKEY, 'mk-larm-skickat', 'mk-onboarded', NKEY]) { try { localStorage.removeItem(k); } catch { /* privat läge */ } }
+  ACC.session = null; ACC.user = null;
+}
+function confirmDelete(onYes) {
+  const d = document.createElement('div'); d.className = 'modal-back';
+  d.innerHTML = `<div class="modal card" role="dialog" aria-modal="true" aria-labelledby="del-h">
+    <h2 class="section" id="del-h" style="font-size:22px">Radera ditt konto?</h2>
+    <p style="margin:0">Ditt konto, ditt namn, din bevakning och dina prislarm raderas för alltid. Det går inte att ångra.</p>
+    <label class="field"><span>Skriv RADERA för att bekräfta</span><input type="text" autocomplete="off" data-confirm></label>
+    <p class="small" role="status" data-msg style="margin:0;min-height:1em"></p>
+    <div class="chips" style="justify-content:flex-end"><button class="btn ghost" type="button" data-no>Avbryt</button><button class="btn danger" type="button" data-yes disabled>Radera kontot</button></div></div>`;
+  document.body.append(d);
+  const inp = d.querySelector('[data-confirm]'); const yes = d.querySelector('[data-yes]');
+  inp.focus();
+  inp.addEventListener('input', () => { yes.disabled = inp.value.trim().toUpperCase() !== 'RADERA'; });
+  const close = () => d.remove();
+  d.addEventListener('click', (e) => { if (e.target === d || e.target.closest('[data-no]')) close(); });
+  d.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  yes.addEventListener('click', async () => {
+    yes.disabled = true; d.querySelector('[data-msg]').textContent = 'Raderar …';
+    try { await onYes(); close(); }
+    catch (err) { yes.disabled = false; d.querySelector('[data-msg]').textContent = err.code === 'missing' ? `Radering är inte påslagen än. ${OM.mejl ? 'Mejla ' + OM.mejl + ' så raderar vi kontot åt dig.' : 'Kontakta oss så raderar vi kontot åt dig.'}` : 'Det gick inte att radera just nu. Prova igen om en stund.'; }
+  });
+}
+
+/* ================= Kom igång: välj aktier ================= */
+const START_VAL = [
+  ['VOLV-B.ST', 'Volvo B', 'Lastbilar och bussar'], ['INVE-B.ST', 'Investor B', 'Investmentbolag'], ['ERIC-B.ST', 'Ericsson B', 'Telekom'],
+  ['HM-B.ST', 'H&M B', 'Kläder'], ['ATCO-A.ST', 'Atlas Copco A', 'Industri'], ['SEB-A.ST', 'SEB A', 'Bank'],
+  ['AZN.ST', 'AstraZeneca', 'Läkemedel'], ['SAAB-B.ST', 'Saab B', 'Försvar'], ['EVO.ST', 'Evolution', 'Onlinespel'],
+  ['AAPL', 'Apple', 'Teknik, USA'], ['NVDA', 'Nvidia', 'Halvledare, USA'], ['MSFT', 'Microsoft', 'Mjukvara, USA'],
+  ['TSLA', 'Tesla', 'Elbilar, USA'], ['AMZN', 'Amazon', 'E-handel, USA'], ['SPY', 'S&P 500', 'Fond (ETF), USA'], ['EWD', 'Sverige', 'Fond (ETF)']
+];
+const onboarded = () => !!(ACC.user?.user_metadata?.onboarded || readLS('mk-onboarded', null) === ACC.user?.id);
+const needsOnboarding = () => !!ACC.user && !onboarded();
+
+function viewValkommen() {
+  return `<div class="stack" style="gap:6px;max-width:760px">
+    <span class="eyebrow">Steg 1 av 1 · tar 20 sekunder</span>
+    <h1 class="title">Välkommen${firstName() ? ', ' + esc(firstName()) : ''}! Vilka aktier vill du följa?</h1>
+    <p class="muted" style="margin:0;font-size:16px">Välj minst tre. De hamnar under Bevakning och på din startsida, och du kan ändra när du vill.</p>
+  </div>
+  <form class="searchbar" role="search" style="max-width:520px;flex:none;width:100%" data-onsearch>${svg('search', 18, '#6B6F76')}<label class="sr-only" for="on-q">Sök fler bolag</label><input id="on-q" type="search" placeholder="Sök fler bolag, till exempel Spotify" autocomplete="off"></form>
+  <div id="on-results"></div>
+  <div class="on-grid" id="on-grid"></div>
+  <div class="on-bar"><span id="on-count" class="muted">0 valda</span><button class="linkbtn small" type="button" data-skip>Hoppa över</button><button class="btn" type="button" data-done disabled>Klar, visa min startsida</button></div>`;
+}
+function mountValkommen() {
+  const picked = new Map(getWatch().filter(() => readLS(WKEY, null) !== null).map((s) => [s, nameOf(s)]));
+  const extra = [];
+  const card = ([sym, namn, sub], q) => `<button type="button" class="on-card" data-pick="${esc(sym)}" data-namn="${esc(namn)}" aria-pressed="${picked.has(sym)}">
+      <span class="avatar">${esc(short(sym))}</span><span class="grow" style="text-align:left;min-width:0"><b>${esc(namn)}</b><span class="small muted">${esc(sub)}</span></span>
+      <span class="on-check" aria-hidden="true">${svg('check', 14)}</span>
+      ${q?.d1 != null ? `<span class="on-d1" style="color:var(--${tone(q.d1)})">${pct(q.d1, 1)}</span>` : ''}</button>`;
+  let quotes = {};
+  const draw = () => {
+    $('#on-grid').innerHTML = [...extra, ...START_VAL].map((x) => card(x, quotes[x[0]])).join('');
+    $('#on-count').textContent = `${picked.size} ${picked.size === 1 ? 'vald' : 'valda'}`;
+    $('[data-done]').disabled = picked.size < 1;
+    $('[data-done]').textContent = picked.size < 3 ? `Välj ${3 - picked.size} till` : 'Klar, visa min startsida';
+    if (picked.size >= 1) $('[data-done]').disabled = false;
+  };
+  draw();
+  getQuotes(START_VAL.map((x) => x[0])).then((q) => { quotes = q; if ($('#on-grid')) draw(); });
+  const finish = async (save) => {
+    if (save) {
+      SYNCING = true;
+      try { for (const [s, n] of picked) rememberName(s, n); writeLS(WKEY, [...picked.keys()]); } finally { SYNCING = false; }
+    }
+    writeLS('mk-onboarded', ACC.user.id);
+    try { const t = await token(); if (t) ACC.user = await auth('/user', { data: { onboarded: true, ...(save ? { bevakning: [...picked.keys()], namn: Object.fromEntries([...picked].map(([s, n]) => [s, n])) } : {}) } }, 'PUT', t); } catch { /* sparas lokalt ändå */ }
+    if (save) toast(`Klart! Du bevakar ${picked.size} ${picked.size === 1 ? 'aktie' : 'aktier'}.`, 'Välj ett prislarm under Bevakning om du vill få en notis när de rör sig mycket.');
+    goAfterLogin();
+  };
+  $('.main').addEventListener('click', (e) => {
+    const c = e.target.closest('[data-pick]');
+    if (c) { const s = c.dataset.pick; if (picked.has(s)) picked.delete(s); else picked.set(s, c.dataset.namn); c.setAttribute('aria-pressed', String(picked.has(s))); draw(); return; }
+    const r = e.target.closest('[data-addpick]');
+    if (r) { const s = r.dataset.addpick; if (!START_VAL.some((x) => x[0] === s) && !extra.some((x) => x[0] === s)) extra.unshift([s, r.dataset.namn, r.dataset.sub]); picked.set(s, r.dataset.namn); $('#on-q').value = ''; $('#on-results').innerHTML = ''; draw(); return; }
+    if (e.target.closest('[data-done]')) finish(true);
+    if (e.target.closest('[data-skip]')) finish(false);
+  });
+  let timer;
+  $('#on-q').addEventListener('input', (e) => {
+    clearTimeout(timer); const term = e.target.value.trim();
+    if (term.length < 2) { $('#on-results').innerHTML = ''; return; }
+    timer = setTimeout(async () => {
+      const r = await api('/api/search?q=' + encodeURIComponent(term), 60 * 60e3);
+      if (!$('#on-results') || term !== $('#on-q').value.trim()) return;
+      $('#on-results').innerHTML = `<div class="pick-results card" style="padding:6px 10px">${(r?.results || []).slice(0, 5).map((x) => `<button type="button" class="pick" data-addpick="${esc(x.sym)}" data-namn="${esc(x.klass ? `${x.namn}, ${x.typ}` : x.namn)}" data-sub="${esc([x.typ, x.sym].filter(Boolean).join(' · '))}"><span class="avatar">${esc(short(x.sym))}</span><span class="grow" style="text-align:left"><span style="display:block;font-weight:500">${esc(x.namn)}</span><span class="small muted">${esc([x.typ, x.sym].filter(Boolean).join(' · '))}</span></span>${svg('plus', 16)}</button>`).join('') || '<p class="small muted">Inga träffar.</p>'}</div>`;
+    }, 300);
+  });
+  $('[data-onsearch]').addEventListener('submit', (e) => { e.preventDefault(); $('#on-results .pick')?.click(); });
+}
+
+/* ================= Lägg till på hemskärmen ================= */
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; document.querySelectorAll('[data-install]').forEach((b) => { b.hidden = false; }); });
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function installHTML() {
+  if (isStandalone()) return '';
+  if (isIOS()) return `<div class="install-tip">${svg('plus', 16)}<span class="small">Lägg Marknadskollen på hemskärmen: tryck på <b>Dela</b> och välj <b>Lägg till på hemskärmen</b>. Då fungerar prislarmen som notiser.</span></div>`;
+  return `<button class="btn ghost small" type="button" data-install ${installEvt ? '' : 'hidden'}>${svg('plus', 14)} Installera som app</button>`;
+}
+document.addEventListener('click', async (e) => {
+  if (!e.target.closest?.('[data-install]') || !installEvt) return;
+  installEvt.prompt();
+  const r = await installEvt.userChoice.catch(() => null);
+  if (r?.outcome === 'accepted') toast('Marknadskollen är installerad', 'Du hittar den bland dina appar.');
+  installEvt = null; document.querySelectorAll('[data-install]').forEach((b) => { b.hidden = true; });
+});
 
 /* ================= Konto (Supabase Auth via REST, utan extra bibliotek) ================= */
 // Bevakning, larm och namn sparas i kontots användardata. Ingen databastabell behövs.
@@ -1086,7 +1371,7 @@ const AUTH_ERR = {
 function goAfterLogin() {
   let to = readLS('mk-efter-login', '/');
   try { localStorage.removeItem('mk-efter-login'); } catch { /* privat läge */ }
-  if (typeof to !== 'string' || !to.startsWith('/') || to.startsWith('//') || to.startsWith('/konto')) to = '/';
+  if (typeof to !== 'string' || !to.startsWith('/') || to.startsWith('//') || to.startsWith('/konto') || to.startsWith('/valkommen')) to = '/';
   navigate(to);
 }
 const authErr = (e) => AUTH_ERR[e?.code] || (e?.status === 400 ? 'Kontrollera uppgifterna och prova igen.' : 'Det gick inte att nå inloggningen just nu.');
@@ -1099,6 +1384,7 @@ function viewKonto() {
         <p class="muted" style="margin:0;font-size:16px">Riskkoll, kursdiagram, nyheter med AI-sammanfattning, insynshandel och blankning. Logga in eller skapa ett gratis konto för att fortsätta.</p></div>
       <div id="konto" class="auth-card">${loading('Hämtar …')}</div>
       <p class="small faint" style="margin:0;text-align:center">Ingen investeringsrådgivning. Data från Yahoo Finance, Finnhub och Finansinspektionen.</p>
+      <p class="small" style="margin:0;text-align:center"><a href="/om" data-link>Om oss</a> · <a href="/integritet" data-link>Så hanterar vi dina uppgifter</a> · <a href="/ordlista" data-link>Ordlista</a></p>
     </div>`;
   }
   return `
@@ -1140,7 +1426,17 @@ async function mountKonto() {
       <form class="stack" style="gap:8px" data-nameform><label class="field"><span>Namn</span><input name="name" type="text" maxlength="60" autocomplete="name" value="${esc(fullName())}" required></label><div style="display:flex;gap:10px;align-items:center"><button class="btn ghost small" type="submit">Spara namn</button><span class="small muted" data-namemsg role="status"></span></div></form>
       <div class="statbar" style="padding:0"><div class="stat"><span class="small muted">Bevakar</span><span class="num">${n} st</span></div><div class="stat"><span class="small muted">Prislarm</span><span class="num">${l} st</span></div></div>
       <p class="small muted" style="margin:0">Din bevakning och dina larm sparas på kontot och syns när du loggar in på mobilen eller datorn.</p>
-      <div class="chips"><a class="btn" href="/bevakning" data-link>Till bevakningen</a><button class="btn ghost" type="button" data-logout>Logga ut</button></div></div>`;
+      <div class="chips"><a class="btn" href="/bevakning" data-link>Till bevakningen</a><button class="btn ghost" type="button" data-logout>Logga ut</button>${installHTML()}</div></div>
+    <div class="card stack" style="gap:10px;padding:22px 26px;margin-top:16px">
+      <span class="label-up">Dina uppgifter</span>
+      <p class="small muted" style="margin:0">Vi sparar din e-post, ditt namn, din bevakning och dina prislarm. <a href="/integritet" data-link>Läs mer</a></p>
+      <button class="linkbtn small danger-link" type="button" data-delete>Radera mitt konto</button>
+    </div>`;
+    box.querySelector('[data-delete]').addEventListener('click', () => confirmDelete(async () => {
+      await deleteAccount();
+      toast('Ditt konto är raderat', 'Tack för att du testade Marknadskollen.');
+      navigate('/konto');
+    }));
     box.querySelector('[data-nameform]').addEventListener('submit', async (e) => {
       e.preventDefault();
       const name = String(new FormData(e.target).get('name') || '').replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -1225,7 +1521,7 @@ function notifyBar() {
     : st === 'denied' ? 'Notiser är blockerade i webbläsaren. Larmen visas ändå här på sidan. Du kan tillåta notiser i webbläsarens inställningar för sidan.'
     : st === 'unsupported' ? 'Din webbläsare stöder inte notiser. Larmen visas här på sidan. På iPhone fungerar notiser när sidan är tillagd på hemskärmen.'
     : 'Välj en gräns under Prislarm, så säger vi till när aktien rör sig mer än så under dagen.';
-  return `<div class="notify-bar">${svg('bell', 18)}<span class="grow small">${txt}</span>${st === 'default' && any ? '<button class="btn small" type="button" data-notify>Slå på notiser</button>' : ''}</div>`;
+  return `<div class="notify-bar">${svg('bell', 18)}<span class="grow small">${txt}</span>${st === 'default' && any ? '<button class="btn small" type="button" data-notify>Slå på notiser</button>' : ''}</div>${any && isIOS() && !isStandalone() ? installHTML() : ''}`;
 }
 async function showNotice(title, body, href) {
   toast(title, body, href);
@@ -1435,6 +1731,18 @@ function mountJamfor(params) {
 const cleanSym = (s) => { const v = String(s || '').trim().toUpperCase(); return /^\^?[A-Z0-9][A-Z0-9.\-_:]{0,24}$/.test(v) ? v : null; };
 
 function route() {
+  // Sidor som alla får se, även utan konto
+  const PUBLIC = ['/om', '/integritet', '/ordlista'];
+  const here = location.pathname.replace(/\/+$/, '') || '/';
+  if (here === '/om') return { active: 'om', title: 'Om oss', html: viewOm(), mount: () => {} };
+  if (here === '/integritet') return { active: 'integritet', title: 'Integritet', html: viewIntegritet(), mount: () => {} };
+  if (here === '/ordlista') return { active: 'ordlista', title: 'Ordlista', html: viewOrdlista(), mount: () => {} };
+  // Första gången efter inloggning: välj aktier
+  if (needsOnboarding() && here !== '/valkommen' && !here.startsWith('/konto') && !PUBLIC.includes(here)) {
+    if (!readLS('mk-efter-login', null)) writeLS('mk-efter-login', location.pathname + location.search);
+    history.replaceState(null, '', '/valkommen');
+  }
+  if ((location.pathname.replace(/\/+$/, '') || '/') === '/valkommen' && ACC.user) return { active: '', title: 'Välkommen', html: viewValkommen(), mount: mountValkommen };
   // Inte inloggad: spara vart man var på väg och visa inloggningen
   if (locked() && !location.pathname.startsWith('/konto')) {
     writeLS('mk-efter-login', location.pathname + location.search);
@@ -1464,7 +1772,9 @@ function refreshNav(active) { $('#sidebar').innerHTML = sidebar(active); }
 
 function render() {
   const r = route();
-  document.body.classList.toggle('locked', locked());
+  const pub = ['om', 'integritet', 'ordlista'].includes(r.active);
+  document.body.classList.toggle('locked', locked() && !pub);
+  document.body.classList.toggle('nosidebar', locked() && pub);
   document.title = `${r.title} · Marknadskollen`;
   refreshNav(r.active);
   const main = $('#main');
@@ -1476,6 +1786,7 @@ function render() {
 
 function navigate(href) {
   history.pushState(null, '', href);
+  document.dispatchEvent(new Event('mk-navigate'));
   const swap = () => { render(); window.scrollTo(0, 0); $('#main').focus({ preventScroll: true }); };
   // Mjuk övergång mellan sidor i webbläsare som stöder det, annars direkt
   if (document.startViewTransition && !REDUCED) document.startViewTransition(swap); else swap();
