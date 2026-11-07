@@ -1048,22 +1048,26 @@ function viewOrdlista() {
 /* ================= Om oss ================= */
 // Fylls i med Albins svar. Tomma fält visas inte.
 const OM = {
-  namn: 'Albin Karlsson',
+  namn: 'Albin',
+  ansvarig: 'Albin Karlsson',
   roll: 'Grundare av Marknadskollen',
   stad: '',
   bild: '',
-  mejl: '',
+  mejl: 'kontakt.finanskollen@gmail.com',
   orgnr: '',
-  ingress: 'Marknadskollen är byggt för dig som vill förstå börsen innan du sätter in pengar. Här ser du risken i ett bolag på enkel svenska, med fakta från öppna källor.',
-  historia: [],
-  forVem: '',
+  ingress: 'Vi vill att alla ska kunna känna sig trygga i sina affärer inom finans. Marknadskollen visar risken i ett bolag på enkel svenska, med fakta från öppna källor, så att du kan förstå innan du sätter in pengar.',
+  historia: [
+    'Marknadskollen startades av Albin, som pluggar till försäljare och själv handlar med aktier och Solana-tokens. Han har sett hur otrygg finansvärlden kan kännas: svåra ord, tips från okända i chattar och sociala medier, och bolag som är svåra att genomskåda.',
+    'Därför samlar vi det viktigaste på ett ställe: risken i varje bolag, vad ledningen själv köper och säljer, hur många som satsar på att kursen ska falla och vad nyheterna säger. Allt förklarat så att vem som helst kan förstå.'
+  ],
+  forVem: 'Marknadskollen är till för alla, oavsett om du aldrig har ägt en aktie eller har handlat i många år.',
   loften: [
     'Vi ger aldrig köp- eller säljtips. Vi visar fakta och förklarar risken, du bestämmer själv.',
-    'Vi säljer aldrig dina uppgifter och visar ingen reklam som spårar dig.',
+    'Vi säljer aldrig dina uppgifter, och vi visar ingen reklam som spårar dig.',
     'Vi visar alltid varifrån informationen kommer och när den hämtades.',
-    'Saknas data säger vi det, i stället för att gissa.'
+    'Saknas det data säger vi det, i stället för att gissa.'
   ],
-  vi: 'jag'
+  vi: 'vi'
 };
 
 function viewOm() {
@@ -1075,7 +1079,7 @@ function viewOm() {
       ${OM.bild ? `<img src="${esc(OM.bild)}" alt="${esc(OM.namn)}" class="om-photo" width="120" height="120">` : `<span class="avatar om-photo" aria-hidden="true">${esc(OM.namn.split(' ').map((w) => w[0]).join('').slice(0, 2))}</span>`}
       <div><b style="font-size:20px;font-weight:500">${esc(OM.namn)}</b><div class="muted">${esc([OM.roll, OM.stad].filter(Boolean).join(' · '))}</div></div>
       ${OM.mejl ? `<a class="btn ghost" href="mailto:${esc(OM.mejl)}">Mejla ${p ? 'oss' : 'mig'}: ${esc(OM.mejl)}</a>` : ''}
-      <p class="small muted" style="margin:0">${OM.orgnr ? `Organisationsnummer ${esc(OM.orgnr)}.` : `Marknadskollen drivs av ${esc(OM.namn)} som privatperson.`}</p>
+      <p class="small muted" style="margin:0">${OM.orgnr ? `Organisationsnummer ${esc(OM.orgnr)}.` : `Marknadskollen drivs just nu av ${esc(OM.namn)} som privatperson.`}</p>
     </section>
     <div class="stack" style="gap:20px">
       <section class="card co-section"><p class="lead" style="margin:0">${esc(OM.ingress)}</p>
@@ -1105,7 +1109,7 @@ function viewOm() {
 }
 
 /* ================= Integritet ================= */
-const SUPA_REGION = ''; // fylls i när Albin svarat, t.ex. 'Stockholm (EU)'
+const SUPA_REGION = 'Sverige, inom EU';
 function viewIntegritet() {
   return `${topbar([['Översikt', '/'], ['Integritet', '/integritet']], false)}
   <div class="stack" style="gap:6px"><span class="eyebrow">Senast uppdaterad 7 november 2026</span><h1 class="title">Så hanterar vi dina uppgifter</h1></div>
@@ -1145,7 +1149,7 @@ function viewIntegritet() {
     <p style="margin:0">Enligt dataskyddsförordningen (GDPR) har du rätt att få veta vilka uppgifter vi har om dig, få fel rättade och få allt raderat. Det mesta ser du själv under Mitt konto, där du också kan radera kontot. ${OM.mejl ? `Har du frågor, mejla <a href="mailto:${esc(OM.mejl)}">${esc(OM.mejl)}</a>.` : ''} Tycker du att vi hanterar dina uppgifter fel kan du klaga hos <a href="https://www.imy.se" target="_blank" rel="noopener noreferrer">Integritetsskyddsmyndigheten (IMY)</a>.</p>
 
     <h2 class="section">Vem ansvarar?</h2>
-    <p style="margin:0">${esc(OM.namn)}${OM.orgnr ? `, organisationsnummer ${esc(OM.orgnr)}` : ''} ansvarar för behandlingen av dina personuppgifter. Läs mer <a href="/om" data-link>om oss</a>.</p>
+    <p style="margin:0">${esc(OM.ansvarig || OM.namn)}${OM.orgnr ? `, organisationsnummer ${esc(OM.orgnr)}` : ', som driver Marknadskollen som privatperson,'} ansvarar för behandlingen av dina personuppgifter. Kontakt: <a href="mailto:${esc(OM.mejl)}">${esc(OM.mejl)}</a>. Läs mer <a href="/om" data-link>om oss</a>.</p>
   </section>
   ${footer()}`;
 }
