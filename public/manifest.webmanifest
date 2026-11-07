@@ -1,6 +1,6 @@
 {
-  "name": "Marknadskollen",
-  "short_name": "Marknadskollen",
+  "name": "Finanskollen",
+  "short_name": "Finanskollen",
   "description": "Börsen på enkel svenska: riskkoll, kursdiagram, nyheter, insynshandel och blankning.",
   "lang": "sv",
   "start_url": "/",

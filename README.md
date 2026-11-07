@@ -1,4 +1,4 @@
-# Marknadskollen
+# Finanskollen
 
 Aktiesök med riskkoll och börsnyheter på enkel svenska. All data är riktig och hämtas live. Ingen exempeldata.
 

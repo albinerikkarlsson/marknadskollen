@@ -1,4 +1,4 @@
-// Service worker för Marknadskollen. Används bara för att visa prislarm som notiser
+// Service worker för Finanskollen. Används bara för att visa prislarm som notiser
 // och öppna rätt bolagssida när man klickar på notisen. Ingen cachning av data.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));

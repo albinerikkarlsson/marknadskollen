@@ -1,4 +1,4 @@
-/* Marknadskollen. All data hämtas live via våra API-funktioner (/api/*), som i sin tur hämtar från Yahoo Finance, Finnhub och Finansinspektionen.
+/* Finanskollen. All data hämtas live via våra API-funktioner (/api/*), som i sin tur hämtar från Yahoo Finance, Finnhub och Finansinspektionen.
    Ingen exempeldata: saknas något visas det som saknat. */
 
 /* ================= Hjälpfunktioner ================= */
@@ -29,6 +29,7 @@ const ICON = {
   compare: 'M8 4v16M16 4v16M4 9h8M12 15h8',
   list: 'M4 6h16M4 12h16M4 18h10',
   check: 'M5 12l5 5 9-10',
+  info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7.5v.5',
   plus: 'M12 5v14M5 12h14',
   user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0',
   bell: 'M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0'
@@ -129,7 +130,7 @@ const NAV = [
     { id: 'jamfor', href: '/jamfor', label: 'Jämför', icon: 'compare' },
     { id: 'bevakning', href: '/bevakning', label: 'Bevakning', icon: 'star', badge: true }
   ] },
-  { group: 'Konto', items: [{ id: 'konto', href: '/konto', label: 'Logga in', icon: 'user' }] }
+  { group: 'Konto', items: [{ id: 'konto', href: '/konto', label: 'Logga in', icon: 'user' }, { id: 'om', href: '/om', label: 'Om oss', icon: 'info' }] }
 ];
 
 function sidebar(active) {
@@ -139,7 +140,7 @@ function sidebar(active) {
   <nav class="nav" aria-label="Huvudmeny">
     <a class="brand" href="/" data-link>
       <span class="brand-mark">${svg('logo', 20, '#FFFFFF')}</span>
-      <span class="brand-text"><span class="brand-name">Marknadskollen</span><span class="brand-sub">Trygg börskoll</span></span>
+      <span class="brand-text"><span class="brand-name">Finanskollen</span><span class="brand-sub">Trygg börskoll</span></span>
     </a>
     <div class="welcome"><b>Välkommen tillbaka${firstName() ? `, ${esc(firstName())}` : ''}</b><span>${esc(today)}</span></div>
     ${NAV.map((g) => `
@@ -774,7 +775,7 @@ async function mountBolag(sym) {
     }
     return;
   }
-  document.title = `${s.namn} · Marknadskollen`;
+  document.title = `${s.namn} · Finanskollen`;
   const crumb = $('.crumbs .here'); if (crumb) crumb.textContent = s.namn;
   el.innerHTML = bolagHTML(s);
   const sc = $('.score[data-count]', el); if (sc) countUp(sc, Number(sc.dataset.count), (v) => String(Math.round(v)), 700, 1);
@@ -1050,17 +1051,17 @@ function viewOrdlista() {
 const OM = {
   namn: 'Albin',
   ansvarig: 'Albin Karlsson',
-  roll: 'Grundare av Marknadskollen',
+  roll: 'Grundare av Finanskollen',
   stad: '',
   bild: '',
   mejl: 'kontakt.finanskollen@gmail.com',
   orgnr: '',
-  ingress: 'Vi vill att alla ska kunna känna sig trygga i sina affärer inom finans. Marknadskollen visar risken i ett bolag på enkel svenska, med fakta från öppna källor, så att du kan förstå innan du sätter in pengar.',
+  ingress: 'Vi vill att alla ska kunna känna sig trygga i sina affärer inom finans. Finanskollen visar risken i ett bolag på enkel svenska, med fakta från öppna källor, så att du kan förstå innan du sätter in pengar.',
   historia: [
-    'Marknadskollen startades av Albin, som pluggar till försäljare och själv handlar med aktier och Solana-tokens. Han har sett hur otrygg finansvärlden kan kännas: svåra ord, tips från okända i chattar och sociala medier, och bolag som är svåra att genomskåda.',
+    'Finanskollen startades av Albin, som pluggar till försäljare och själv handlar med aktier och Solana-tokens. Han har sett hur otrygg finansvärlden kan kännas: svåra ord, tips från okända i chattar och sociala medier, och bolag som är svåra att genomskåda.',
     'Därför samlar vi det viktigaste på ett ställe: risken i varje bolag, vad ledningen själv köper och säljer, hur många som satsar på att kursen ska falla och vad nyheterna säger. Allt förklarat så att vem som helst kan förstå.'
   ],
-  forVem: 'Marknadskollen är till för alla, oavsett om du aldrig har ägt en aktie eller har handlat i många år.',
+  forVem: 'Finanskollen är till för alla, oavsett om du aldrig har ägt en aktie eller har handlat i många år.',
   loften: [
     'Vi ger aldrig köp- eller säljtips. Vi visar fakta och förklarar risken, du bestämmer själv.',
     'Vi säljer aldrig dina uppgifter, och vi visar ingen reklam som spårar dig.',
@@ -1073,13 +1074,13 @@ const OM = {
 function viewOm() {
   const p = OM.vi === 'vi';
   return `${topbar([['Översikt', '/'], ['Om oss', '/om']], false)}
-  <div class="stack" style="gap:6px"><span class="eyebrow">Vem står bakom Marknadskollen?</span><h1 class="title">Om oss</h1></div>
+  <div class="stack" style="gap:6px"><span class="eyebrow">Vem står bakom Finanskollen?</span><h1 class="title">Om oss</h1></div>
   <div class="om-grid">
     <section class="card om-person">
       ${OM.bild ? `<img src="${esc(OM.bild)}" alt="${esc(OM.namn)}" class="om-photo" width="120" height="120">` : `<span class="avatar om-photo" aria-hidden="true">${esc(OM.namn.split(' ').map((w) => w[0]).join('').slice(0, 2))}</span>`}
       <div><b style="font-size:20px;font-weight:500">${esc(OM.namn)}</b><div class="muted">${esc([OM.roll, OM.stad].filter(Boolean).join(' · '))}</div></div>
       ${OM.mejl ? `<a class="btn ghost" href="mailto:${esc(OM.mejl)}">Mejla ${p ? 'oss' : 'mig'}: ${esc(OM.mejl)}</a>` : ''}
-      <p class="small muted" style="margin:0">${OM.orgnr ? `Organisationsnummer ${esc(OM.orgnr)}.` : `Marknadskollen drivs just nu av ${esc(OM.namn)} som privatperson.`}</p>
+      <p class="small muted" style="margin:0">${OM.orgnr ? `Organisationsnummer ${esc(OM.orgnr)}.` : `Finanskollen drivs just nu av ${esc(OM.namn)} som privatperson.`}</p>
     </section>
     <div class="stack" style="gap:20px">
       <section class="card co-section"><p class="lead" style="margin:0">${esc(OM.ingress)}</p>
@@ -1099,7 +1100,7 @@ function viewOm() {
         </ul>
       </section>
       <section class="card co-section"><span class="label-up">Bra att veta</span>
-        <p style="margin:0">Marknadskollen ger ingen investeringsrådgivning. Allt du läser här är information, inte en rekommendation att köpa eller sälja. Har du frågor om ditt sparande, prata med din bank eller en rådgivare med tillstånd från Finansinspektionen.</p>
+        <p style="margin:0">Finanskollen ger ingen investeringsrådgivning. Allt du läser här är information, inte en rekommendation att köpa eller sälja. Har du frågor om ditt sparande, prata med din bank eller en rådgivare med tillstånd från Finansinspektionen.</p>
         <p style="margin:0">Har någon kontaktat dig om en placering som låter för bra för att vara sann? Kolla <a href="https://www.fi.se/sv/vara-register/varningslistan/" target="_blank" rel="noopener noreferrer">Finansinspektionens varningslista</a> innan du gör något.</p>
         <p class="small" style="margin:0"><a href="/integritet" data-link>Så hanterar vi dina uppgifter</a> · <a href="/ordlista" data-link>Ordlista</a></p>
       </section>
@@ -1149,7 +1150,7 @@ function viewIntegritet() {
     <p style="margin:0">Enligt dataskyddsförordningen (GDPR) har du rätt att få veta vilka uppgifter vi har om dig, få fel rättade och få allt raderat. Det mesta ser du själv under Mitt konto, där du också kan radera kontot. ${OM.mejl ? `Har du frågor, mejla <a href="mailto:${esc(OM.mejl)}">${esc(OM.mejl)}</a>.` : ''} Tycker du att vi hanterar dina uppgifter fel kan du klaga hos <a href="https://www.imy.se" target="_blank" rel="noopener noreferrer">Integritetsskyddsmyndigheten (IMY)</a>.</p>
 
     <h2 class="section">Vem ansvarar?</h2>
-    <p style="margin:0">${esc(OM.ansvarig || OM.namn)}${OM.orgnr ? `, organisationsnummer ${esc(OM.orgnr)}` : ', som driver Marknadskollen som privatperson,'} ansvarar för behandlingen av dina personuppgifter. Kontakt: <a href="mailto:${esc(OM.mejl)}">${esc(OM.mejl)}</a>. Läs mer <a href="/om" data-link>om oss</a>.</p>
+    <p style="margin:0">${esc(OM.ansvarig || OM.namn)}${OM.orgnr ? `, organisationsnummer ${esc(OM.orgnr)}` : ', som driver Finanskollen som privatperson,'} ansvarar för behandlingen av dina personuppgifter. Kontakt: <a href="mailto:${esc(OM.mejl)}">${esc(OM.mejl)}</a>. Läs mer <a href="/om" data-link>om oss</a>.</p>
   </section>
   ${footer()}`;
 }
@@ -1264,14 +1265,14 @@ const isStandalone = () => matchMedia('(display-mode: standalone)').matches || n
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 function installHTML() {
   if (isStandalone()) return '';
-  if (isIOS()) return `<div class="install-tip">${svg('plus', 16)}<span class="small">Lägg Marknadskollen på hemskärmen: tryck på <b>Dela</b> och välj <b>Lägg till på hemskärmen</b>. Då fungerar prislarmen som notiser.</span></div>`;
+  if (isIOS()) return `<div class="install-tip">${svg('plus', 16)}<span class="small">Lägg Finanskollen på hemskärmen: tryck på <b>Dela</b> och välj <b>Lägg till på hemskärmen</b>. Då fungerar prislarmen som notiser.</span></div>`;
   return `<button class="btn ghost small" type="button" data-install ${installEvt ? '' : 'hidden'}>${svg('plus', 14)} Installera som app</button>`;
 }
 document.addEventListener('click', async (e) => {
   if (!e.target.closest?.('[data-install]') || !installEvt) return;
   installEvt.prompt();
   const r = await installEvt.userChoice.catch(() => null);
-  if (r?.outcome === 'accepted') toast('Marknadskollen är installerad', 'Du hittar den bland dina appar.');
+  if (r?.outcome === 'accepted') toast('Finanskollen är installerad', 'Du hittar den bland dina appar.');
   installEvt = null; document.querySelectorAll('[data-install]').forEach((b) => { b.hidden = true; });
 });
 
@@ -1383,7 +1384,7 @@ const authErr = (e) => AUTH_ERR[e?.code] || (e?.status === 400 ? 'Kontrollera up
 function viewKonto() {
   if (locked()) {
     return `<div class="auth-wrap">
-      <div class="auth-brand"><span class="brand-mark">${svg('logo', 22, '#FFFFFF')}</span><span><b>Marknadskollen</b><span class="small muted">Trygg börskoll</span></span></div>
+      <div class="auth-brand"><span class="brand-mark">${svg('logo', 22, '#FFFFFF')}</span><span><b>Finanskollen</b><span class="small muted">Trygg börskoll</span></span></div>
       <div class="auth-intro"><h1 class="title" style="font-size:clamp(30px,5vw,42px)">Börsen på enkel svenska</h1>
         <p class="muted" style="margin:0;font-size:16px">Riskkoll, kursdiagram, nyheter med AI-sammanfattning, insynshandel och blankning. Logga in eller skapa ett gratis konto för att fortsätta.</p></div>
       <div id="konto" class="auth-card">${loading('Hämtar …')}</div>
@@ -1438,7 +1439,7 @@ async function mountKonto() {
     </div>`;
     box.querySelector('[data-delete]').addEventListener('click', () => confirmDelete(async () => {
       await deleteAccount();
-      toast('Ditt konto är raderat', 'Tack för att du testade Marknadskollen.');
+      toast('Ditt konto är raderat', 'Tack för att du testade Finanskollen.');
       navigate('/konto');
     }));
     box.querySelector('[data-nameform]').addEventListener('submit', async (e) => {
@@ -1779,7 +1780,7 @@ function render() {
   const pub = ['om', 'integritet', 'ordlista'].includes(r.active);
   document.body.classList.toggle('locked', locked() && !pub);
   document.body.classList.toggle('nosidebar', locked() && pub);
-  document.title = `${r.title} · Marknadskollen`;
+  document.title = `${r.title} · Finanskollen`;
   refreshNav(r.active);
   const main = $('#main');
   const fresh = main.cloneNode(false); // tar bort gamla lyssnare

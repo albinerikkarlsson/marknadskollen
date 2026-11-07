@@ -3,7 +3,7 @@ import { yChart } from '../lib/yahoo.mjs';
 
 // GET /api/about?s=AAPL  →  affärsidé, historia och fakta om bolaget
 // Källor: Wikipedia (text, CC BY-SA 4.0) och Wikidata (fakta, CC0). Svenska i första hand, annars engelska.
-const UA = 'Marknadskollen/1.0 (https://marknadskollen.netlify.app)';
+const UA = 'Finanskollen/1.0 (https://marknadskollen.netlify.app)';
 
 export default async (req) => {
   try {
