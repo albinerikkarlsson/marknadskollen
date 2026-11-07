@@ -10,7 +10,7 @@ const SECTORS = {
 };
 const MARKETS = {
   se: { region: 'se', pages: 2, currency: 'SEK' },
-  us: { region: 'us', pages: 1, currency: 'USD', extra: [{ operator: 'gt', operands: ['intradaymarketcap', 2e9] }] }
+  us: { region: 'us', pages: 3, currency: 'USD', extra: [{ operator: 'gt', operands: ['intradaymarketcap', 2e9] }] }
 };
 const OTC = ['PNK', 'OQB', 'OQX', 'OEM', 'OGM', 'OBB', 'XXX'];
 
