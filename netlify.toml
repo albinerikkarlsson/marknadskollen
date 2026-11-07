@@ -1,6 +1,7 @@
 [build]
   publish = "public"
-  command = ""
+  # Stämplar varje publicering med commit-id så att webbläsaren alltid hämtar den nya koden
+  command = "sed -i \"s/__V__/${COMMIT_REF:-dev}/g\" public/index.html"
 
 [functions]
   directory = "netlify/functions"
@@ -23,6 +24,17 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=300"
+
+# Själva sidan sparas aldrig gammal, så att nya versioner syns direkt
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache"
 
 [[headers]]
   for = "/sw.js"
