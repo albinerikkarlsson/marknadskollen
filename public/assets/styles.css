@@ -645,3 +645,25 @@ body.nosidebar .sidebar { display: none; }
 .watch-nums .num { white-space: nowrap; font-size: 15px; }
 .watch-nums .pill { flex: none; }
 @media (max-width: 600px) { .watch-tile { flex-basis: 172px; padding: 12px; } .watch-nums .num { font-size: 14px; } }
+
+/* ================= Flaggor ================= */
+.cflag { display: inline-flex; width: 18px; height: 12px; border-radius: 3px; overflow: hidden; flex: none; vertical-align: -1px; box-shadow: 0 0 0 1px rgba(17, 18, 20, 0.1); background: var(--line-soft); }
+.cflag svg { width: 100%; height: 100%; display: block; }
+.cflag.globe { place-items: center; justify-content: center; align-items: center; color: var(--muted); background: var(--line-soft); }
+.avatar { position: relative; }
+.cflag.on-avatar { position: absolute; right: -3px; bottom: -2px; width: 16px; height: 11px; border-radius: 2px; box-shadow: 0 0 0 2px var(--card); }
+.cflag.on-avatar.big { width: 24px; height: 16px; right: -2px; bottom: 2px; }
+.card.dark .cflag.on-avatar { box-shadow: 0 0 0 2px #1A1B1E; }
+.src { display: inline-flex; align-items: center; gap: 6px; }
+.pill.src .cflag { width: 16px; height: 11px; }
+.cflag.mob-ak, .cflag.mob-pf { display: none; margin-right: 6px; }
+@media (max-width: 520px) { .cflag.mob-ak { display: inline-flex; } }
+@media (max-width: 700px) { .cflag.mob-pf { display: inline-flex; } }
+
+/* ================= Språkväxlare ================= */
+.lang-switch { display: inline-flex; padding: 3px; gap: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; flex: none; }
+.lang-switch button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; font: inherit; font-size: 12.5px; color: var(--muted); padding: 6px 10px; border-radius: 999px; cursor: pointer; }
+.lang-switch button[aria-pressed="true"] { background: var(--ink); color: #FFFFFF; }
+.lang-switch button:not([aria-pressed="true"]):hover { color: var(--ink); background: var(--line-soft); }
+.lang-switch .cflag { width: 16px; height: 11px; }
+.topbar .lang-switch { margin-left: auto; }

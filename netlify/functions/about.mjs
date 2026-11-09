@@ -8,6 +8,7 @@ const UA = 'Finanskollen/1.0 (https://finanskollen.live)';
 export default async (req) => {
   try {
     const sym = cleanSymbol(new URL(req.url).searchParams.get('s'));
+    const wantEn = new URL(req.url).searchParams.get('lang') === 'en';
     if (!sym) throw new ApiError(400, 'ogiltig ticker');
     // Bolagsnamnet behövs för att hitta rätt artikel. Finnhub har amerikanska bolag, Yahoo även svenska.
     const profile = /[.^]/.test(sym) ? null : await finnhub('/stock/profile2', { symbol: sym }).catch(() => null);
@@ -17,11 +18,11 @@ export default async (req) => {
     const item = await findItem(sym, name);
     if (!item) return cached({ saknas: true }, 7 * 86400);
 
-    const lang = item.sv ? 'sv' : item.en ? 'en' : null;
-    const title = item.sv || item.en;
+    const lang = wantEn ? (item.en ? 'en' : item.sv ? 'sv' : null) : (item.sv ? 'sv' : item.en ? 'en' : null);
+    const title = lang ? item[lang] : null;
     const [text, facts] = await Promise.all([
       title ? articleText(lang, title) : null,
-      wikidataFacts(item.id)
+      wikidataFacts(item.id, wantEn)
     ]);
     if (!text && !facts.length) return cached({ saknas: true }, 7 * 86400);
 
@@ -115,7 +116,7 @@ const sentences = (p) => String(p).split(/(?<=[.!?])\s+(?=[A-ZÅÄÖ0-9"«])/).m
 function clip(s, n) { return s.length > n ? s.slice(0, n).replace(/\s+\S*$/, '') + ' …' : s; }
 
 /* ---------- Fakta från Wikidata ---------- */
-async function wikidataFacts(id) {
+async function wikidataFacts(id, wantEn) {
   const r = await get(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${id}&props=claims&format=json`).catch(() => null);
   const c = r?.entities?.[id]?.claims || {};
   const current = (arr) => (arr || []).filter((s) => s.rank !== 'deprecated' && !(s.qualifiers?.P582)); // utan slutdatum
@@ -132,7 +133,7 @@ async function wikidataFacts(id) {
   let labels = {};
   if (all.length) {
     const l = await get(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${all.join('|')}&props=labels&languages=sv|en&format=json`).catch(() => null);
-    for (const [k, v] of Object.entries(l?.entities || {})) labels[k] = v.labels?.sv?.value || v.labels?.en?.value || null;
+    for (const [k, v] of Object.entries(l?.entities || {})) labels[k] = (wantEn ? v.labels?.en?.value || v.labels?.sv?.value : v.labels?.sv?.value || v.labels?.en?.value) || null;
   }
   const names = (arr) => arr.map((x) => labels[x]).filter(Boolean).join(', ');
   return [
@@ -140,7 +141,7 @@ async function wikidataFacts(id) {
     ['Grundare', names(founders) || null],
     ['Huvudkontor', names(hq) || null],
     ['Vd', names(ceo) || null],
-    ['Anställda', emp ? Math.abs(emp.n).toLocaleString('sv-SE') + (emp.t ? ` (${String(emp.t).replace(/^\+/, '').slice(0, 4)})` : '') : null]
+    ['Anställda', emp ? Math.abs(emp.n).toLocaleString(wantEn ? 'en-GB' : 'sv-SE') + (emp.t ? ` (${String(emp.t).replace(/^\+/, '').slice(0, 4)})` : '') : null]
   ].filter((x) => x[1]);
 }
 

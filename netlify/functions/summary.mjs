@@ -13,6 +13,7 @@ export default async (req) => {
     const sym = cleanSymbol(p.get('s'));
     if (!sym) throw new ApiError(400, 'ogiltig ticker');
     const namn = (p.get('namn') || sym).slice(0, 80);
+    const en = p.get('lang') === 'en';
     const key = Netlify.env.get('ANTHROPIC_API_KEY');
     if (!key) return cached({ saknas: 'no_ai_key' }, 300);
 
@@ -22,7 +23,7 @@ export default async (req) => {
     if (!items.length) return cached({ saknas: 'no_news' }, 3600);
 
     const lista = items.map((n, i) => `${i + 1}. ${n.datum ? n.datum.slice(0, 10) : ''} | ${n.kalla} | ${n.rubrik}${n.text ? ' – ' + n.text : ''}`).join('\n');
-    const prompt = `Här är de senaste nyhetsrubrikerna om ${namn} (${sym}):\n\n${lista}\n\nSammanfatta på enkel svenska vad nyheterna säger om bolaget, i 2 till 4 korta punkter. Regler:\n- Bara det som står i rubrikerna, inga egna antaganden.\n- Hoppa över rubriker som inte handlar om ${namn}.\n- Neutral ton. Inga råd om att köpa eller sälja och inga kursprognoser.\n- Använd aldrig ordet "säkert".\nSvara endast med JSON: {"punkter": ["...", "..."]}`;
+    const prompt = `Här är de senaste nyhetsrubrikerna om ${namn} (${sym}):\n\n${lista}\n\n${en ? 'Sammanfatta på enkel ENGELSKA (svara på engelska)' : 'Sammanfatta på enkel svenska'} vad nyheterna säger om bolaget, i 2 till 4 korta punkter. Regler:\n- Bara det som står i rubrikerna, inga egna antaganden.\n- Hoppa över rubriker som inte handlar om ${namn}.\n- Neutral ton. Inga råd om att köpa eller sälja och inga kursprognoser.\n- Använd aldrig ordet "säkert".\nSvara endast med JSON: {"punkter": ["...", "..."]}`;
 
     const base = (Netlify.env.get('ANTHROPIC_BASE_URL') || 'https://api.anthropic.com').replace(/\/+$/, '');
     let body = null; let lastErr = null;

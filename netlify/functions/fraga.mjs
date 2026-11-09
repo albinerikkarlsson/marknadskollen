@@ -54,7 +54,8 @@ export default async (req) => {
   const sym = cleanSymbol(body?.sym);
   if (sym) context += await companyContext(sym);
   if (typeof body?.portfolj === 'string' && body.portfolj.trim()) context += `\n\nAnvändarens portfölj enligt Finanskollen (användaren har själv skrivit in den):\n${body.portfolj.slice(0, 2500)}`;
-  const system = SYSTEM + `\n\nDagens datum: ${day}.` + (user.user_metadata?.full_name ? ` Användaren heter ${String(user.user_metadata.full_name).split(' ')[0]}.` : '') + (context ? `\n\n--- Underlag från Finanskollen ---${context}` : '');
+  const en = body?.sprak === 'en';
+  const system = SYSTEM + (en ? '\n\nVIKTIGT: Användaren har valt engelska. Svara alltid på engelska (English), även om frågan är på svenska. Raden FÖRSLAG: ska behållas exakt så, men med förslagen skrivna på engelska.' : '') + `\n\nDagens datum: ${day}.` + (user.user_metadata?.full_name ? ` Användaren heter ${String(user.user_metadata.full_name).split(' ')[0]}.` : '') + (context ? `\n\n--- Underlag från Finanskollen ---${context}` : '');
 
   const base = (Netlify.env.get('ANTHROPIC_BASE_URL') || 'https://api.anthropic.com').replace(/\/+$/, '');
   let upstream = null; let lastErr = '';
