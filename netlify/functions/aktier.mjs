@@ -38,11 +38,24 @@ async function fromScreener(m) {
     }
     return out;
   });
+  // Aktier som Yahoo inte har gett någon bransch kommer annars inte med. För Sverige hämtar vi alla och lägger resten under Övrigt.
+  if (m === 'se') jobs.push((async () => {
+    const out = [];
+    for (let page = 0; page < 5; page++) {
+      const r = await yScreen(base, { offset: page * 250 });
+      out.push(...r.quotes.map((q) => row(q, 'Övrigt')));
+      if ((page + 1) * 250 >= r.total) break;
+    }
+    return out;
+  })());
   const res = await Promise.allSettled(jobs);
   const ok = res.filter((x) => x.status === 'fulfilled');
   if (!ok.length) throw res[0].reason;
   const seen = new Set();
+  // Branschlistorna kommer först, så att Övrigt bara får de som saknar bransch
   const aktier = ok.flatMap((x) => x.value).filter((a) => a && a.kurs != null && !seen.has(a.sym) && seen.add(a.sym));
+  const per = {}; for (const a of aktier) per[a.bransch] = (per[a.bransch] || 0) + 1;
+  console.log(`[aktier] ${m}: ${aktier.length} aktier`, JSON.stringify(per), 'exempel', JSON.stringify(aktier.filter((a) => ['VOLV-B.ST', 'ERIC-B.ST', 'HEXA-B.ST', 'ABB.ST', 'AZN.ST', 'AAPL', 'MSFT'].includes(a.sym)).map((a) => [a.sym, a.kurs, a.d1, a.ar, a.pe, a.utd, a.mcap])));
   return { kalla: 'Yahoo Finance', komplett: ok.length === res.length, aktier };
 }
 
@@ -50,8 +63,13 @@ function row(q, bransch) {
   if (!q?.symbol) return null;
   const kurs = raw(q.regularMarketPrice);
   const eps = raw(q.epsTrailingTwelveMonths);
-  const pe = raw(q.trailingPE) ?? (kurs && eps && eps > 0 ? kurs / eps : null);
-  const dy = raw(q.trailingAnnualDividendYield);
+  // Bolag som redovisar i en annan valuta än aktien handlas i (t.ex. Hexagon i euro, ABB i dollar):
+  // då räknar vi inte själva, eftersom vinst och utdelning kan stå i fel valuta. Yahoos egna nyckeltal används.
+  const sameCur = !q.financialCurrency || !q.currency || q.financialCurrency.toUpperCase() === q.currency.toUpperCase();
+  const pe = raw(q.trailingPE) ?? (sameCur && kurs && eps && eps > 0 ? kurs / eps : null);
+  // dividendYield är redan i procent och räknad i rätt valuta
+  const dyPct = raw(q.dividendYield);
+  const dy = dyPct != null ? dyPct / 100 : sameCur ? raw(q.trailingAnnualDividendYield) : null;
   return {
     sym: q.symbol.toUpperCase(),
     namn: String(q.longName || q.shortName || q.symbol).replace(/\s+/g, ' ').trim(),
@@ -61,7 +79,7 @@ function row(q, bransch) {
     kurs,
     d1: r2(raw(q.regularMarketChangePercent)),
     ar: r2(raw(q.fiftyTwoWeekChangePercent)),
-    pe: pe != null && pe > 0 && pe < 1000 ? r2(pe) : eps != null && eps <= 0 ? -1 : null,
+    pe: pe != null && pe > 0 && pe < 1000 ? r2(pe) : eps != null && eps < 0 ? -1 : null,
     utd: dy != null && dy > 0 && dy < 0.5 ? r2(dy * 100) : dy === 0 ? 0 : null,
     mcap: raw(q.marketCap),
     oms: raw(q.averageDailyVolume3Month) && kurs ? Math.round(raw(q.averageDailyVolume3Month) * kurs) : null
