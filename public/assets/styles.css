@@ -667,3 +667,51 @@ body.nosidebar .sidebar { display: none; }
 .lang-switch button:not([aria-pressed="true"]):hover { color: var(--ink); background: var(--line-soft); }
 .lang-switch .cflag { width: 16px; height: 11px; }
 .topbar .lang-switch { margin-left: auto; }
+
+/* ================= Startsida för besökare ================= */
+.visitor-hero { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 28px; padding: 30px; align-items: center; }
+.vh-title { margin: 0; font-size: clamp(28px, 4vw, 40px); font-weight: 400; letter-spacing: -0.015em; line-height: 1.12; }
+.vh-points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.vh-points li { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; line-height: 1.45; }
+.vh-points svg { flex: none; margin-top: 2px; color: var(--up); }
+.vh-points b { font-weight: 500; }
+@media (max-width: 860px) { .visitor-hero { grid-template-columns: 1fr; padding: 22px; } }
+.auth-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.auth-top .auth-brand { color: var(--ink); text-decoration: none; }
+.pill-btn { font: inherit; font-size: 13px; cursor: pointer; color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px; }
+
+/* ================= Import ================= */
+.imp-file { align-self: flex-start; cursor: pointer; }
+.imp-help summary { cursor: pointer; font-size: 14px; color: var(--ink-2); }
+.imp-help .om-list { margin-top: 10px; }
+.imp-list { display: flex; flex-direction: column; gap: 10px; }
+.imp-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line-soft); }
+.imp-row.off { opacity: 0.55; }
+.imp-row .grow { flex: 1; display: flex; flex-direction: column; }
+.imp-row .grow b, .imp-match b { font-weight: 500; }
+.imp-match { display: flex; align-items: center; gap: 8px; min-width: 0; text-align: right; }
+.imp-match > span:not(.cflag) { display: flex; flex-direction: column; }
+.imp-row input[type="checkbox"], .imp-opt input { width: 18px; height: 18px; accent-color: var(--ink); flex: none; }
+.imp-opt { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.imp-pick { padding: 4px 0 8px 30px; }
+@media (max-width: 600px) { .imp-row { flex-wrap: wrap; } .imp-match { width: 100%; justify-content: flex-start; text-align: left; padding-left: 30px; } }
+
+/* ================= Dagens koll och kalender ================= */
+.koll { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+.koll-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; }
+.koll-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.koll-h { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 14px; font-weight: 500; color: var(--ink-2); }
+.koll-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line-soft); color: var(--ink); text-decoration: none; min-width: 0; }
+.koll-row:first-of-type { border-top: 0; }
+.koll-row .grow { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.koll-row .grow b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.koll-row .grow .small { white-space: normal; }
+.koll-row:hover b { text-decoration: underline; text-underline-offset: 3px; }
+.koll-row .avatar { width: 36px; height: 36px; font-size: 11px; }
+.koll-date { flex: none; width: 86px; font-size: 13.5px; }
+.koll-date b { font-weight: 500; }
+.kal-month { display: flex; flex-direction: column; margin-top: 10px; }
+.koll-set { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; font-size: 14px; }
+.koll-set label { display: flex; align-items: center; gap: 10px; }
+.koll-set input { width: 18px; height: 18px; accent-color: var(--ink); flex: none; }
+@media (max-width: 1000px) { .koll-grid { grid-template-columns: 1fr; gap: 14px; } }

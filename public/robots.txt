@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /konto
+Disallow: /portfolj
+Disallow: /ova
+Disallow: /bevakning
+Disallow: /kalender
+
+Sitemap: https://finanskollen.live/sitemap.xml
