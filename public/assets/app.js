@@ -1864,7 +1864,7 @@ function mountOva() {
             <div><span class="small muted">Riskkoll${tip('Riskkoll')}</span><b class="num">${h.poang != null ? `${h.poang} / 10 · ${LV[lvlOf(h.poang)].t}` : 'för lite data'}</b></div>
           </div>
           <div class="pf-buys"><span class="label-up">Dina affärer</span>${affarer(h.sym).slice(0, 8).map((a) => `
-            <div class="pf-buy"><span class="pill ${a.typ === 'Köp' ? 'up' : 'down'}">${a.typ}</span>
+            <div class="pf-buy"><span class="pill ${a.typ === 'Köp' ? 'up' : 'down'}">${esc(a.typ)}</span>
               <span class="grow"><b>${esc(fmtTid(a.t))}</b><span class="small muted">${a.antal} st à ${esc(kr(a.pris))} ${esc(cur(a.valuta))}</span></span>
               <span class="pf-val"><b class="num small">${sek(a.belopp)}</b></span></div>`).join('')}</div>
           <div class="chips"><button type="button" class="btn ghost small" data-ovbuy="${esc(h.sym)}">${svg('plus', 13)} Köp mer</button><button type="button" class="btn ghost small" data-ovsell="${esc(h.sym)}">Sälj</button><a class="btn ghost small" href="/bolag/${encodeURIComponent(h.sym)}" data-link>Bolagssida och riskkoll</a><a class="btn ghost small" href="/fraga?s=${encodeURIComponent(h.sym)}" data-link>${svg('spark', 13)} Fråga AI</a></div>
@@ -1872,7 +1872,7 @@ function mountOva() {
       </div>`).join('')}</div>`
       : '<div class="empty">Du äger inga aktier än. Sök fram en aktie under Handla och gör ditt första låtsasköp.</div>';
 
-    $('#ov-hist').innerHTML = ova.historik.length ? `<div>${ova.historik.slice(-8).reverse().map((h) => `<div class="row-link" style="gap:12px"><span class="pill ${h.typ === 'Köp' ? 'up' : 'down'}">${h.typ}</span><span class="grow"><b style="font-weight:500">${esc(nameOf(h.sym))}</b><span class="small muted" style="display:block">${h.antal} st · ${esc(fmtTid(h.t))}</span></span><span class="num small">${sek(h.belopp)}</span></div>`).join('')}</div>` : '<p class="small muted" style="margin:0">Inga affärer än.</p>';
+    $('#ov-hist').innerHTML = ova.historik.length ? `<div>${ova.historik.slice(-8).reverse().map((h) => `<div class="row-link" style="gap:12px"><span class="pill ${h.typ === 'Köp' ? 'up' : 'down'}">${esc(h.typ)}</span><span class="grow"><b style="font-weight:500">${esc(nameOf(h.sym))}</b><span class="small muted" style="display:block">${h.antal} st · ${esc(fmtTid(h.t))}</span></span><span class="num small">${sek(h.belopp)}</span></div>`).join('')}</div>` : '<p class="small muted" style="margin:0">Inga affärer än.</p>';
 
     if (hold.some((h) => h.varde)) pfInsight(hold, innehav, '#ov-side', false);
     else $('#ov-side').innerHTML = `<section class="card co-section"><span class="label-up">Så fungerar det</span><ol class="om-list">
@@ -1889,14 +1889,18 @@ function mountOva() {
     const id = ++tlSeq; const box = $('#ov-tl'); if (!box) return;
     const trades = ova.historik.slice().sort((a, b) => a.t.localeCompare(b.t));
     if (!trades.length) { box.innerHTML = '<div class="empty">Tidslinjen visas efter din första affär.</div>'; return; }
-    // Stämmer historiken med kontanterna? Äldre övningsportföljer kan sakna de första affärerna.
-    const kassaSlut = trades.reduce((k, a) => k + (a.typ === 'Köp' ? -a.belopp : a.belopp), START_KASSA);
-    if (Math.abs(kassaSlut - ova.kassa) > 5) { box.innerHTML = '<div class="empty">Tidslinjen saknar några av dina första affärer. Den visas som vanligt om du börjar om.</div>'; return; }
+    // Läget före den äldsta sparade affären räknas baklänges från dagens läge.
+    // Kontot sparar bara de senaste affärerna, så på en ny enhet kan de första saknas.
+    let k0 = ova.kassa; const n0 = Object.fromEntries(Object.entries(ova.innehav).map(([x, h]) => [x, h.antal]));
+    for (const a of trades) { const buy = a.typ === 'Köp'; k0 += buy ? a.belopp : -a.belopp; n0[a.sym] = (n0[a.sym] || 0) + (buy ? -a.antal : a.antal); }
+    if (Object.values(n0).some((v) => v < -1e-6)) { box.innerHTML = '<div class="empty">Tidslinjen kan inte räknas fram för de här affärerna. Den visas som vanligt om du börjar om.</div>'; return; }
+    const complete = Math.abs(k0 - START_KASSA) < 5 && Object.values(n0).every((v) => Math.abs(v) < 1e-6);
     box.classList.add('is-loading');
-    const syms = [...new Set(trades.map((a) => a.sym))];
-    const first = (s) => trades.find((a) => a.sym === s).t.slice(0, 10);
-    const curs = [...new Set(trades.map((a) => a.valuta).filter((c) => c && c !== 'SEK'))];
-    const start = (ova.start < trades[0].t ? ova.start : trades[0].t).slice(0, 10);
+    const start = (complete && ova.start < trades[0].t ? ova.start : trades[0].t).slice(0, 10);
+    const syms = [...new Set([...trades.map((a) => a.sym), ...Object.keys(n0).filter((x) => n0[x] > 0)])];
+    const first = (s) => (n0[s] > 0 ? start : trades.find((a) => a.sym === s).t.slice(0, 10));
+    const curOf = (s) => trades.find((a) => a.sym === s)?.valuta || quotes[s]?.valuta || 'SEK';
+    const curs = [...new Set(syms.map(curOf).filter((c) => c && c !== 'SEK'))];
     const [hist, fxh] = await Promise.all([
       Promise.all(syms.map((s) => api(`/api/chart?s=${encodeURIComponent(s)}&from=${first(s)}`, 30 * 60e3))),
       Promise.all(curs.map((c) => api(`/api/chart?s=${encodeURIComponent((c === 'GBp' || c === 'GBX' ? 'GBP' : c) + 'SEK=X')}&from=${start}`, 30 * 60e3)))
@@ -1906,12 +1910,12 @@ function mountOva() {
     const H = Object.fromEntries(syms.map((s, i) => [s, hist[i]?.punkter || []]));
     const F = Object.fromEntries(curs.map((c, i) => [c, (fxh[i]?.punkter || []).map(([t, v]) => [t, c === 'GBp' || c === 'GBX' ? v / 100 : v])]));
     const at = (pts, t) => { let v = null; for (const p of pts) { if (p[0] <= t) v = p[1]; else break; } return v ?? pts[0]?.[1] ?? null; };
-    const valuta = Object.fromEntries(trades.map((a) => [a.sym, a.valuta || 'SEK']));
+    const valuta = Object.fromEntries(syms.map((x) => [x, curOf(x)]));
     const DAY = 86400; const t0 = Math.floor(new Date(start + 'T00:00:00Z').getTime() / 1000); const tNow = Math.floor(Date.now() / 1000);
     const step = tNow - t0 > 3 * 365 * DAY ? 7 * DAY : DAY;
     const V = []; const I = [];
     for (let t = t0 + DAY - 1; ; t += step) {
-      const tt = Math.min(t, tNow); let kassa = START_KASSA; const n = {};
+      const tt = Math.min(t, tNow); let kassa = k0; const n = { ...n0 };
       for (const a of trades) { if (new Date(a.t).getTime() / 1000 > tt) break; kassa += a.typ === 'Köp' ? -a.belopp : a.belopp; n[a.sym] = (n[a.sym] || 0) + (a.typ === 'Köp' ? a.antal : -a.antal); }
       let v = kassa; let ok = true;
       for (const [s, cnt] of Object.entries(n)) {
@@ -2172,10 +2176,16 @@ function setSession(j) {
   if (j?.user) ACC.user = j.user;
   if (!ACC.session) ACC.user = null;
 }
+let REFRESHING = null;
 async function token() {
   const s = ACC.session; if (!s) return null;
   if (Date.now() < s.exp - 60e3) return s.access;
-  try { const j = await auth('/token?grant_type=refresh_token', { refresh_token: s.refresh }); setSession(j); return j.access_token; } catch { setSession(null); return null; }
+  // Ett förnyande åt gången. Bara ett nej från inloggningen loggar ut, inte ett nätverksfel.
+  if (!REFRESHING) REFRESHING = auth('/token?grant_type=refresh_token', { refresh_token: s.refresh })
+    .then((j) => { setSession(j); return j.access_token; })
+    .catch((e) => { if (e?.status >= 400 && e?.status < 500) setSession(null); return null; })
+    .finally(() => { REFRESHING = null; });
+  return REFRESHING;
 }
 // Kontot är facit. Första gången på en enhet slås den lokala listan ihop med kontots.
 function applyCloud() {

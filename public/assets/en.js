@@ -653,7 +653,7 @@ const D = {
   ', till exempel {n} kr. Du handlar till den riktiga kursen just nu.': ', for example {n} SEK. You trade at the real price right now.',
   'för hela portföljen, precis som i Min portfölj.': 'for the whole portfolio, just like in My portfolio.',
   'Tidslinjen visas efter din första affär.': 'The timeline appears after your first trade.',
-  'Tidslinjen saknar några av dina första affärer. Den visas som vanligt om du börjar om.': 'The timeline is missing some of your first trades. It will show as usual if you start over.',
+  'Tidslinjen kan inte räknas fram för de här affärerna. Den visas som vanligt om du börjar om.': 'The timeline cannot be calculated for these trades. It will show as usual if you start over.',
   'Tidslinjen visas när det finns minst två dagars kurser efter din första affär. Kom tillbaka i morgon!': 'The timeline appears when there are at least two days of prices after your first trade. Come back tomorrow!',
   'Streckad linje = de {n} låtsaskronor du började med. Ytan = vad portföljen var värd varje dag, kontanter inräknade.': 'Dashed line = the {n} pretend kronor you started with. Area = what the portfolio was worth each day, including cash.',
   '{n} st · {n} {n} {n}, {n}': '{n} shares · {n} {n} {n}, {n}',
