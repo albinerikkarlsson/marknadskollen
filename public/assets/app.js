@@ -25,6 +25,11 @@ const ICON = {
   news: 'M5 5h11v14H6a1 1 0 0 1-1-1zM16 9h3v9a1 1 0 0 1-2 0V9M8 9h5M8 12h5M8 15h3',
   star: 'M12 4l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 16.4 7.2 18.9l.9-5.4-3.9-3.8 5.4-.8z',
   logo: 'M4 17l5-6 4 3 7-9',
+  spark: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z',
+  copy: 'M9 9h10v10H9zM5 15V5h10',
+  arrow: 'M5 12h14M13 6l6 6-6 6',
+  pie: 'M12 3v9h9M12 3a9 9 0 1 0 9 9',
+  play: 'M4 19V9M10 19V5M16 19v-7M22 19H2',
   ext: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
   compare: 'M8 4v16M16 4v16M4 9h8M12 15h8',
   list: 'M4 6h16M4 12h16M4 18h10',
@@ -106,7 +111,7 @@ const NKEY = 'mk-namn';
 const DEFAULT_WATCH = ['VOLV-B.ST', 'INVE-B.ST', 'AAPL', 'NVDA', 'SPY'];
 const DEFAULT_NAMES = { AAPL: 'Apple', MSFT: 'Microsoft', NVDA: 'Nvidia', TSLA: 'Tesla', SPY: 'SPDR S&P 500 ETF', EWD: 'iShares MSCI Sweden ETF', QQQ: 'Invesco QQQ', 'VOLV-B.ST': 'Volvo B', 'EVO.ST': 'Evolution', 'SAAB-B.ST': 'Saab B', 'INVE-B.ST': 'Investor B', 'ERIC-B.ST': 'Ericsson B', '^OMX': 'OMX Stockholm 30' };
 const readLS = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fb; } catch { return fb; } };
-const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* privat läge */ } if ((k === WKEY || k === LKEY) && !SYNCING) saveCloud(); };
+const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* privat läge */ } if ((k === WKEY || k === LKEY || k === 'mk-portfolj' || k === 'mk-ova') && !SYNCING) saveCloud(); };
 let SYNCING = false;
 const LKEY = 'mk-larm';
 const getLarm = () => { const v = readLS(LKEY, {}); return v && typeof v === 'object' ? v : {}; };
@@ -122,12 +127,16 @@ function toggleWatch(sym, namn) {
 
 /* ================= Gemensamma delar ================= */
 const NAV = [
-  { group: 'Översikt', items: [{ id: 'oversikt', href: '/', label: 'Översikt', icon: 'home' }] },
+  { group: 'Översikt', items: [{ id: 'oversikt', href: '/', label: 'Översikt', icon: 'home' }, { id: 'fraga', href: '/fraga', label: 'Fråga AI', icon: 'spark' }] },
   { group: 'Börsen', items: [
     { id: 'sok', href: '/sok', label: 'Sök och riskkoll', icon: 'search' },
     { id: 'nyheter', href: '/nyheter', label: 'Nyheter', icon: 'news' },
     { id: 'aktier', href: '/aktier', label: 'Alla aktier', icon: 'list' },
-    { id: 'jamfor', href: '/jamfor', label: 'Jämför', icon: 'compare' },
+    { id: 'jamfor', href: '/jamfor', label: 'Jämför', icon: 'compare' }
+  ] },
+  { group: 'Mina pengar', items: [
+    { id: 'portfolj', href: '/portfolj', label: 'Min portfölj', icon: 'pie' },
+    { id: 'ova', href: '/ova', label: 'Övningsportfölj', icon: 'play' },
     { id: 'bevakning', href: '/bevakning', label: 'Bevakning', icon: 'star', badge: true }
   ] },
   { group: 'Konto', items: [{ id: 'konto', href: '/konto', label: 'Logga in', icon: 'user' }, { id: 'om', href: '/om', label: 'Om oss', icon: 'info' }] }
@@ -636,7 +645,7 @@ function bolagHTML(s) {
         <div style="min-width:0">
           <span class="label-up">${esc(s.lista || s.sym)}</span>
           <h1 class="title" style="margin:2px 0 6px">${esc(s.namn)}</h1>
-          <div class="chips"><span class="pill outline num">${esc(s.sym)}</span>${s.aktieslag ? `<span class="pill outline">${esc(s.aktieslag)}</span>` : ''}<a class="pill outline" href="/jamfor?a=${encodeURIComponent(s.sym)}" data-link style="text-decoration:none">${svg('compare', 13)} Jämför</a>${safeUrl(s.webb) ? `<a class="pill outline" href="${esc(safeUrl(s.webb))}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Webbplats ${svg('ext', 13)}</a>` : ''}
+          <div class="chips"><span class="pill outline num">${esc(s.sym)}</span>${s.aktieslag ? `<span class="pill outline">${esc(s.aktieslag)}</span>` : ''}<a class="pill outline" href="/jamfor?a=${encodeURIComponent(s.sym)}" data-link style="text-decoration:none">${svg('compare', 13)} Jämför</a><a class="pill outline" href="/fraga?s=${encodeURIComponent(s.sym)}" data-link style="text-decoration:none">${svg('spark', 13)} Fråga AI</a>${safeUrl(s.webb) ? `<a class="pill outline" href="${esc(safeUrl(s.webb))}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Webbplats ${svg('ext', 13)}</a>` : ''}
             <button class="btn small ${watched ? 'ghost' : ''}" type="button" data-watch="${esc(s.sym)}" data-namn="${esc(s.namn)}" aria-pressed="${watched}">${watched ? 'Bevakas ✓' : 'Bevaka'}</button></div>
         </div>
       </div>
@@ -1126,6 +1135,8 @@ function viewIntegritet() {
     <ul class="om-list">
       <li><b>Konto:</b> din e-postadress, ditt namn och ett lösenord. Lösenordet sparas krypterat och kan inte läsas av någon, inte heller av oss.</li>
       <li><b>Inställningar:</b> vilka aktier du bevakar, dina prislarm och om du har gått igenom startguiden.</li>
+      <li><b>Portföljer:</b> innehaven du själv skriver in under Min portfölj och dina låtsasaffärer i övningsportföljen. De syns bara för dig.</li>
+      <li><b>Frågor till AI-assistenten:</b> skickas till Anthropic (Claude) för att få ett svar, men sparas inte av oss. Konversationen finns bara i din webbläsare tills du stänger fliken.</li>
       <li><b>I din webbläsare:</b> din inloggning, din bevakning och dina val sparas lokalt (localStorage) så att sidan går snabbt. Det är inte spårningscookies och försvinner om du rensar webbläsaren.</li>
       <li><b>Tekniska loggar:</b> när du besöker sidan sparar vår webbhotell en kort logg med bland annat din IP-adress, för att kunna hitta fel och stoppa attacker. Loggarna rensas automatiskt.</li>
     </ul>
@@ -1140,6 +1151,7 @@ function viewIntegritet() {
     <ul class="om-list">
       <li>Kurser, nyheter och register hämtas av vår server från Yahoo Finance, Finnhub, Finansinspektionen och Wikipedia. Din IP-adress och dina uppgifter skickas inte till dem.</li>
       <li>AI-sammanfattningarna skapas av Anthropic (Claude). Bara nyhetsrubriker skickas dit, aldrig något om dig.</li>
+      <li>När du frågar AI-assistenten skickas din fråga, ditt förnamn och, om du väljer det, en sammanfattning av din portfölj till Anthropic. Skriv inte in personnummer, kontonummer eller lösenord.</li>
       <li>Typsnittet ligger på vår egen server, så inget skickas till Google.</li>
     </ul>
 
@@ -1163,14 +1175,14 @@ async function deleteAccount() {
   const res = await fetch(c.url + '/rest/v1/rpc/delete_my_account', { method: 'POST', headers: { apikey: c.anon, authorization: 'Bearer ' + t, 'content-type': 'application/json' }, body: '{}' });
   if (res.status === 404) throw Object.assign(new Error('saknas'), { code: 'missing' });
   if (!res.ok) throw new Error('Radering misslyckades (' + res.status + ')');
-  for (const k of ['mk-session', 'mk-sync-user', WKEY, LKEY, 'mk-larm-skickat', 'mk-onboarded', NKEY]) { try { localStorage.removeItem(k); } catch { /* privat läge */ } }
+  for (const k of ['mk-session', 'mk-sync-user', WKEY, LKEY, 'mk-larm-skickat', 'mk-onboarded', NKEY, 'mk-portfolj', 'mk-ova']) { try { localStorage.removeItem(k); } catch { /* privat läge */ } }
   ACC.session = null; ACC.user = null;
 }
 function confirmDelete(onYes) {
   const d = document.createElement('div'); d.className = 'modal-back';
   d.innerHTML = `<div class="modal card" role="dialog" aria-modal="true" aria-labelledby="del-h">
     <h2 class="section" id="del-h" style="font-size:22px">Radera ditt konto?</h2>
-    <p style="margin:0">Ditt konto, ditt namn, din bevakning och dina prislarm raderas för alltid. Det går inte att ångra.</p>
+    <p style="margin:0">Ditt konto, ditt namn, din bevakning, dina prislarm och dina portföljer raderas för alltid. Det går inte att ångra.</p>
     <label class="field"><span>Skriv RADERA för att bekräfta</span><input type="text" autocomplete="off" data-confirm></label>
     <p class="small" role="status" data-msg style="margin:0;min-height:1em"></p>
     <div class="chips" style="justify-content:flex-end"><button class="btn ghost" type="button" data-no>Avbryt</button><button class="btn danger" type="button" data-yes disabled>Radera kontot</button></div></div>`;
@@ -1276,6 +1288,394 @@ document.addEventListener('click', async (e) => {
   installEvt = null; document.querySelectorAll('[data-install]').forEach((b) => { b.hidden = true; });
 });
 
+/* ================= Valutor till kronor ================= */
+// Yahoo har växelkurser som "USDSEK=X". Kurser i pence (GBp) räknas om till pund.
+async function fxToSek(currencies) {
+  const out = { SEK: 1 };
+  const need = [...new Set(currencies.filter(Boolean).map((c) => (c === 'GBp' || c === 'GBX' ? 'GBP' : c)).filter((c) => c !== 'SEK'))];
+  if (!need.length) return out;
+  const q = await getQuotes(need.map((c) => `${c}SEK=X`));
+  for (const c of need) if (q[`${c}SEK=X`]?.kurs) out[c] = q[`${c}SEK=X`].kurs;
+  if (out.GBP) { out.GBp = out.GBP / 100; out.GBX = out.GBP / 100; }
+  return out;
+}
+const sek = (n) => (n == null ? '–' : `${nf(n, Math.abs(n) >= 1000 ? 0 : 2)} kr`);
+const sekBig = (n) => (n == null ? '–' : Math.abs(n) >= 1e6 ? `${nf(n / 1e6, 2)} mn kr` : `${nf(n, 0)} kr`);
+
+// Gemensam sökruta för att välja ett värdepapper
+function pickerHTML(id, placeholder) {
+  return `<div class="picker-wrap"><form class="searchbar" role="search" style="flex:none;max-width:none" data-pform="${id}">${svg('search', 18, '#6B6F76')}<label class="sr-only" for="${id}">${esc(placeholder)}</label><input id="${id}" type="search" placeholder="${esc(placeholder)}" autocomplete="off"></form><div class="pick-results" data-presults="${id}"></div></div>`;
+}
+function bindPicker(id, onPick) {
+  const input = $('#' + id); const list = $(`[data-presults="${id}"]`); let timer;
+  if (!input) return;
+  const search = async () => {
+    const term = input.value.trim(); if (term.length < 2) { list.innerHTML = ''; return; }
+    const r = await api('/api/search?q=' + encodeURIComponent(term), 60 * 60e3);
+    if (term !== input.value.trim()) return;
+    list.innerHTML = (r?.results || []).slice(0, 6).map((x) => `<button type="button" class="pick" data-sym="${esc(x.sym)}" data-namn="${esc(x.klass ? `${x.namn}, ${x.typ}` : x.namn)}"><span class="avatar">${esc(short(x.sym))}</span><span class="grow" style="text-align:left"><span style="display:block;font-weight:500">${esc(x.namn)}</span><span class="small muted">${esc([x.typ, x.sym].filter(Boolean).join(' · '))}</span></span></button>`).join('') || '<p class="small muted" style="padding:6px">Inga träffar.</p>';
+  };
+  input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(search, 300); });
+  $(`[data-pform="${id}"]`).addEventListener('submit', (e) => { e.preventDefault(); const f = list.querySelector('.pick'); if (f) f.click(); else search(); });
+  list.addEventListener('click', (e) => { const p = e.target.closest('.pick'); if (!p) return; rememberName(p.dataset.sym, p.dataset.namn); input.value = ''; list.innerHTML = ''; onPick(p.dataset.sym, p.dataset.namn); });
+}
+const bar = (pct, cls = '') => `<span class="mini-bar" aria-hidden="true"><span class="${cls}" style="width:${Math.max(2, Math.min(100, pct))}%"></span></span>`;
+
+/* ================= Min portfölj ================= */
+const PKEY = 'mk-portfolj';
+const getPort = () => { const v = readLS(PKEY, []); return Array.isArray(v) ? v.filter((x) => x && x.sym && x.antal > 0) : []; };
+
+function viewPortfolj() {
+  return `${topbar([['Översikt', '/'], ['Min portfölj', '/portfolj']])}
+  <div class="stack" style="gap:6px"><span class="eyebrow">Skriv in vad du äger och se risken i helheten</span><h1 class="title">Min portfölj</h1></div>
+  <div id="pf-sum"></div>
+  <div class="grid g2" style="align-items:start">
+    <section class="card co-section"><div class="section-head" style="align-items:center"><h2 class="section" style="font-size:22px">Dina innehav</h2><span class="small muted" id="pf-count"></span></div>
+      <div id="pf-list">${loading('Hämtar kurser …')}</div>
+      <div class="pf-add"><span class="label-up">Lägg till ett innehav</span>${pickerHTML('pf-q', 'Sök aktie eller fond, till exempel Volvo')}<div id="pf-form"></div></div>
+    </section>
+    <div class="stack" style="gap:20px" id="pf-side"></div>
+  </div>
+  <p class="small faint" style="margin:0">Innehaven sparas på ditt konto och syns bara för dig. Värdet räknas om till kronor med dagens växelkurs. Portföljkollen är en förenkling och inget råd.</p>
+  ${footer()}`;
+}
+
+function mountPortfolj() {
+  let port = getPort();
+  const save = () => { writeLS(PKEY, port); };
+  const formFor = (sym, namn, edit) => {
+    const h = port.find((x) => x.sym === sym);
+    $('#pf-form').innerHTML = `<form class="pf-form" data-pfsave="${esc(sym)}">
+      <div class="picked"><span class="avatar">${esc(short(sym))}</span><span class="grow"><b style="display:block;font-weight:500">${esc(namn || nameOf(sym))}</b><span class="small muted">${esc(sym)}</span></span></div>
+      <div class="pf-fields"><label class="field"><span>Antal</span><input name="antal" type="number" min="0" step="any" inputmode="decimal" required value="${h ? h.antal : ''}"></label>
+      <label class="field"><span>Snittpris (valfritt)</span><input name="gav" type="number" min="0" step="any" inputmode="decimal" placeholder="Vad du betalade per st" value="${h?.gav ?? ''}"></label></div>
+      <div class="chips"><button class="btn" type="submit">${edit ? 'Spara' : 'Lägg till'}</button><button class="btn ghost" type="button" data-pfcancel>Avbryt</button></div></form>`;
+    $('#pf-form input[name=antal]').focus();
+  };
+  bindPicker('pf-q', (sym, namn) => formFor(sym, namn, port.some((x) => x.sym === sym)));
+
+  const draw = async () => {
+    $('#pf-count').textContent = port.length ? `${port.length} st` : '';
+    if (!port.length) {
+      $('#pf-sum').innerHTML = '';
+      $('#pf-list').innerHTML = '<div class="empty">Du har inga innehav än. Sök fram en aktie eller fond nedanför och skriv hur många du äger.</div>';
+      $('#pf-side').innerHTML = `<section class="card co-section"><span class="label-up">Så fungerar det</span><ul class="om-list"><li>Lägg till dina aktier och fonder med antal.</li><li>Vi räknar ut värdet, hur det gått och hur risken är fördelad.</li><li>Du ser om du har för mycket i ett bolag eller en bransch.</li><li>Ingenting kopplas till din bank. Du skriver in allt själv.</li></ul></section>`;
+      return;
+    }
+    const syms = port.map((x) => x.sym);
+    const [q, stocks] = await Promise.all([getQuotes(syms), Promise.all(syms.map((s) => getStock(s)))]);
+    if (!$('#pf-list')) return;
+    const S = Object.fromEntries(syms.map((s, i) => [s, stocks[i]?.error ? null : stocks[i]]));
+    const fx = await fxToSek(syms.map((s) => q[s]?.valuta || S[s]?.valuta));
+    const rows = port.map((h) => {
+      const qq = q[h.sym] || {}; const st = S[h.sym]; const valuta = qq.valuta || st?.valuta || 'SEK';
+      const kurs = qq.kurs ?? st?.kurs ?? null; const rate = fx[valuta] ?? null;
+      const varde = kurs != null && rate != null ? kurs * h.antal * rate : null;
+      const idag = varde != null && qq.d1 != null ? varde - varde / (1 + qq.d1 / 100) : null;
+      const kostnad = h.gav != null && rate != null ? h.gav * h.antal * rate : null;
+      return { ...h, namn: nameOf(h.sym), kurs, valuta, d1: qq.d1 ?? null, varde, idag, kostnad, poang: st?.poang ?? null, bransch: st?.fakta?.find((f) => f[0] === 'Bransch')?.[1] || (st?.typ === 'ETF' ? 'Fonder (ETF)' : 'Okänd bransch'), land: st?.fakta?.find((f) => f[0] === 'Land')?.[1] || (h.sym.endsWith('.ST') ? 'Sverige' : 'Övriga'), typ: st?.typ };
+    });
+    const tot = rows.reduce((a, r) => a + (r.varde || 0), 0);
+    const idag = rows.reduce((a, r) => a + (r.idag || 0), 0);
+    const withCost = rows.filter((r) => r.kostnad != null && r.varde != null);
+    const kostnad = withCost.reduce((a, r) => a + r.kostnad, 0); const vardeC = withCost.reduce((a, r) => a + r.varde, 0);
+    const avk = withCost.length ? vardeC - kostnad : null;
+    const scored = rows.filter((r) => r.poang != null && r.varde);
+    const risk = scored.length ? scored.reduce((a, r) => a + r.poang * r.varde, 0) / scored.reduce((a, r) => a + r.varde, 0) : null;
+    const lv = risk != null ? LV[lvlOf(Math.round(risk))] : null;
+
+    $('#pf-sum').innerHTML = `<div class="statbar card">
+      <div class="stat"><span class="small muted">Värde</span><span class="num" style="font-size:24px">${sekBig(tot)}</span></div>
+      <div class="stat"><span class="small muted">I dag</span><span class="num" style="color:var(--${tone(idag)})">${idag ? (idag > 0 ? '+' : '−') + sekBig(Math.abs(idag)) : '–'}${tot && idag ? ` (${pct((idag / (tot - idag)) * 100, 1)})` : ''}</span></div>
+      <div class="stat"><span class="small muted">Sedan köp</span><span class="num" style="color:var(--${tone(avk)})">${avk != null ? (avk >= 0 ? '+' : '−') + sekBig(Math.abs(avk)) + ` (${pct((avk / kostnad) * 100, 1)})` : '<span class="small muted">Fyll i snittpris</span>'}</span></div>
+      <div class="stat"><span class="small muted">Portföljens riskkoll${tip('Riskkoll')}</span><span class="num">${risk != null ? `${nf(risk, 1)} / 10 <span class="pill ${lv.c}">${lv.t}</span>` : '–'}</span></div>
+    </div>`;
+
+    $('#pf-list').innerHTML = `<div class="table-wrap"><table class="pf-table"><thead><tr><th scope="col">Innehav</th><th scope="col" class="r">Värde</th><th scope="col" class="r">I dag</th><th scope="col" class="r hide-xs">Andel</th><th scope="col"><span class="sr-only">Ändra</span></th></tr></thead><tbody>${rows.sort((a, b) => (b.varde || 0) - (a.varde || 0)).map((r) => `<tr>
+      <td><a class="ak-name" href="/bolag/${encodeURIComponent(r.sym)}" data-link><span class="avatar">${esc(short(r.sym))}</span><span><b>${esc(r.namn)}</b><span class="small muted">${nf(r.antal, r.antal % 1 ? 2 : 0)} st · ${r.kurs != null ? esc(kr(r.kurs)) + ' ' + esc(cur(r.valuta)) : 'kurs saknas'}</span></span></a></td>
+      <td class="r num">${r.varde != null ? sek(r.varde) : '–'}</td>
+      <td class="r"><span class="pill ${tone(r.d1)}">${r.d1 != null ? pct(r.d1, 1) : '–'}</span></td>
+      <td class="r num hide-xs">${r.varde && tot ? nf((r.varde / tot) * 100, 0) + ' %' : '–'}</td>
+      <td class="r"><button class="btn ghost small" type="button" data-pfedit="${esc(r.sym)}">Ändra</button></td></tr>`).join('')}</tbody></table></div>`;
+
+    // Fördelning och varningar
+    const group = (key) => { const m = {}; for (const r of rows) if (r.varde) m[r[key]] = (m[r[key]] || 0) + r.varde; return Object.entries(m).sort((a, b) => b[1] - a[1]); };
+    const br = group('bransch'); const la = group('land');
+    const top = rows.filter((r) => r.varde).sort((a, b) => b.varde - a.varde)[0];
+    const flags = [];
+    const n = rows.filter((r) => r.varde).length;
+    const etfShare = rows.filter((r) => r.typ === 'ETF' || r.typ === 'Fond').reduce((a, r) => a + (r.varde || 0), 0) / (tot || 1);
+    if (top && tot && top.varde / tot > 0.25 && rows.length > 1) flags.push(['warn', `${top.namn} är ${nf((top.varde / tot) * 100, 0)} % av portföljen. Faller den aktien märks det mycket på helheten.`]);
+    if (br[0] && tot && br[0][1] / tot > 0.5 && br.length > 0) flags.push(['warn', `${nf((br[0][1] / tot) * 100, 0)} % ligger i ${br[0][0].toLowerCase()}. Går det dåligt för branschen påverkas en stor del av dina pengar samtidigt.`]);
+    if (n < 5 && etfShare < 0.5) flags.push(['warn', `Du har ${n} ${n === 1 ? 'innehav' : 'innehav'}. Med färre än fem bolag kan ett enskilt fall slå hårt. En bred fond är ett sätt många använder för att sprida risken.`]);
+    const hogRisk = rows.filter((r) => r.poang != null && r.poang >= 7 && r.varde).reduce((a, r) => a + r.varde, 0);
+    if (tot && hogRisk / tot > 0.3) flags.push(['warn', `${nf((hogRisk / tot) * 100, 0)} % av pengarna ligger i aktier med hög riskkoll (7 eller mer).`]);
+    if (la[0] && tot && la[0][1] / tot > 0.9 && rows.length >= 3) flags.push(['info', `Nästan allt ligger i ${la[0][0]}. Det är vanligt, men betyder att du är beroende av ett lands ekonomi och valuta.`]);
+    if (!flags.length) flags.push(['ok', 'Bra spridning: inget enskilt bolag eller bransch dominerar portföljen.']);
+    const dist = (title, list) => `<section class="card co-section"><span class="label-up">${title}</span><div class="dist">${list.slice(0, 7).map(([k, v]) => `<div class="dist-row"><span class="grow">${esc(k)}</span>${bar((v / tot) * 100)}<span class="num small" style="width:44px;text-align:right">${nf((v / tot) * 100, 0)} %</span></div>`).join('')}</div></section>`;
+    $('#pf-side').innerHTML = `
+      <section class="card co-section"><span class="label-up">Portföljkollen</span><ul class="flags">${flags.map(([t, s]) => `<li class="flag ${t}">${svg(t === 'ok' ? 'check' : 'info', 16)}<span>${esc(s)}</span></li>`).join('')}</ul>
+        <a class="btn ghost small" href="/fraga?om=portfolj" data-link style="align-self:flex-start">${svg('spark', 14)} Fråga AI om min portfölj</a></section>
+      ${dist('Fördelning per bransch', br)}
+      ${dist('Fördelning per land', la)}`;
+    // Sammanfattning till AI-assistenten
+    try { sessionStorage.setItem('mk-pf-sammanfattning', [`Totalt värde ${sekBig(tot)}, riskkoll ${risk != null ? nf(risk, 1) : 'okänd'} av 10.`, ...rows.map((r) => `- ${r.namn} (${r.sym}): ${r.varde != null ? sek(r.varde) : 'värde saknas'}, ${r.varde && tot ? nf((r.varde / tot) * 100, 0) : '?'} % av portföljen, bransch ${r.bransch}, riskkoll ${r.poang ?? 'okänd'}`), 'Branscher: ' + br.map(([k, v]) => `${k} ${nf((v / tot) * 100, 0)} %`).join(', ')].join('\n')); } catch { /* privat läge */ }
+  };
+
+  $('.main').addEventListener('click', (e) => {
+    const ed = e.target.closest('[data-pfedit]'); if (ed) { formFor(ed.dataset.pfedit, nameOf(ed.dataset.pfedit), true); $('#pf-form').scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    if (e.target.closest('[data-pfcancel]')) { $('#pf-form').innerHTML = ''; return; }
+    if (e.target.closest('[data-pfdel]')) { const s = e.target.closest('[data-pfdel]').dataset.pfdel; port = port.filter((x) => x.sym !== s); save(); $('#pf-form').innerHTML = ''; draw(); }
+  });
+  $('.main').addEventListener('submit', (e) => {
+    const f = e.target.closest('[data-pfsave]'); if (!f) return; e.preventDefault();
+    const sym = f.dataset.pfsave; const fd = new FormData(f);
+    const antal = Number(String(fd.get('antal')).replace(',', '.')); const gavRaw = String(fd.get('gav') || '').replace(',', '.').trim(); const gav = gavRaw ? Number(gavRaw) : null;
+    if (!(antal >= 0) || !Number.isFinite(antal)) return;
+    port = port.filter((x) => x.sym !== sym);
+    if (antal > 0) port.push({ sym, antal, gav: gav != null && Number.isFinite(gav) && gav > 0 ? gav : null });
+    save(); $('#pf-form').innerHTML = ''; toast(antal > 0 ? `${nameOf(sym)} är sparad i portföljen` : `${nameOf(sym)} är borttagen`, ''); draw();
+  });
+  // Ta bort-knapp i formuläret när man ändrar
+  const obs = new MutationObserver(() => { const f = $('#pf-form [data-pfsave]'); if (f && port.some((x) => x.sym === f.dataset.pfsave) && !f.querySelector('[data-pfdel]')) f.querySelector('.chips').insertAdjacentHTML('beforeend', `<button class="linkbtn small danger-link" type="button" data-pfdel="${esc(f.dataset.pfsave)}">Ta bort innehavet</button>`); });
+  obs.observe($('#pf-form'), { childList: true });
+  draw();
+}
+
+/* ================= Övningsportfölj ================= */
+const OKEY = 'mk-ova';
+const START_KASSA = 100000;
+const newOva = () => ({ kassa: START_KASSA, start: new Date().toISOString(), innehav: {}, historik: [] });
+const getOva = () => { const v = readLS(OKEY, null); return v && typeof v.kassa === 'number' && v.innehav ? v : newOva(); };
+
+function viewOva() {
+  return `${topbar([['Översikt', '/'], ['Övningsportfölj', '/ova']])}
+  <div class="stack" style="gap:6px"><span class="eyebrow">Öva med 100 000 låtsaskronor på riktiga kurser, helt utan risk</span><h1 class="title">Övningsportfölj</h1></div>
+  <div id="ov-sum"></div>
+  <div class="grid g2" style="align-items:start">
+    <section class="card co-section"><div class="section-head" style="align-items:center"><h2 class="section" style="font-size:22px">Handla</h2><span class="pill">Låtsaspengar</span></div>
+      ${pickerHTML('ov-q', 'Sök aktie att köpa, till exempel Apple')}
+      <div id="ov-trade"></div>
+      <h3 class="label-up" style="margin:10px 0 0">Dina innehav</h3>
+      <div id="ov-list">${loading('Hämtar kurser …')}</div>
+    </section>
+    <div class="stack" style="gap:20px">
+      <section class="card co-section"><span class="label-up">Senaste affärerna</span><div id="ov-hist"></div></section>
+      <section class="card co-section"><span class="label-up">Bra att veta</span><ul class="om-list"><li>Du handlar till senaste kursen, utan avgifter. I verkligheten kostar varje affär lite (courtage).</li><li>Utländska aktier räknas om till kronor med dagens växelkurs.</li><li>Det här är bara för att lära sig. Låtsaspengar kan inte tas ut.</li></ul>
+        <button class="linkbtn small danger-link" type="button" data-ovreset>Börja om med 100 000 kr</button></section>
+    </div>
+  </div>
+  ${footer()}`;
+}
+
+function mountOva() {
+  let ova = getOva();
+  const save = () => writeLS(OKEY, ova);
+  let quotes = {}; let fx = { SEK: 1 };
+  const priceSek = (sym) => { const q = quotes[sym]; if (!q?.kurs) return null; const r = fx[q.valuta || 'SEK']; return r ? q.kurs * r : null; };
+
+  const tradeForm = async (sym, namn, mode = 'kop') => {
+    $('#ov-trade').innerHTML = loading('Hämtar kurs …');
+    const q = await getQuotes([sym]); quotes = { ...quotes, ...q };
+    fx = { ...fx, ...(await fxToSek([q[sym]?.valuta])) };
+    const p = priceSek(sym); const has = ova.innehav[sym]?.antal || 0;
+    if (!p) { $('#ov-trade').innerHTML = '<div class="empty">Kursen saknas just nu, så det går inte att handla den här.</div>'; return; }
+    const maxKop = Math.floor(ova.kassa / p);
+    $('#ov-trade').innerHTML = `<form class="pf-form" data-ovform="${esc(sym)}">
+      <div class="picked"><span class="avatar">${esc(short(sym))}</span><span class="grow"><b style="display:block;font-weight:500">${esc(namn || nameOf(sym))}</b><span class="small muted">${esc(kr(q[sym].kurs))} ${esc(cur(q[sym].valuta))}${q[sym].valuta !== 'SEK' ? ` · ${sek(p)}` : ''} · du äger ${has} st</span></span></div>
+      <div class="tabs" role="tablist" aria-label="Köp eller sälj"><button type="button" role="tab" data-ovmode="kop" aria-selected="${mode === 'kop'}">Köp</button><button type="button" role="tab" data-ovmode="salj" aria-selected="${mode === 'salj'}" ${has ? '' : 'disabled'}>Sälj</button></div>
+      <label class="field"><span>Antal (max ${mode === 'kop' ? maxKop : has} st)</span><input name="antal" type="number" min="1" step="1" max="${mode === 'kop' ? maxKop : has}" inputmode="numeric" required></label>
+      <p class="small muted" data-ovsum style="margin:0">Välj antal.</p>
+      <div class="chips"><button class="btn" type="submit">${mode === 'kop' ? 'Köp' : 'Sälj'} med låtsaspengar</button><button class="btn ghost" type="button" data-ovcancel>Avbryt</button></div></form>`;
+    const f = $('[data-ovform]'); f.dataset.mode = mode;
+    f.antal.addEventListener('input', () => {
+      const n = Math.floor(Number(f.antal.value)) || 0; const max = mode === 'kop' ? maxKop : has; const out = f.querySelector('[data-ovsum]');
+      if (n > max) { out.textContent = mode === 'kop' ? `Du har låtsaspengar till högst ${maxKop} st.` : `Du äger bara ${has} st.`; return; }
+      out.textContent = n ? `${mode === 'kop' ? 'Kostar' : 'Du får'} ${sek(n * p)}.${mode === 'kop' ? ` Kvar efteråt: ${sek(ova.kassa - n * p)}.` : ''}` : 'Välj antal.';
+    });
+    f.antal.focus();
+  };
+  bindPicker('ov-q', (sym, namn) => tradeForm(sym, namn, 'kop'));
+
+  const draw = async () => {
+    const syms = Object.keys(ova.innehav);
+    if (syms.length) { quotes = { ...quotes, ...(await getQuotes(syms)) }; fx = { ...fx, ...(await fxToSek(syms.map((s) => quotes[s]?.valuta))) }; }
+    if (!$('#ov-list')) return;
+    const rows = syms.map((s) => { const h = ova.innehav[s]; const p = priceSek(s); const v = p != null ? p * h.antal : null; return { sym: s, ...h, varde: v, vinst: v != null ? v - h.kostnad : null, d1: quotes[s]?.d1 ?? null }; });
+    const innehav = rows.reduce((a, r) => a + (r.varde ?? r.kostnad), 0);
+    const tot = ova.kassa + innehav; const res = tot - START_KASSA;
+    $('#ov-sum').innerHTML = `<div class="statbar card">
+      <div class="stat"><span class="small muted">Totalt värde</span><span class="num" style="font-size:24px">${sekBig(tot)}</span></div>
+      <div class="stat"><span class="small muted">Resultat sedan start</span><span class="num" style="color:var(--${tone(res)})">${res >= 0 ? '+' : '−'}${sekBig(Math.abs(res))} (${pct((res / START_KASSA) * 100, 1)})</span></div>
+      <div class="stat"><span class="small muted">Kontanter</span><span class="num">${sekBig(ova.kassa)}</span></div>
+      <div class="stat"><span class="small muted">I aktier</span><span class="num">${sekBig(innehav)}</span></div></div>`;
+    $('#ov-list').innerHTML = rows.length ? `<div class="table-wrap"><table class="pf-table"><tbody>${rows.sort((a, b) => (b.varde || 0) - (a.varde || 0)).map((r) => `<tr>
+      <td><a class="ak-name" href="/bolag/${encodeURIComponent(r.sym)}" data-link><span class="avatar">${esc(short(r.sym))}</span><span><b>${esc(nameOf(r.sym))}</b><span class="small muted">${r.antal} st · köpt för ${sek(r.kostnad)}</span></span></a></td>
+      <td class="r num">${r.varde != null ? sek(r.varde) : '–'}<span class="small" style="display:block;color:var(--${tone(r.vinst)})">${r.vinst != null && Math.abs(r.vinst) >= 0.5 ? (r.vinst >= 0 ? '+' : '−') + sek(Math.abs(r.vinst)) : r.vinst != null ? '±0 kr' : ''}</span></td>
+      <td class="r"><div class="chips" style="justify-content:flex-end;flex-wrap:nowrap"><button class="btn ghost small" type="button" data-ovbuy="${esc(r.sym)}">Köp</button><button class="btn ghost small" type="button" data-ovsell="${esc(r.sym)}">Sälj</button></div></td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">Du äger inga aktier än. Sök fram en aktie ovanför och gör ditt första låtsasköp.</div>';
+    $('#ov-hist').innerHTML = ova.historik.length ? `<div>${ova.historik.slice(-8).reverse().map((h) => `<div class="row-link" style="gap:12px"><span class="pill ${h.typ === 'Köp' ? 'up' : 'down'}">${h.typ}</span><span class="grow"><b style="font-weight:500">${esc(nameOf(h.sym))}</b><span class="small muted" style="display:block">${h.antal} st · ${esc(new Date(h.t).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }))}</span></span><span class="num small">${sek(h.belopp)}</span></div>`).join('')}</div>` : '<p class="small muted" style="margin:0">Inga affärer än.</p>';
+  };
+
+  $('.main').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ovbuy],[data-ovsell]');
+    if (b) { const s = b.dataset.ovbuy || b.dataset.ovsell; tradeForm(s, nameOf(s), b.dataset.ovbuy ? 'kop' : 'salj'); $('#ov-trade').scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    const m = e.target.closest('[data-ovmode]'); if (m && !m.disabled) { const f = $('[data-ovform]'); tradeForm(f.dataset.ovform, nameOf(f.dataset.ovform), m.dataset.ovmode); return; }
+    if (e.target.closest('[data-ovcancel]')) { $('#ov-trade').innerHTML = ''; return; }
+    if (e.target.closest('[data-ovreset]')) {
+      const d = document.createElement('div'); d.className = 'modal-back';
+      d.innerHTML = `<div class="modal card" role="dialog" aria-modal="true" aria-labelledby="ovr-h"><h2 class="section" id="ovr-h" style="font-size:22px">Börja om?</h2><p style="margin:0">Alla låtsasinnehav och affärer raderas, och du får 100 000 nya låtsaskronor.</p><div class="chips" style="justify-content:flex-end"><button class="btn ghost" type="button" data-no>Avbryt</button><button class="btn" type="button" data-yes>Börja om</button></div></div>`;
+      document.body.append(d);
+      d.addEventListener('click', (ev) => { if (ev.target === d || ev.target.closest('[data-no]')) d.remove(); if (ev.target.closest('[data-yes]')) { ova = newOva(); save(); d.remove(); $('#ov-trade').innerHTML = ''; toast('Ny övningsportfölj', 'Du har 100 000 låtsaskronor att handla för.'); draw(); } });
+    }
+  });
+  $('.main').addEventListener('submit', (e) => {
+    const f = e.target.closest('[data-ovform]'); if (!f) return; e.preventDefault();
+    const sym = f.dataset.ovform; const mode = f.dataset.mode; const n = Math.floor(Number(f.antal.value)) || 0; const p = priceSek(sym);
+    if (n < 1 || !p) return;
+    const h = ova.innehav[sym] || { antal: 0, kostnad: 0 };
+    if (mode === 'kop') {
+      if (n * p > ova.kassa + 0.01) { f.querySelector('[data-ovsum]').textContent = 'Du har inte tillräckligt med låtsaspengar.'; return; }
+      ova.kassa -= n * p; h.antal += n; h.kostnad += n * p; ova.innehav[sym] = h;
+    } else {
+      if (n > h.antal) return;
+      const snitt = h.kostnad / h.antal; ova.kassa += n * p; h.antal -= n; h.kostnad -= snitt * n;
+      if (h.antal <= 0) delete ova.innehav[sym]; else ova.innehav[sym] = h;
+    }
+    ova.historik.push({ t: new Date().toISOString(), typ: mode === 'kop' ? 'Köp' : 'Sälj', sym, antal: n, pris: quotes[sym].kurs, valuta: quotes[sym].valuta || 'SEK', belopp: Math.round(n * p * 100) / 100 });
+    ova.historik = ova.historik.slice(-100);
+    ova.kassa = Math.round(ova.kassa * 100) / 100;
+    save(); $('#ov-trade').innerHTML = '';
+    toast(`${mode === 'kop' ? 'Köpt' : 'Sålt'}: ${n} st ${nameOf(sym)}`, `För ${sek(n * p)} i låtsaspengar.`);
+    draw();
+  });
+  draw();
+}
+
+/* ================= AI-assistent ================= */
+const CHAT_KEY = 'mk-chatt';
+const CHAT_IDEER = [
+  ['Grunder', [['Vad är skillnaden mellan en aktie och en fond?'], ['Hur fungerar ränta på ränta?'], ['Vad är en indexfond och varför väljer många det?']]],
+  ['Risk och trygghet', [['Hur känner jag igen ett investeringsbedrägeri?'], ['Vad betyder det att en aktie är blankad?'], ['Hur mycket risk är lagom för en nybörjare?']]],
+  ['Om ett bolag', [['Förklara riskkollen för Volvo B', 'VOLV-B.ST'], ['Vad gör Investor och hur har det gått?', 'INVE-B.ST'], ['Vad säger nyheterna om Ericsson?', 'ERIC-B.ST']]],
+  ['Sparande', [['Hur börjar jag spara i fonder med lite pengar?'], ['Vad är ett ISK och hur skiljer det sig från en kapitalförsäkring?'], ['Hur sprider jag risken i mitt sparande?']]]
+];
+
+// Liten och säker markdown: rubriker, listor, fetstil, kod och länkar. Allt annat visas som text.
+function md(src) {
+  const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, a, u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${a}</a>`);
+  const out = []; let list = null;
+  const flush = () => { if (list) { out.push(`<${list.t}>${list.items.map((i) => `<li>${i}</li>`).join('')}</${list.t}>`); list = null; } };
+  for (const raw of String(src).split('\n')) {
+    const line = raw.trimEnd();
+    let m;
+    if (!line.trim()) { flush(); continue; }
+    if ((m = line.match(/^#{1,4}\s+(.*)$/))) { flush(); out.push(`<h4>${inline(m[1])}</h4>`); continue; }
+    if ((m = line.match(/^\s*[-*•]\s+(.*)$/))) { if (!list || list.t !== 'ul') { flush(); list = { t: 'ul', items: [] }; } list.items.push(inline(m[1])); continue; }
+    if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))) { if (!list || list.t !== 'ol') { flush(); list = { t: 'ol', items: [] }; } list.items.push(inline(m[1])); continue; }
+    flush(); out.push(`<p>${inline(line)}</p>`);
+  }
+  flush();
+  return out.join('');
+}
+const splitForslag = (t) => {
+  const m = String(t).match(/\n?\s*FÖRSLAG:\s*(.+)\s*$/i);
+  if (!m) return { text: String(t).replace(/\n?\s*FÖRSLAG:?\s*$/i, ''), forslag: [] };
+  return { text: String(t).slice(0, m.index).trimEnd(), forslag: m[1].split('|').map((x) => x.trim()).filter(Boolean).slice(0, 3) };
+};
+
+function viewFraga() {
+  return `${topbar([['Översikt', '/'], ['Fråga AI', '/fraga']], false)}
+  <div class="chat-wrap">
+    <div class="chat-head">
+      <span class="brand-mark ai-mark">${svg('spark', 20, '#FFFFFF')}</span>
+      <div class="grow"><h1 class="title" style="font-size:clamp(26px,4vw,34px)">Fråga Finanskollen</h1><p class="muted" style="margin:2px 0 0">Ställ frågor om aktier, fonder, sparande och risk. Svaren bygger på fakta och ger aldrig köptips.</p></div>
+      <button class="btn ghost small" type="button" data-chatnew hidden>${svg('plus', 14)} Ny konversation</button>
+    </div>
+    <div id="chat-log" class="chat-log" aria-live="polite"></div>
+    <form class="composer" data-chatform>
+      <div class="composer-ctx" data-ctx></div>
+      <label class="sr-only" for="chat-in">Din fråga</label>
+      <textarea id="chat-in" rows="1" maxlength="1500" placeholder="Skriv en fråga, till exempel: Vad är ett bra sätt att börja spara?"></textarea>
+      <div class="composer-row">
+        <button class="btn ghost small" type="button" data-ctxpick>${svg('search', 14)} Fråga om ett bolag</button>
+        <span class="small faint grow" data-left></span>
+        <button class="btn send" type="submit" aria-label="Skicka">${svg('arrow', 18, '#FFFFFF')}</button>
+      </div>
+    </form>
+    <div data-ctxsearch hidden class="card" style="padding:10px 14px">${pickerHTML('chat-q', 'Sök bolag att fråga om')}</div>
+    <p class="small faint" style="margin:0;text-align:center">AI kan ha fel. Kontrollera viktiga uppgifter och fatta egna beslut. Finanskollen ger ingen investeringsrådgivning.</p>
+  </div>`;
+}
+
+function mountFraga(params) {
+  let chat = (() => { try { const v = JSON.parse(sessionStorage.getItem(CHAT_KEY) || 'null'); return v && Array.isArray(v.m) ? v : null; } catch { return null; } })() || { m: [], sym: null };
+  if (cleanSym(params.get('s'))) chat.sym = cleanSym(params.get('s'));
+  let pfAsk = params.get('om') === 'portfolj';
+  let busy = false;
+  const persist = () => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify({ m: chat.m.slice(-20), sym: chat.sym })); } catch { /* privat läge */ } };
+  const log = $('#chat-log'); const input = $('#chat-in');
+
+  const drawCtx = () => {
+    $('[data-ctx]').innerHTML = chat.sym ? `<span class="ctx-chip">${svg('info', 13)} Frågar om <b>${esc(nameOf(chat.sym))}</b><button type="button" aria-label="Ta bort bolaget" data-ctxclear>×</button></span>` : pfAsk ? `<span class="ctx-chip">${svg('info', 13)} Frågar om <b>din portfölj</b><button type="button" aria-label="Sluta fråga om portföljen" data-pfclear>×</button></span>` : '';
+  };
+  const msgHTML = (m, i, last) => {
+    if (m.roll === 'user') return `<div class="msg user"><div class="bubble">${esc(m.text)}</div></div>`;
+    const { text, forslag } = splitForslag(m.text);
+    return `<div class="msg ai"><span class="ai-mark small">${svg('spark', 14, '#FFFFFF')}</span><div class="ai-body">
+      <div class="ai-text">${m.text ? md(text) : '<span class="typing" aria-label="Skriver"><i></i><i></i><i></i></span>'}${m.streaming && m.text ? '<span class="caret"></span>' : ''}</div>
+      ${!m.streaming && m.text ? `<div class="ai-tools"><button type="button" class="linkbtn small" data-copy="${i}">${svg('copy', 13)} Kopiera</button></div>` : ''}
+      ${last && !m.streaming && forslag.length ? `<div class="followups">${forslag.map((f) => `<button type="button" class="chip-btn" data-ask="${esc(f)}">${esc(f)}</button>`).join('')}</div>` : ''}
+    </div></div>`;
+  };
+  const draw = () => {
+    $('[data-chatnew]').hidden = !chat.m.length;
+    if (!chat.m.length) {
+      log.innerHTML = `<div class="chat-empty">${pfAsk ? `<div class="idea-group" style="grid-column:1/-1"><span class="label-up">Din portfölj</span><button type="button" class="idea" data-ask="Hur ser risken ut i min portfölj och vad borde jag tänka på?">Hur ser risken ut i min portfölj och vad borde jag tänka på?</button><button type="button" class="idea" data-ask="Är min portfölj tillräckligt spridd?">Är min portfölj tillräckligt spridd?</button></div>` : ''}${CHAT_IDEER.map(([g, list]) => `<div class="idea-group"><span class="label-up">${esc(g)}</span>${list.map(([q, s]) => `<button type="button" class="idea" data-ask="${esc(q)}" ${s ? `data-asksym="${esc(s)}"` : ''}>${esc(q)}</button>`).join('')}</div>`).join('')}</div>`;
+    } else log.innerHTML = chat.m.map((m, i) => msgHTML(m, i, i === chat.m.length - 1)).join('');
+    drawCtx();
+  };
+  const scroll = () => { const r = log.lastElementChild?.getBoundingClientRect(); if (r && r.bottom > innerHeight - 160) window.scrollBy({ top: r.bottom - innerHeight + 200, behavior: 'smooth' }); };
+
+  const ask = async (q) => {
+    q = String(q || '').trim(); if (!q || busy) return;
+    if (!ACC.user) { toast('Logga in för att fråga AI', ''); navigate('/konto'); return; }
+    busy = true; input.value = ''; autosize(); $('[data-left]').textContent = '';
+    chat.m.push({ roll: 'user', text: q }); const ai = { roll: 'assistant', text: '', streaming: true }; chat.m.push(ai);
+    draw(); scroll();
+    try {
+      const t = await token();
+      const res = await fetch('/api/fraga', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + t }, body: JSON.stringify({ meddelanden: chat.m.filter((m) => m !== ai && m.text).map((m) => ({ roll: m.roll, text: m.roll === 'assistant' ? splitForslag(m.text).text : m.text })), sym: chat.sym, portfolj: pfAsk ? (sessionStorage.getItem('mk-pf-sammanfattning') || '') : '' }) });
+      if (!res.ok || !res.body) { ai.text = (await res.text().catch(() => '')) || 'AI-assistenten svarar inte just nu. Prova igen om en stund.'; }
+      else {
+        const reader = res.body.getReader(); const dec = new TextDecoder(); let frame = 0;
+        for (;;) {
+          const { value, done } = await reader.read(); if (done) break;
+          ai.text += dec.decode(value, { stream: true });
+          if (!frame) frame = requestAnimationFrame(() => { frame = 0; const el = log.lastElementChild; if (el) el.outerHTML = msgHTML(ai, chat.m.length - 1, true); scroll(); });
+        }
+      }
+    } catch { ai.text = ai.text || 'Kunde inte nå AI-assistenten. Kontrollera din uppkoppling och prova igen.'; }
+    ai.streaming = false; busy = false; persist(); draw(); scroll(); input.focus();
+  };
+
+  const autosize = () => { input.style.height = 'auto'; input.style.height = Math.min(200, input.scrollHeight) + 'px'; };
+  input.addEventListener('input', () => { autosize(); const left = 1500 - input.value.length; $('[data-left]').textContent = left < 200 ? `${left} tecken kvar` : ''; });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(input.value); } });
+  $('[data-chatform]').addEventListener('submit', (e) => { e.preventDefault(); ask(input.value); });
+  bindPicker('chat-q', (sym) => { chat.sym = sym; pfAsk = false; $('[data-ctxsearch]').hidden = true; persist(); drawCtx(); input.focus(); });
+  $('.main').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-ask]'); if (a) { if (a.dataset.asksym) { chat.sym = a.dataset.asksym; pfAsk = false; } ask(a.dataset.ask); return; }
+    if (e.target.closest('[data-ctxpick]')) { const s = $('[data-ctxsearch]'); s.hidden = !s.hidden; if (!s.hidden) $('#chat-q').focus(); return; }
+    if (e.target.closest('[data-ctxclear]')) { chat.sym = null; persist(); drawCtx(); return; }
+    if (e.target.closest('[data-pfclear]')) { pfAsk = false; drawCtx(); return; }
+    if (e.target.closest('[data-chatnew]')) { chat = { m: [], sym: null }; pfAsk = false; persist(); draw(); input.focus(); return; }
+    const c = e.target.closest('[data-copy]'); if (c) { const m = chat.m[Number(c.dataset.copy)]; navigator.clipboard?.writeText(splitForslag(m.text).text).then(() => toast('Kopierat', '')).catch(() => {}); }
+  });
+  draw(); input.focus();
+}
+
 /* ================= Konto (Supabase Auth via REST, utan extra bibliotek) ================= */
 // Bevakning, larm och namn sparas i kontots användardata. Ingen databastabell behövs.
 const ACC = { cfg: undefined, ai: false, session: readLS('mk-session', null), user: null };
@@ -1325,6 +1725,8 @@ function applyCloud() {
     const own = readLS(WKEY, null);
     if (cloud) writeLS(WKEY, first && Array.isArray(own) ? [...new Set([...cloud, ...own])].slice(0, 60) : cloud);
     if (d.larm && typeof d.larm === 'object') writeLS(LKEY, first ? { ...d.larm, ...getLarm() } : d.larm);
+    if (Array.isArray(d.portfolj) && (!first || !getPort().length)) writeLS(PKEY, d.portfolj);
+    if (d.ova && typeof d.ova.kassa === 'number' && (!first || !readLS(OKEY, null))) writeLS(OKEY, d.ova);
   } finally { SYNCING = false; }
   writeLS('mk-sync-user', ACC.user.id);
   if (first || !cloud) saveCloud();
@@ -1337,7 +1739,9 @@ function saveCloud() {
     const t = await token(); if (!t) return;
     const watch = getWatch();
     try {
-      const u = await auth('/user', { data: { bevakning: watch, larm: getLarm(), namn: Object.fromEntries(watch.map((x) => [x, nameOf(x)])) } }, 'PUT', t);
+      const port = getPort(); const ova = readLS(OKEY, null);
+      const syms = [...new Set([...watch, ...port.map((x) => x.sym), ...Object.keys(ova?.innehav || {})])];
+      const u = await auth('/user', { data: { bevakning: watch, larm: getLarm(), portfolj: port, ...(ova ? { ova: { ...ova, historik: (ova.historik || []).slice(-40) } } : {}), namn: Object.fromEntries(syms.map((x) => [x, nameOf(x)])) } }, 'PUT', t);
       ACC.user = u;
     } catch (e) { console.warn('Kunde inte spara till kontot', e.message); }
   }, 500);
@@ -1733,7 +2137,7 @@ function mountJamfor(params) {
   compare();
   if (!sel.a) $('#pick-a')?.focus(); else if (!sel.b) $('#pick-b')?.focus();
 }
-const cleanSym = (s) => { const v = String(s || '').trim().toUpperCase(); return /^\^?[A-Z0-9][A-Z0-9.\-_:]{0,24}$/.test(v) ? v : null; };
+const cleanSym = (s) => { const v = String(s || '').trim().toUpperCase(); return /^\^?[A-Z0-9][A-Z0-9.\-_:=]{0,24}$/.test(v) ? v : null; };
 
 function route() {
   // Sidor som alla får se, även utan konto
@@ -1760,6 +2164,9 @@ function route() {
   if (path === '/sok') return { active: 'sok', title: 'Sök och riskkoll', html: viewSok(params), mount: () => mountSok(params) };
   if (path === '/nyheter') return { active: 'nyheter', title: 'Nyheter', html: viewNyheter(), mount: mountNyheter };
   if (path === '/bevakning') return { active: 'bevakning', title: 'Bevakning', html: viewBevakning(), mount: mountBevakning };
+  if (path === '/portfolj') return { active: 'portfolj', title: 'Min portfölj', html: viewPortfolj(), mount: mountPortfolj };
+  if (path === '/ova') return { active: 'ova', title: 'Övningsportfölj', html: viewOva(), mount: mountOva };
+  if (path === '/fraga') return { active: 'fraga', title: 'Fråga AI', html: viewFraga(), mount: () => mountFraga(params) };
   if (path === '/aktier') return { active: 'aktier', title: 'Alla aktier', html: viewAktier(), mount: () => mountAktier(params) };
   if (path === '/jamfor') return { active: 'jamfor', title: 'Jämför', html: viewJamfor(), mount: () => mountJamfor(params) };
   if (path === '/konto') return { active: 'konto', title: ACC.user ? 'Mitt konto' : 'Logga in', html: viewKonto(), mount: mountKonto };
@@ -1768,7 +2175,7 @@ function route() {
     let sym = decodeURIComponent(m[1]);
     if (LEGACY[sym.toLowerCase()]) sym = LEGACY[sym.toLowerCase()];
     sym = sym.toUpperCase();
-    if (/^\^?[A-Z0-9][A-Z0-9.\-_:]{0,24}$/.test(sym)) return { active: 'sok', title: nameOf(sym), html: viewBolag(sym), mount: () => mountBolag(sym) };
+    if (/^\^?[A-Z0-9][A-Z0-9.\-_:=]{0,24}$/.test(sym)) return { active: 'sok', title: nameOf(sym), html: viewBolag(sym), mount: () => mountBolag(sym) };
   }
   return { active: '', title: 'Sidan finns inte', html: viewNotFound() };
 }

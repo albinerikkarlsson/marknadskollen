@@ -9,6 +9,9 @@ Aktiesök med riskkoll och börsnyheter på enkel svenska. All data är riktig o
 - `/bevakning` Mina aktier (sparas i webbläsaren tills inloggning finns)
 - `/bolag/:ticker` Bolagssida med allt samlat: kursdiagram (1 mån–5 år), nyckeltal, affärsidé, historia, insynshandel, blankning, nyheter med AI-sammanfattning och full riskkoll. T.ex. `/bolag/VOLV-B.ST`
 - `/aktier` Alla aktier i Sverige eller USA med filter för kategori, bransch och storlek, sortering och sök. Filtren sparas i adressen så att man kan dela en vy, t.ex. `/aktier?b=Teknik&k=utdelare`
+- `/fraga` AI-assistenten Fråga Finanskollen (kräver inloggning, högst 40 frågor per dag och användare). Kan få bolagsdata och en sammanfattning av portföljen som underlag
+- `/portfolj` Min portfölj: innehav, värde i kronor, spridning per bransch och land, portföljkollen
+- `/ova` Övningsportfölj med 100 000 låtsaskronor på riktiga kurser
 - `/jamfor?a=VOLV-B.ST&b=AAPL` Jämför två bolag sida vid sida
 - `/konto` Logga in eller skapa konto (Supabase). Bevakning och prislarm följer då med mellan enheter
 
@@ -22,6 +25,7 @@ Aktiesök med riskkoll och börsnyheter på enkel svenska. All data är riktig o
   - `/api/insyn` eller `?namn=` insynshandel från Finansinspektionens insynsregister
   - `/api/blankning` eller `?namn=` blankning från Finansinspektionens blankningsregister
   - `/api/aktier?m=se|us` alla aktier med bransch och nyckeltal (Yahoos aktiefilter, en gång per bransch)
+  - `/api/fraga` (POST) AI-assistenten, strömmar svaret som text via Netlifys AI Gateway
   - `/api/chart?s=&r=1m|6m|1y|5y` kursdiagram
   - `/api/summary?s=&namn=` AI-sammanfattning på svenska av nyheterna (kräver `ANTHROPIC_API_KEY`)
   - `/api/config` offentliga inställningar (Supabase-adress och publik nyckel)
