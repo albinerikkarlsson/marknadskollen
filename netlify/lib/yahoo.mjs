@@ -91,8 +91,10 @@ export async function yQuotes(syms) {
 }
 
 // Kursdiagram. Ger senaste kurs och dagliga stängningskurser.
+// range kan också vara { period1, period2 } i sekunder, för en egen tidsperiod
 export async function yChart(sym, range = '1y', interval = '1d') {
-  const d = await yahoo(`/v8/finance/chart/${encodeURIComponent(sym)}`, { range, interval, includePrePost: 'false' });
+  const span = typeof range === 'object' ? { period1: Math.floor(range.period1), period2: Math.floor(range.period2) } : { range };
+  const d = await yahoo(`/v8/finance/chart/${encodeURIComponent(sym)}`, { ...span, interval, includePrePost: 'false' });
   const r = d?.chart?.result?.[0];
   if (!r?.meta) throw new ApiError(404, 'inget diagram för ' + sym);
   const m = r.meta;
