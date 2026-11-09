@@ -3,7 +3,7 @@
 import { inflateRawSync } from 'node:zlib';
 import { ApiError } from './finnhub.mjs';
 
-const UA = 'Finanskollen/1.0 (https://finanskollen-se.netlify.app)';
+const UA = 'Finanskollen/1.0 (https://finanskollen.live)';
 
 export async function fiFetch(url, timeoutMs = 9000) {
   const res = await fetch(url, { headers: { 'user-agent': UA, accept: '*/*' }, signal: AbortSignal.timeout(timeoutMs) });
