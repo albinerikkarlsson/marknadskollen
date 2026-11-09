@@ -297,6 +297,11 @@ function viewOversikt() {
     <h1 class="title">Börsen i dag</h1>
   </div>
 
+  <section class="watch-strip" aria-labelledby="mina-h">
+    <div class="watch-head"><h2 class="label-up" id="mina-h" style="margin:0">Din bevakning</h2><a class="more small" href="/bevakning" data-link>Visa alla →</a></div>
+    <div id="mine" class="watch-row">${getWatch().slice(0, 12).map(() => '<span class="watch-tile is-skel"></span>').join('') || ''}</div>
+  </section>
+
   <section class="stack" style="gap:14px" aria-labelledby="nyh-h">
     <div class="section-head" style="align-items:center">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><h2 class="section" id="nyh-h">Senaste nyheterna</h2><span id="news-status"></span></div>
@@ -334,8 +339,8 @@ function viewOversikt() {
     </section>
   </div>
 
-  <div class="grid g2">
-    <div class="card dark rings stack" style="padding:24px;gap:14px;align-self:start">
+  <div>
+    <div class="card dark rings stack" style="padding:24px;gap:14px">
       <div class="orb" aria-hidden="true"><div class="orb-tilt"><div class="orb-spin"><i></i><i></i><i></i></div><b></b></div></div>
       <span class="small muted">Sök och riskkoll</span>
       <span style="font-size:28px;letter-spacing:-0.01em;line-height:1.2">Hur riskabel är aktien du funderar på?</span>
@@ -347,10 +352,6 @@ function viewOversikt() {
         <button class="btn small" type="submit">Sök</button>
       </form>
     </div>
-    <section class="card" aria-labelledby="mina-h" style="padding:24px">
-      <div class="section-head" style="margin-bottom:6px"><h2 class="section" id="mina-h" style="font-size:22px">Mina aktier</h2><a class="more" href="/bevakning" data-link>Bevakning →</a></div>
-      <div id="mine">${loading('Hämtar kurser …')}</div>
-    </section>
   </div>
   ${footer('OMX Stockholm 30 visas i indexpoäng. Övriga marknader visas med börsfonder (ETF:er) som följer respektive index, priser i USD.')}`;
 }
@@ -381,7 +382,7 @@ async function mountOversikt() {
   api('/api/blankning', 30 * 60e3).then((d) => { const b = $('#blank-o'); if (b) b.innerHTML = blankOverviewHTML(d); });
 
   // Marknaden och mina aktier i ett anrop
-  const watch = getWatch().slice(0, 6);
+  const watch = getWatch().slice(0, 12);
   const quotes = await getQuotes([...MARKET.map((m) => m.sym), ...watch]);
   if (!$('#ticker')) return;
   for (const m of MARKET) {
@@ -395,13 +396,11 @@ async function mountOversikt() {
   const el = $('#mine'); if (!el) return;
   el.innerHTML = watch.length ? watch.map((s) => {
     const q = quotes[s];
-    return `<a class="row-link" href="/bolag/${encodeURIComponent(s)}" data-link>
-      <span class="avatar">${esc(short(s))}</span>
-      <span class="grow" style="font-weight:500">${esc(nameOf(s))}</span>
-      <span class="num small muted">${q?.kurs != null ? kr(q.kurs) : 'kurs saknas'}</span>
-      <span class="pill ${tone(q?.d1)}">${q?.d1 != null ? pct(q.d1, 1) : '–'}</span>
+    return `<a class="watch-tile" href="/bolag/${encodeURIComponent(s)}" data-link>
+      <span class="watch-name"><span class="avatar">${esc(short(s))}</span><b>${esc(nameOf(s))}</b></span>
+      <span class="watch-nums"><span class="num">${q?.kurs != null ? esc(kr(q.kurs)) + ' <span class="small faint">' + esc(cur(q.valuta)) + '</span>' : '<span class="faint small">Kurs saknas</span>'}</span><span class="pill ${tone(q?.d1)}">${q?.d1 != null ? pct(q.d1, 1) : '–'}</span></span>
     </a>`;
-  }).join('') : '<p class="muted">Du bevakar inga aktier än. Sök på ett bolag och tryck på Bevaka.</p>';
+  }).join('') : `<a class="watch-tile watch-empty" href="/sok" data-link>${svg('plus', 16)}<span>Du bevakar inga aktier än. Sök på ett bolag och tryck på <b>Bevaka</b>, så syns det här.</span></a>`;
 }
 
 /* ================= Sök ================= */
@@ -1476,8 +1475,7 @@ function mountPortfolj() {
         sym: s, namn: nameOf(s), bs, antal, varde, insatt, vinst: varde != null && insatt != null ? varde - insatt : null,
         snitt: kand.length && kand.every((b) => b.kurs) ? kand.reduce((a, b) => a + b.kurs * b.antal, 0) / kand.reduce((a, b) => a + b.antal, 0) : null,
         kurs: kursNu(s), valuta: valOf(s), d1, idag: varde != null && d1 != null ? varde - varde / (1 + d1 / 100) : null,
-        poang: st?.poang ?? null, bransch: st?.fakta?.find((f) => f[0] === 'Bransch')?.[1] || (st?.typ === 'ETF' ? 'Fonder (ETF)' : 'Okänd bransch'),
-        land: st?.fakta?.find((f) => f[0] === 'Land')?.[1] || (s.endsWith('.ST') ? 'Sverige' : 'Övriga'), typ: st?.typ, faktorer: st?.faktorer || []
+        ...holdMeta(s, st)
       };
     });
     const tot = hold.reduce((a, h) => a + (h.varde || 0), 0);
@@ -1531,34 +1529,7 @@ function mountPortfolj() {
       </div>`).join('')}</div>`;
 
     /* ---- Portföljkollen ---- */
-    const group = (key) => { const m = {}; for (const h of hold) if (h.varde) m[h[key]] = (m[h[key]] || 0) + h.varde; return Object.entries(m).sort((a, b) => b[1] - a[1]); };
-    const br = group('bransch'); const la = group('land');
-    const top = sorted.find((h) => h.varde);
-    const n = hold.filter((h) => h.varde).length;
-    const etfShare = hold.filter((h) => h.typ === 'ETF' || h.typ === 'Fond').reduce((a, h) => a + (h.varde || 0), 0) / (tot || 1);
-    const flags = [];
-    if (top && tot && top.varde / tot > 0.25 && n > 1) flags.push(['warn', `${top.namn} är ${nf((top.varde / tot) * 100, 0)} % av portföljen. Faller den aktien märks det mycket på helheten.`]);
-    if (br[0] && tot && br[0][1] / tot > 0.5 && n > 1) flags.push(['warn', `${nf((br[0][1] / tot) * 100, 0)} % ligger i ${br[0][0].toLowerCase()}. Går det dåligt för branschen påverkas en stor del av dina pengar samtidigt.`]);
-    if (n < 5 && etfShare < 0.5) flags.push(['warn', `Du har ${n} ${n === 1 ? 'innehav' : 'innehav'}. Med färre än fem bolag kan ett enskilt fall slå hårt. En bred fond är ett sätt många använder för att sprida risken.`]);
-    const hog = hold.filter((h) => h.poang != null && h.poang >= 7 && h.varde).reduce((a, h) => a + h.varde, 0);
-    if (tot && hog / tot > 0.3) flags.push(['warn', `${nf((hog / tot) * 100, 0)} % av pengarna ligger i aktier med hög riskkoll (7 eller mer).`]);
-    const forlust = hold.filter((h) => h.vinst != null && h.insatt && h.vinst / h.insatt < -0.3);
-    if (forlust.length) flags.push(['info', `${forlust.map((h) => h.namn).join(', ')} har gått ner mer än 30 % sedan du köpte. Titta gärna på bolagssidan vad som hänt innan du bestämmer dig.`]);
-    if (la[0] && tot && la[0][1] / tot > 0.9 && n >= 3) flags.push(['info', `Nästan allt ligger i ${la[0][0]}. Det är vanligt, men gör dig beroende av ett lands ekonomi och valuta.`]);
-    if (!flags.length) flags.push(['ok', 'Bra spridning: inget enskilt bolag eller bransch dominerar portföljen.']);
-    // Vilka riskdelar som väger tyngst i hela portföljen
-    const delar = {};
-    for (const h of hold) if (h.varde && tot) for (const f of h.faktorer) { const d = (delar[f[0]] = delar[f[0]] || { v: 0, w: 0 }); d.v += f[1] * h.varde; d.w += h.varde; }
-    const delRows = Object.entries(delar).map(([k, d]) => [k, d.v / d.w]).sort((a, b) => b[1] - a[1]);
-    const dist = (title, list) => `<section class="card co-section"><span class="label-up">${title}</span><div class="dist">${list.slice(0, 7).map(([k, v]) => `<div class="dist-row"><span>${esc(k)}</span>${bar((v / tot) * 100)}<span class="num small" style="width:44px;text-align:right">${nf((v / tot) * 100, 0)} %</span></div>`).join('')}</div></section>`;
-    $('#pf-side').innerHTML = `
-      <section class="card co-section"><span class="label-up">Portföljkollen</span><ul class="flags">${flags.map(([t, s]) => `<li class="flag ${t}">${svg(t === 'ok' ? 'check' : 'info', 16)}<span>${esc(s)}</span></li>`).join('')}</ul>
-        <a class="btn ghost small" href="/fraga?om=portfolj" data-link style="align-self:flex-start">${svg('spark', 14)} Fråga AI om min portfölj</a></section>
-      ${delRows.length ? `<section class="card co-section"><span class="label-up">Riskkollen för hela portföljen</span>
-        <p class="small muted" style="margin:0">Varje del vägd efter hur mycket pengar du har i bolagen. 1 är låg risk och 3 hög.</p>
-        <div class="dist">${delRows.map(([k, v]) => `<div class="dist-row"><span>${esc(k)}${tip(k)}</span>${bar(((v - 1) / 2) * 100, v >= 2.4 ? 'hi' : v >= 1.7 ? 'mid' : 'lo')}<span class="small" style="width:56px;text-align:right">${v >= 2.4 ? 'Hög' : v >= 1.7 ? 'Medel' : 'Låg'}</span></div>`).join('')}</div></section>` : ''}
-      ${dist('Fördelning per bransch', br)}
-      ${dist('Fördelning per land', la)}`;
+    const { br } = pfInsight(hold, tot, '#pf-side', true);
     try { sessionStorage.setItem('mk-pf-sammanfattning', [`Värde ${sekBig(tot)}, insatt ${kandaInsatt ? sekBig(insatt) : 'okänt'}, ${vinst != null ? `resultat ${vinst >= 0 ? '+' : '-'}${sekBig(Math.abs(vinst))}` : ''}, riskkoll ${risk != null ? nf(risk, 1) : 'okänd'} av 10.`, ...sorted.map((h) => `- ${h.namn} (${h.sym}): ${h.varde != null ? sek(h.varde) : 'värde saknas'}, ${h.varde && tot ? nf((h.varde / tot) * 100, 0) : '?'} % av portföljen, ${h.vinst != null ? `${h.vinst >= 0 ? '+' : '-'}${sek(Math.abs(h.vinst))} sedan köp, ` : ''}bransch ${h.bransch}, riskkoll ${h.poang ?? 'okänd'}`), 'Branscher: ' + br.map(([k, v]) => `${k} ${nf((v / tot) * 100, 0)} %`).join(', ')].join('\n')); } catch { /* privat läge */ }
 
     cache = { buys, valOf, quotes, fxNow, tot, insatt };
@@ -1621,7 +1592,47 @@ function mountPortfolj() {
 }
 
 // Tidslinje för pengar: värdet som yta och insatta pengar som streckad linje, med förklaring vid hovring
-function drawMoneyChart(box, V, I) {
+// Gemensamt för Min portfölj och Övningsportföljen
+const holdMeta = (s, st) => ({
+  poang: st?.poang ?? null, bransch: st?.fakta?.find((f) => f[0] === 'Bransch')?.[1] || (st?.typ === 'ETF' ? 'Fonder (ETF)' : 'Okänd bransch'),
+  land: st?.fakta?.find((f) => f[0] === 'Land')?.[1] || (s.endsWith('.ST') ? 'Sverige' : 'Övriga'), typ: st?.typ, faktorer: st?.faktorer || []
+});
+// Portföljkollen, riskkollen för helheten och fördelning per bransch och land
+function pfInsight(hold, tot, target, aiLink) {
+  const sorted = hold.slice().sort((a, b) => (b.varde || 0) - (a.varde || 0));
+    const group = (key) => { const m = {}; for (const h of hold) if (h.varde) m[h[key]] = (m[h[key]] || 0) + h.varde; return Object.entries(m).sort((a, b) => b[1] - a[1]); };
+    const br = group('bransch'); const la = group('land');
+    const top = sorted.find((h) => h.varde);
+    const n = hold.filter((h) => h.varde).length;
+    const etfShare = hold.filter((h) => h.typ === 'ETF' || h.typ === 'Fond').reduce((a, h) => a + (h.varde || 0), 0) / (tot || 1);
+    const flags = [];
+    if (top && tot && top.varde / tot > 0.25 && n > 1) flags.push(['warn', `${top.namn} är ${nf((top.varde / tot) * 100, 0)} % av portföljen. Faller den aktien märks det mycket på helheten.`]);
+    if (br[0] && tot && br[0][1] / tot > 0.5 && n > 1) flags.push(['warn', `${nf((br[0][1] / tot) * 100, 0)} % ligger i ${br[0][0].toLowerCase()}. Går det dåligt för branschen påverkas en stor del av dina pengar samtidigt.`]);
+    if (n < 5 && etfShare < 0.5) flags.push(['warn', `Du har ${n} ${n === 1 ? 'innehav' : 'innehav'}. Med färre än fem bolag kan ett enskilt fall slå hårt. En bred fond är ett sätt många använder för att sprida risken.`]);
+    const hog = hold.filter((h) => h.poang != null && h.poang >= 7 && h.varde).reduce((a, h) => a + h.varde, 0);
+    if (tot && hog / tot > 0.3) flags.push(['warn', `${nf((hog / tot) * 100, 0)} % av pengarna ligger i aktier med hög riskkoll (7 eller mer).`]);
+    const forlust = hold.filter((h) => h.vinst != null && h.insatt && h.vinst / h.insatt < -0.3);
+    if (forlust.length) flags.push(['info', `${forlust.map((h) => h.namn).join(', ')} har gått ner mer än 30 % sedan du köpte. Titta gärna på bolagssidan vad som hänt innan du bestämmer dig.`]);
+    if (la[0] && tot && la[0][1] / tot > 0.9 && n >= 3) flags.push(['info', `Nästan allt ligger i ${la[0][0]}. Det är vanligt, men gör dig beroende av ett lands ekonomi och valuta.`]);
+    if (!flags.length) flags.push(['ok', 'Bra spridning: inget enskilt bolag eller bransch dominerar portföljen.']);
+    // Vilka riskdelar som väger tyngst i hela portföljen
+    const delar = {};
+    for (const h of hold) if (h.varde && tot) for (const f of h.faktorer) { const d = (delar[f[0]] = delar[f[0]] || { v: 0, w: 0 }); d.v += f[1] * h.varde; d.w += h.varde; }
+    const delRows = Object.entries(delar).map(([k, d]) => [k, d.v / d.w]).sort((a, b) => b[1] - a[1]);
+    const dist = (title, list) => `<section class="card co-section"><span class="label-up">${title}</span><div class="dist">${list.slice(0, 7).map(([k, v]) => `<div class="dist-row"><span>${esc(k)}</span>${bar((v / tot) * 100)}<span class="num small" style="width:44px;text-align:right">${nf((v / tot) * 100, 0)} %</span></div>`).join('')}</div></section>`;
+  $(target).innerHTML = `
+      <section class="card co-section"><span class="label-up">Portföljkollen</span><ul class="flags">${flags.map(([t, s]) => `<li class="flag ${t}">${svg(t === 'ok' ? 'check' : 'info', 16)}<span>${esc(s)}</span></li>`).join('')}</ul>
+        ${aiLink ? `<a class="btn ghost small" href="/fraga?om=portfolj" data-link style="align-self:flex-start">${svg('spark', 14)} Fråga AI om min portfölj</a>` : ''}</section>
+      ${delRows.length ? `<section class="card co-section"><span class="label-up">Riskkollen för hela portföljen</span>
+        <p class="small muted" style="margin:0">Varje del vägd efter hur mycket pengar du har i bolagen. 1 är låg risk och 3 hög.</p>
+        <div class="dist">${delRows.map(([k, v]) => `<div class="dist-row"><span>${esc(k)}${tip(k)}</span>${bar(((v - 1) / 2) * 100, v >= 2.4 ? 'hi' : v >= 1.7 ? 'mid' : 'lo')}<span class="small" style="width:56px;text-align:right">${v >= 2.4 ? 'Hög' : v >= 1.7 ? 'Medel' : 'Låg'}</span></div>`).join('')}</div></section>` : ''}
+      ${dist('Fördelning per bransch', br)}
+      ${dist('Fördelning per land', la)}`;
+  return { br };
+}
+
+function drawMoneyChart(box, V, I, o = {}) {
+  const inL = o.inLabel || 'Insatt';
   const W = 1000; const H = 300; const PAD = 10;
   const all = [...V, ...I]; const t0 = V[0][0]; const t1 = V[V.length - 1][0];
   let lo = Math.min(...all.map((p) => p[1])); let hi = Math.max(...all.map((p) => p[1]));
@@ -1633,7 +1644,7 @@ function drawMoneyChart(box, V, I) {
   const col = res >= 0 ? 'var(--up)' : 'var(--down)';
   const peak = V.reduce((a, p) => (p[1] > a[1] ? p : a), V[0]); const low = V.reduce((a, p) => (p[1] < a[1] ? p : a), V[0]);
   box.innerHTML = `
-    <div class="chart-head"><span class="chart-key"><i style="background:${col}"></i>Värde <b class="num">${sekBig(last)}</b></span><span class="chart-key"><i class="dash"></i>Insatt <b class="num">${sekBig(lastI)}</b></span><span class="chart-key">Utveckling i perioden <b class="num" style="color:var(--${tone(change)})">${change >= 0 ? '+' : '−'}${sekBig(Math.abs(change))}</b></span><span class="small muted" style="margin-left:auto">${esc(fmtDag(t0))} – ${esc(fmtDag(t1))}</span></div>
+    <div class="chart-head"><span class="chart-key"><i style="background:${col}"></i>Värde <b class="num">${sekBig(last)}</b></span><span class="chart-key"><i class="dash"></i>${esc(inL)} <b class="num">${sekBig(lastI)}</b></span><span class="chart-key">Utveckling i perioden <b class="num" style="color:var(--${tone(change)})">${change >= 0 ? '+' : '−'}${sekBig(Math.abs(change))}</b></span><span class="small muted" style="margin-left:auto">${esc(fmtDag(t0))} – ${esc(fmtDag(t1))}</span></div>
     <div class="chart-plot">
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Portföljens värde över tid">
         <defs><linearGradient id="pfg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity="0.18"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
@@ -1645,7 +1656,7 @@ function drawMoneyChart(box, V, I) {
       <span class="chart-cross" hidden></span><span class="chart-dot" hidden style="background:${col}"></span>
       <div class="chart-tip" hidden></div>
     </div>
-    <div class="pf-tl-facts"><span class="small muted">Högst: <b class="num">${sekBig(peak[1])}</b> ${esc(fmtDag(peak[0]))}</span><span class="small muted">Lägst: <b class="num">${sekBig(low[1])}</b> ${esc(fmtDag(low[0]))}</span><span class="small faint">Streckad linje = pengar du satt in. Ytan = vad de var värda varje dag.</span></div>`;
+    <div class="pf-tl-facts"><span class="small muted">Högst: <b class="num">${sekBig(peak[1])}</b> ${esc(fmtDag(peak[0]))}</span><span class="small muted">Lägst: <b class="num">${sekBig(low[1])}</b> ${esc(fmtDag(low[0]))}</span><span class="small faint">${esc(o.note || 'Streckad linje = pengar du satt in. Ytan = vad de var värda varje dag.')}</span></div>`;
   const plot = box.querySelector('.chart-plot'); const tipEl = box.querySelector('.chart-tip'); const cross = box.querySelector('.chart-cross'); const dot = box.querySelector('.chart-dot');
   let frame = 0; let lastX = 0;
   const move = () => {
@@ -1655,7 +1666,7 @@ function drawMoneyChart(box, V, I) {
     cross.hidden = false; cross.style.transform = `translateX(${px}px)`;
     dot.hidden = false; dot.style.transform = `translate(${px}px, ${(Y(v) / H) * r.height}px)`;
     tipEl.hidden = false;
-    tipEl.innerHTML = `<span class="small muted">${esc(fmtDag(tt))}</span><b class="num">Värde ${esc(sekBig(v))}</b><span class="small">Insatt ${esc(sekBig(inv))}</span><span class="small" style="color:${v - inv >= 0 ? '#8FD3A8' : '#F4A79D'}">${v - inv >= 0 ? '+' : '−'}${esc(sekBig(Math.abs(v - inv)))} (${pct(inv ? ((v - inv) / inv) * 100 : 0, 1)})</span>`;
+    tipEl.innerHTML = `<span class="small muted">${esc(fmtDag(tt))}</span><b class="num">Värde ${esc(sekBig(v))}</b><span class="small">${esc(inL)} ${esc(sekBig(inv))}</span><span class="small" style="color:${v - inv >= 0 ? '#8FD3A8' : '#F4A79D'}">${v - inv >= 0 ? '+' : '−'}${esc(sekBig(Math.abs(v - inv)))} (${pct(inv ? ((v - inv) / inv) * 100 : 0, 1)})</span>`;
     const tw = tipEl.offsetWidth; tipEl.style.transform = `translateX(${Math.min(r.width - tw, Math.max(0, px - tw / 2))}px)`;
   };
   plot.addEventListener('pointermove', (e) => { lastX = e.clientX; if (!frame) frame = requestAnimationFrame(move); });
@@ -1672,15 +1683,24 @@ function viewOva() {
   return `${topbar([['Översikt', '/'], ['Övningsportfölj', '/ova']])}
   <div class="stack" style="gap:6px"><span class="eyebrow">Öva med 100 000 låtsaskronor på riktiga kurser, helt utan risk</span><h1 class="title">Övningsportfölj</h1></div>
   <div id="ov-sum"></div>
-  <div class="grid g2" style="align-items:start">
-    <section class="card co-section"><div class="section-head" style="align-items:center"><h2 class="section" style="font-size:22px">Handla</h2><span class="pill">Låtsaspengar</span></div>
-      ${pickerHTML('ov-q', 'Sök aktie att köpa, till exempel Apple')}
-      <div id="ov-trade"></div>
-      <h3 class="label-up" style="margin:10px 0 0">Dina innehav</h3>
-      <div id="ov-list">${loading('Hämtar kurser …')}</div>
-    </section>
-    <div class="stack" style="gap:20px">
+  <section class="card co-section" aria-labelledby="ov-tl-h">
+    <div class="section-head" style="align-items:center"><div><span class="label-up">Tidslinje</span><h2 class="section" id="ov-tl-h" style="margin-top:4px">Så har dina låtsaspengar utvecklats</h2></div>
+      <div class="tabs" role="tablist" aria-label="Period">${[['1m', '1 mån'], ['6m', '6 mån'], ['1y', '1 år'], ['all', 'Allt']].map(([k, t]) => `<button role="tab" data-ovrange="${k}" aria-selected="${k === 'all'}">${t}</button>`).join('')}</div></div>
+    <div id="ov-tl" class="chart">${loading('Räknar fram tidslinjen …')}</div>
+  </section>
+  <div class="pf-layout">
+    <div class="stack" style="gap:20px;min-width:0">
+      <section class="card co-section"><div class="section-head" style="align-items:center"><h2 class="section" style="font-size:22px">Dina innehav</h2><span class="pill">Låtsaspengar</span></div>
+        <div id="ov-list">${loading('Hämtar kurser …')}</div>
+      </section>
+      <section class="card co-section" id="ov-add-card"><span class="label-up">Handla</span>
+        ${pickerHTML('ov-q', 'Sök aktie eller fond att köpa, till exempel Apple')}
+        <div id="ov-trade"></div>
+      </section>
       <section class="card co-section"><span class="label-up">Senaste affärerna</span><div id="ov-hist"></div></section>
+    </div>
+    <div class="stack" style="gap:20px;min-width:0">
+      <div class="stack" style="gap:20px" id="ov-side"></div>
       <section class="card co-section"><span class="label-up">Bra att veta</span><ul class="om-list"><li>Du handlar till senaste kursen, utan avgifter. I verkligheten kostar varje affär lite (courtage).</li><li>Utländska aktier räknas om till kronor med dagens växelkurs.</li><li>Det här är bara för att lära sig. Låtsaspengar kan inte tas ut.</li></ul>
         <button class="linkbtn small danger-link" type="button" data-ovreset>Börja om med 100 000 kr</button></section>
     </div>
@@ -1691,71 +1711,179 @@ function viewOva() {
 function mountOva() {
   let ova = getOva();
   const save = () => writeLS(OKEY, ova);
-  let quotes = {}; let fx = { SEK: 1 };
+  let quotes = {}; let fx = { SEK: 1 }; let S = {};
+  let open = null; let range = 'all';
   const priceSek = (sym) => { const q = quotes[sym]; if (!q?.kurs) return null; const r = fx[q.valuta || 'SEK']; return r ? q.kurs * r : null; };
 
+  /* ---- Köp och sälj: skriv antal eller belopp, det andra räknas ut ---- */
   const tradeForm = async (sym, namn, mode = 'kop') => {
     $('#ov-trade').innerHTML = loading('Hämtar kurs …');
     const q = await getQuotes([sym]); quotes = { ...quotes, ...q };
     fx = { ...fx, ...(await fxToSek([q[sym]?.valuta])) };
     const p = priceSek(sym); const has = ova.innehav[sym]?.antal || 0;
     if (!p) { $('#ov-trade').innerHTML = '<div class="empty">Kursen saknas just nu, så det går inte att handla den här.</div>'; return; }
-    const maxKop = Math.floor(ova.kassa / p);
-    $('#ov-trade').innerHTML = `<form class="pf-form" data-ovform="${esc(sym)}">
-      <div class="picked"><span class="avatar">${esc(short(sym))}</span><span class="grow"><b style="display:block;font-weight:500">${esc(namn || nameOf(sym))}</b><span class="small muted">${esc(kr(q[sym].kurs))} ${esc(cur(q[sym].valuta))}${q[sym].valuta !== 'SEK' ? ` · ${sek(p)}` : ''} · du äger ${has} st</span></span></div>
-      <div class="tabs" role="tablist" aria-label="Köp eller sälj"><button type="button" role="tab" data-ovmode="kop" aria-selected="${mode === 'kop'}">Köp</button><button type="button" role="tab" data-ovmode="salj" aria-selected="${mode === 'salj'}" ${has ? '' : 'disabled'}>Sälj</button></div>
-      <label class="field"><span>Antal (max ${mode === 'kop' ? maxKop : has} st)</span><input name="antal" type="number" min="1" step="1" max="${mode === 'kop' ? maxKop : has}" inputmode="numeric" required></label>
-      <p class="small muted" data-ovsum style="margin:0">Välj antal.</p>
-      <div class="chips"><button class="btn" type="submit">${mode === 'kop' ? 'Köp' : 'Sälj'} med låtsaspengar</button><button class="btn ghost" type="button" data-ovcancel>Avbryt</button></div></form>`;
+    const max = mode === 'kop' ? Math.floor(ova.kassa / p) : has;
+    $('#ov-trade').innerHTML = `<form class="pf-form" data-ovform="${esc(sym)}" novalidate>
+      <div class="picked"><span class="avatar">${esc(short(sym))}</span><span class="grow"><b style="display:block;font-weight:500">${esc(namn || nameOf(sym))}</b><span class="small muted">${esc(kr(q[sym].kurs))} ${esc(cur(q[sym].valuta))}${q[sym].valuta !== 'SEK' ? ` · ${sek(p)}` : ''} per aktie · du äger ${has} st</span></span></div>
+      <div class="tabs" role="tablist" aria-label="Köp eller sälj" style="align-self:flex-start"><button type="button" role="tab" data-ovmode="kop" aria-selected="${mode === 'kop'}">Köp</button><button type="button" role="tab" data-ovmode="salj" aria-selected="${mode === 'salj'}" ${has ? '' : 'disabled'}>Sälj</button></div>
+      <div class="pf-fields">
+        <label class="field"><span>Antal aktier</span><input name="antal" type="number" min="1" step="1" max="${max}" inputmode="numeric" placeholder="Max ${max} st"></label>
+        <label class="field"><span>Eller belopp i kronor</span><input name="belopp" type="number" min="1" step="any" inputmode="decimal" placeholder="T.ex. 10 000"></label>
+      </div>
+      <div class="pf-preview" data-ovsum><span class="small muted">${mode === 'kop' ? `Du har ${sek(ova.kassa)} i låtsaspengar.` : `Du äger ${has} st, värda ${sek(has * p)}.`}</span></div>
+      <div class="chips"><button class="btn" type="submit" disabled>${mode === 'kop' ? 'Köp' : 'Sälj'} med låtsaspengar</button><button class="btn ghost" type="button" data-ovcancel>Avbryt</button><button class="linkbtn small" type="button" data-ovmax>${mode === 'kop' ? 'Köp för allt' : 'Sälj alla'}</button></div></form>`;
     const f = $('[data-ovform]'); f.dataset.mode = mode;
-    f.antal.addEventListener('input', () => {
-      const n = Math.floor(Number(f.antal.value)) || 0; const max = mode === 'kop' ? maxKop : has; const out = f.querySelector('[data-ovsum]');
-      if (n > max) { out.textContent = mode === 'kop' ? `Du har låtsaspengar till högst ${maxKop} st.` : `Du äger bara ${has} st.`; return; }
-      out.textContent = n ? `${mode === 'kop' ? 'Kostar' : 'Du får'} ${sek(n * p)}.${mode === 'kop' ? ` Kvar efteråt: ${sek(ova.kassa - n * p)}.` : ''}` : 'Välj antal.';
-    });
+    const out = f.querySelector('[data-ovsum]'); const btn = f.querySelector('[type=submit]');
+    const show = (n) => {
+      btn.disabled = true;
+      if (!n) { out.innerHTML = `<span class="small muted">${mode === 'kop' ? `Du har ${sek(ova.kassa)} i låtsaspengar.` : `Du äger ${has} st.`}</span>`; return; }
+      if (n > max) { out.innerHTML = `<span class="small" style="color:var(--down)">${mode === 'kop' ? `Du har låtsaspengar till högst ${max} st.` : `Du äger bara ${has} st.`}</span>`; return; }
+      out.innerHTML = `<div class="pf-calc">
+        <div><span class="small muted">Antal</span><b class="num">${n} st</b><span class="small faint">à ${esc(sek(p))}</span></div>
+        <div><span class="small muted">${mode === 'kop' ? 'Kostar' : 'Du får'}</span><b class="num">${esc(sek(n * p))}</b><span class="small faint">utan avgifter</span></div>
+        <div><span class="small muted">Kontanter efteråt</span><b class="num">${esc(sek(ova.kassa + (mode === 'kop' ? -1 : 1) * n * p))}</b><span class="small faint">låtsaspengar</span></div></div>`;
+      btn.disabled = false;
+    };
+    f.antal.addEventListener('input', () => { const n = Math.floor(Number(f.antal.value)) || 0; f.belopp.value = n ? Math.round(n * p) : ''; f.dataset.n = n; show(n); });
+    f.belopp.addEventListener('input', () => { const n = Math.floor((Number(String(f.belopp.value).replace(',', '.')) || 0) / p); f.antal.value = n || ''; f.dataset.n = n; show(n); });
+    f.querySelector('[data-ovmax]').addEventListener('click', () => { f.antal.value = max; f.antal.dispatchEvent(new Event('input')); });
     f.antal.focus();
   };
-  bindPicker('ov-q', (sym, namn) => tradeForm(sym, namn, 'kop'));
+  bindPicker('ov-q', (sym, namn) => { rememberName(sym, namn || nameOf(sym)); tradeForm(sym, namn, 'kop'); });
 
+  /* ---- Översikt, innehav och portföljkollen ---- */
+  let cache = null;
   const draw = async () => {
     const syms = Object.keys(ova.innehav);
-    if (syms.length) { quotes = { ...quotes, ...(await getQuotes(syms)) }; fx = { ...fx, ...(await fxToSek(syms.map((s) => quotes[s]?.valuta))) }; }
+    if (syms.length) {
+      const [q, st] = await Promise.all([getQuotes(syms), Promise.all(syms.map((s) => (S[s] !== undefined ? S[s] : getStock(s))))]);
+      quotes = { ...quotes, ...q }; syms.forEach((s, i) => { S[s] = st[i]?.error ? null : st[i]; });
+      fx = { ...fx, ...(await fxToSek(syms.map((s) => quotes[s]?.valuta))) };
+    }
     if (!$('#ov-list')) return;
-    const rows = syms.map((s) => { const h = ova.innehav[s]; const p = priceSek(s); const v = p != null ? p * h.antal : null; return { sym: s, ...h, varde: v, vinst: v != null ? v - h.kostnad : null, d1: quotes[s]?.d1 ?? null }; });
-    const innehav = rows.reduce((a, r) => a + (r.varde ?? r.kostnad), 0);
+    const hold = syms.map((s) => {
+      const h = ova.innehav[s]; const p = priceSek(s); const varde = p != null ? p * h.antal : null; const d1 = quotes[s]?.d1 ?? S[s]?.d1 ?? null;
+      return { sym: s, namn: nameOf(s), antal: h.antal, insatt: h.kostnad, varde, vinst: varde != null ? varde - h.kostnad : null, d1, idag: varde != null && d1 != null ? varde - varde / (1 + d1 / 100) : null, kurs: quotes[s]?.kurs ?? null, valuta: quotes[s]?.valuta || 'SEK', ...holdMeta(s, S[s]) };
+    });
+    const innehav = hold.reduce((a, h) => a + (h.varde ?? h.insatt), 0);
     const tot = ova.kassa + innehav; const res = tot - START_KASSA;
-    $('#ov-sum').innerHTML = `<div class="statbar card">
-      <div class="stat"><span class="small muted">Totalt värde</span><span class="num" style="font-size:24px">${sekBig(tot)}</span></div>
-      <div class="stat"><span class="small muted">Resultat sedan start</span><span class="num" style="color:var(--${tone(res)})">${res >= 0 ? '+' : '−'}${sekBig(Math.abs(res))} (${pct((res / START_KASSA) * 100, 1)})</span></div>
-      <div class="stat"><span class="small muted">Kontanter</span><span class="num">${sekBig(ova.kassa)}</span></div>
-      <div class="stat"><span class="small muted">I aktier</span><span class="num">${sekBig(innehav)}</span></div></div>`;
-    $('#ov-list').innerHTML = rows.length ? `<div class="table-wrap"><table class="pf-table"><tbody>${rows.sort((a, b) => (b.varde || 0) - (a.varde || 0)).map((r) => `<tr>
-      <td><a class="ak-name" href="/bolag/${encodeURIComponent(r.sym)}" data-link><span class="avatar">${esc(short(r.sym))}</span><span><b>${esc(nameOf(r.sym))}</b><span class="small muted">${r.antal} st · köpt för ${sek(r.kostnad)}</span></span></a></td>
-      <td class="r num">${r.varde != null ? sek(r.varde) : '–'}<span class="small" style="display:block;color:var(--${tone(r.vinst)})">${r.vinst != null && Math.abs(r.vinst) >= 0.5 ? (r.vinst >= 0 ? '+' : '−') + sek(Math.abs(r.vinst)) : r.vinst != null ? '±0 kr' : ''}</span></td>
-      <td class="r"><div class="chips" style="justify-content:flex-end;flex-wrap:nowrap"><button class="btn ghost small" type="button" data-ovbuy="${esc(r.sym)}">Köp</button><button class="btn ghost small" type="button" data-ovsell="${esc(r.sym)}">Sälj</button></div></td></tr>`).join('')}</tbody></table></div>`
-      : '<div class="empty">Du äger inga aktier än. Sök fram en aktie ovanför och gör ditt första låtsasköp.</div>';
-    $('#ov-hist').innerHTML = ova.historik.length ? `<div>${ova.historik.slice(-8).reverse().map((h) => `<div class="row-link" style="gap:12px"><span class="pill ${h.typ === 'Köp' ? 'up' : 'down'}">${h.typ}</span><span class="grow"><b style="font-weight:500">${esc(nameOf(h.sym))}</b><span class="small muted" style="display:block">${h.antal} st · ${esc(new Date(h.t).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }))}</span></span><span class="num small">${sek(h.belopp)}</span></div>`).join('')}</div>` : '<p class="small muted" style="margin:0">Inga affärer än.</p>';
+    const idag = hold.reduce((a, h) => a + (h.idag || 0), 0);
+    const scored = hold.filter((h) => h.poang != null && h.varde);
+    const risk = scored.length ? scored.reduce((a, h) => a + h.poang * h.varde, 0) / scored.reduce((a, h) => a + h.varde, 0) : null;
+    const lv = risk != null ? LV[lvlOf(Math.round(risk))] : null;
+    $('#ov-sum').innerHTML = `<div class="statbar card pf-stats">
+      <div class="stat"><span class="small muted">Totalt värde</span><span class="num big">${sekBig(tot)}</span><span class="small faint">startade med ${sekBig(START_KASSA)} ${esc(new Date(ova.start).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' }))}</span></div>
+      <div class="stat"><span class="small muted">Vinst eller förlust</span><span class="num" style="color:var(--${tone(res)})">${res >= 0 ? '+' : '−'}${sekBig(Math.abs(res))}</span><span class="small" style="color:var(--${tone(res)})">${pct((res / START_KASSA) * 100, 1)}</span></div>
+      <div class="stat"><span class="small muted">I dag</span><span class="num" style="color:var(--${tone(idag)})">${idag ? `${idag > 0 ? '+' : '−'}${sekBig(Math.abs(idag))}` : '–'}</span><span class="small faint">${innehav && idag ? pct((idag / (innehav - idag)) * 100, 1) + ' på aktierna' : ''}</span></div>
+      <div class="stat"><span class="small muted">Kontanter</span><span class="num">${sekBig(ova.kassa)}</span><span class="small faint">i aktier ${sekBig(innehav)}</span></div>
+      <div class="stat"><span class="small muted">Riskkoll för hela portföljen${tip('Riskkoll')}</span><span class="num">${risk != null ? `${nf(risk, 1)} / 10` : '–'}</span>${lv ? `<span class="pill ${lv.c}" style="align-self:flex-start">${lv.t}</span>` : ''}</div>
+    </div>`;
+
+    const sorted = hold.slice().sort((a, b) => (b.varde || 0) - (a.varde || 0));
+    const affarer = (s) => ova.historik.filter((h) => h.sym === s).slice().reverse();
+    $('#ov-list').innerHTML = sorted.length ? `<div class="pf-holdings">${sorted.map((h) => `
+      <div class="pf-hold ${open === h.sym ? 'open' : ''}">
+        <button type="button" class="pf-row" data-ovopen="${esc(h.sym)}" aria-expanded="${open === h.sym}">
+          <span class="avatar">${esc(short(h.sym))}</span>
+          <span class="grow pf-name"><b>${esc(h.namn)}</b><span class="small muted">${h.antal} st · ${h.kurs != null ? esc(kr(h.kurs)) + ' ' + esc(cur(h.valuta)) : 'kurs saknas'}</span></span>
+          <span class="pf-val"><b class="num">${h.varde != null ? sek(h.varde) : '–'}</b><span class="small num" style="color:var(--${tone(h.vinst)})">${h.vinst != null && h.insatt ? `${h.vinst >= 0 ? '+' : '−'}${sek(Math.abs(h.vinst))} (${pct((h.vinst / h.insatt) * 100, 1)})` : ''}</span></span>
+          <span class="pf-chev" aria-hidden="true">${svg('arrow', 14)}</span>
+        </button>
+        ${open === h.sym ? `<div class="pf-detail">
+          <div class="pf-facts">
+            <div><span class="small muted">Andel av aktierna</span><b class="num">${h.varde && innehav ? nf((h.varde / innehav) * 100, 0) + ' %' : '–'}</b></div>
+            <div><span class="small muted">Snittpris vid köp</span><b class="num">${h.antal ? esc(sek(h.insatt / h.antal)) : '–'}</b></div>
+            <div><span class="small muted">I dag</span><b class="num" style="color:var(--${tone(h.d1)})">${h.d1 != null ? pct(h.d1, 1) : '–'}</b></div>
+            <div><span class="small muted">Riskkoll${tip('Riskkoll')}</span><b class="num">${h.poang != null ? `${h.poang} / 10 · ${LV[lvlOf(h.poang)].t}` : 'för lite data'}</b></div>
+          </div>
+          <div class="pf-buys"><span class="label-up">Dina affärer</span>${affarer(h.sym).slice(0, 8).map((a) => `
+            <div class="pf-buy"><span class="pill ${a.typ === 'Köp' ? 'up' : 'down'}">${a.typ}</span>
+              <span class="grow"><b>${esc(fmtTid(a.t))}</b><span class="small muted">${a.antal} st à ${esc(kr(a.pris))} ${esc(cur(a.valuta))}</span></span>
+              <span class="pf-val"><b class="num small">${sek(a.belopp)}</b></span></div>`).join('')}</div>
+          <div class="chips"><button type="button" class="btn ghost small" data-ovbuy="${esc(h.sym)}">${svg('plus', 13)} Köp mer</button><button type="button" class="btn ghost small" data-ovsell="${esc(h.sym)}">Sälj</button><a class="btn ghost small" href="/bolag/${encodeURIComponent(h.sym)}" data-link>Bolagssida och riskkoll</a><a class="btn ghost small" href="/fraga?s=${encodeURIComponent(h.sym)}" data-link>${svg('spark', 13)} Fråga AI</a></div>
+        </div>` : ''}
+      </div>`).join('')}</div>`
+      : '<div class="empty">Du äger inga aktier än. Sök fram en aktie under Handla och gör ditt första låtsasköp.</div>';
+
+    $('#ov-hist').innerHTML = ova.historik.length ? `<div>${ova.historik.slice(-8).reverse().map((h) => `<div class="row-link" style="gap:12px"><span class="pill ${h.typ === 'Köp' ? 'up' : 'down'}">${h.typ}</span><span class="grow"><b style="font-weight:500">${esc(nameOf(h.sym))}</b><span class="small muted" style="display:block">${h.antal} st · ${esc(fmtTid(h.t))}</span></span><span class="num small">${sek(h.belopp)}</span></div>`).join('')}</div>` : '<p class="small muted" style="margin:0">Inga affärer än.</p>';
+
+    if (hold.some((h) => h.varde)) pfInsight(hold, innehav, '#ov-side', false);
+    else $('#ov-side').innerHTML = `<section class="card co-section"><span class="label-up">Så fungerar det</span><ol class="om-list">
+      <li><b>Sök fram en aktie</b> eller fond under Handla.</li>
+      <li><b>Skriv antal eller belopp</b>, till exempel 10 000 kr. Du handlar till den riktiga kursen just nu.</li>
+      <li>Du ser direkt <b>värde, vinst eller förlust, en tidslinje</b> och <b>riskkollen</b> för hela portföljen, precis som i Min portfölj.</li></ol></section>`;
+    cache = { tot };
+    timeline();
+  };
+
+  /* ---- Tidslinje: spelar upp alla affärer dag för dag ---- */
+  let tlSeq = 0;
+  const timeline = async () => {
+    const id = ++tlSeq; const box = $('#ov-tl'); if (!box) return;
+    const trades = ova.historik.slice().sort((a, b) => a.t.localeCompare(b.t));
+    if (!trades.length) { box.innerHTML = '<div class="empty">Tidslinjen visas efter din första affär.</div>'; return; }
+    // Stämmer historiken med kontanterna? Äldre övningsportföljer kan sakna de första affärerna.
+    const kassaSlut = trades.reduce((k, a) => k + (a.typ === 'Köp' ? -a.belopp : a.belopp), START_KASSA);
+    if (Math.abs(kassaSlut - ova.kassa) > 5) { box.innerHTML = '<div class="empty">Tidslinjen saknar några av dina första affärer. Den visas som vanligt om du börjar om.</div>'; return; }
+    box.classList.add('is-loading');
+    const syms = [...new Set(trades.map((a) => a.sym))];
+    const first = (s) => trades.find((a) => a.sym === s).t.slice(0, 10);
+    const curs = [...new Set(trades.map((a) => a.valuta).filter((c) => c && c !== 'SEK'))];
+    const start = (ova.start < trades[0].t ? ova.start : trades[0].t).slice(0, 10);
+    const [hist, fxh] = await Promise.all([
+      Promise.all(syms.map((s) => api(`/api/chart?s=${encodeURIComponent(s)}&from=${first(s)}`, 30 * 60e3))),
+      Promise.all(curs.map((c) => api(`/api/chart?s=${encodeURIComponent((c === 'GBp' || c === 'GBX' ? 'GBP' : c) + 'SEK=X')}&from=${start}`, 30 * 60e3)))
+    ]);
+    if (id !== tlSeq || !$('#ov-tl')) return;
+    box.classList.remove('is-loading');
+    const H = Object.fromEntries(syms.map((s, i) => [s, hist[i]?.punkter || []]));
+    const F = Object.fromEntries(curs.map((c, i) => [c, (fxh[i]?.punkter || []).map(([t, v]) => [t, c === 'GBp' || c === 'GBX' ? v / 100 : v])]));
+    const at = (pts, t) => { let v = null; for (const p of pts) { if (p[0] <= t) v = p[1]; else break; } return v ?? pts[0]?.[1] ?? null; };
+    const valuta = Object.fromEntries(trades.map((a) => [a.sym, a.valuta || 'SEK']));
+    const DAY = 86400; const t0 = Math.floor(new Date(start + 'T00:00:00Z').getTime() / 1000); const tNow = Math.floor(Date.now() / 1000);
+    const step = tNow - t0 > 3 * 365 * DAY ? 7 * DAY : DAY;
+    const V = []; const I = [];
+    for (let t = t0 + DAY - 1; ; t += step) {
+      const tt = Math.min(t, tNow); let kassa = START_KASSA; const n = {};
+      for (const a of trades) { if (new Date(a.t).getTime() / 1000 > tt) break; kassa += a.typ === 'Köp' ? -a.belopp : a.belopp; n[a.sym] = (n[a.sym] || 0) + (a.typ === 'Köp' ? a.antal : -a.antal); }
+      let v = kassa; let ok = true;
+      for (const [s, cnt] of Object.entries(n)) {
+        if (cnt <= 0) continue; const live = tt >= tNow - 60; const c = valuta[s];
+        const k = live ? (quotes[s]?.kurs ?? at(H[s], tt)) : at(H[s], tt);
+        const r = c === 'SEK' ? 1 : live ? (fx[c] ?? at(F[c], tt)) : at(F[c], tt);
+        if (k == null || r == null) { ok = false; break; }
+        v += cnt * k * r;
+      }
+      if (ok) { V.push([tt, Math.round(v)]); I.push([tt, START_KASSA]); }
+      if (tt === tNow) break;
+    }
+    if (V.length < 2) { box.innerHTML = '<div class="empty">Tidslinjen visas när det finns minst två dagars kurser efter din första affär. Kom tillbaka i morgon!</div>'; return; }
+    const from = range === 'all' ? 0 : tNow - ({ '1m': 31, '6m': 183, '1y': 366 }[range]) * DAY;
+    const v2 = V.filter((p) => p[0] >= from); const i2 = I.filter((p) => p[0] >= from);
+    drawMoneyChart(box, v2.length > 1 ? v2 : V.slice(-2), i2.length > 1 ? i2 : I.slice(-2), { inLabel: 'Start', note: 'Streckad linje = de 100 000 låtsaskronor du började med. Ytan = vad portföljen var värd varje dag, kontanter inräknade.' });
   };
 
   $('.main').addEventListener('click', (e) => {
+    const o = e.target.closest('[data-ovopen]'); if (o) { open = open === o.dataset.ovopen ? null : o.dataset.ovopen; draw(); return; }
     const b = e.target.closest('[data-ovbuy],[data-ovsell]');
-    if (b) { const s = b.dataset.ovbuy || b.dataset.ovsell; tradeForm(s, nameOf(s), b.dataset.ovbuy ? 'kop' : 'salj'); $('#ov-trade').scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    if (b) { const s = b.dataset.ovbuy || b.dataset.ovsell; tradeForm(s, nameOf(s), b.dataset.ovbuy ? 'kop' : 'salj'); $('#ov-add-card').scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
     const m = e.target.closest('[data-ovmode]'); if (m && !m.disabled) { const f = $('[data-ovform]'); tradeForm(f.dataset.ovform, nameOf(f.dataset.ovform), m.dataset.ovmode); return; }
     if (e.target.closest('[data-ovcancel]')) { $('#ov-trade').innerHTML = ''; return; }
+    const r = e.target.closest('[data-ovrange]'); if (r) { range = r.dataset.ovrange; document.querySelectorAll('[data-ovrange]').forEach((x) => x.setAttribute('aria-selected', String(x === r))); timeline(); return; }
     if (e.target.closest('[data-ovreset]')) {
       const d = document.createElement('div'); d.className = 'modal-back';
       d.innerHTML = `<div class="modal card" role="dialog" aria-modal="true" aria-labelledby="ovr-h"><h2 class="section" id="ovr-h" style="font-size:22px">Börja om?</h2><p style="margin:0">Alla låtsasinnehav och affärer raderas, och du får 100 000 nya låtsaskronor.</p><div class="chips" style="justify-content:flex-end"><button class="btn ghost" type="button" data-no>Avbryt</button><button class="btn" type="button" data-yes>Börja om</button></div></div>`;
       document.body.append(d);
-      d.addEventListener('click', (ev) => { if (ev.target === d || ev.target.closest('[data-no]')) d.remove(); if (ev.target.closest('[data-yes]')) { ova = newOva(); save(); d.remove(); $('#ov-trade').innerHTML = ''; toast('Ny övningsportfölj', 'Du har 100 000 låtsaskronor att handla för.'); draw(); } });
+      d.addEventListener('click', (ev) => { if (ev.target === d || ev.target.closest('[data-no]')) d.remove(); if (ev.target.closest('[data-yes]')) { ova = newOva(); open = null; save(); d.remove(); $('#ov-trade').innerHTML = ''; toast('Ny övningsportfölj', 'Du har 100 000 låtsaskronor att handla för.'); draw(); } });
     }
   });
   $('.main').addEventListener('submit', (e) => {
     const f = e.target.closest('[data-ovform]'); if (!f) return; e.preventDefault();
-    const sym = f.dataset.ovform; const mode = f.dataset.mode; const n = Math.floor(Number(f.antal.value)) || 0; const p = priceSek(sym);
+    const sym = f.dataset.ovform; const mode = f.dataset.mode; const n = Math.floor(Number(f.dataset.n)) || 0; const p = priceSek(sym);
     if (n < 1 || !p) return;
     const h = ova.innehav[sym] || { antal: 0, kostnad: 0 };
     if (mode === 'kop') {
-      if (n * p > ova.kassa + 0.01) { f.querySelector('[data-ovsum]').textContent = 'Du har inte tillräckligt med låtsaspengar.'; return; }
+      if (n * p > ova.kassa + 0.01) return;
       ova.kassa -= n * p; h.antal += n; h.kostnad += n * p; ova.innehav[sym] = h;
     } else {
       if (n > h.antal) return;
@@ -1763,9 +1891,9 @@ function mountOva() {
       if (h.antal <= 0) delete ova.innehav[sym]; else ova.innehav[sym] = h;
     }
     ova.historik.push({ t: new Date().toISOString(), typ: mode === 'kop' ? 'Köp' : 'Sälj', sym, antal: n, pris: quotes[sym].kurs, valuta: quotes[sym].valuta || 'SEK', belopp: Math.round(n * p * 100) / 100 });
-    ova.historik = ova.historik.slice(-100);
+    ova.historik = ova.historik.slice(-1000);
     ova.kassa = Math.round(ova.kassa * 100) / 100;
-    save(); $('#ov-trade').innerHTML = '';
+    save(); $('#ov-trade').innerHTML = ''; open = sym;
     toast(`${mode === 'kop' ? 'Köpt' : 'Sålt'}: ${n} st ${nameOf(sym)}`, `För ${sek(n * p)} i låtsaspengar.`);
     draw();
   });

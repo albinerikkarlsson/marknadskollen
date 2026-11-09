@@ -627,3 +627,21 @@ body.nosidebar .sidebar { display: none; }
 
 .danger-link { color: var(--down); text-decoration: none; align-self: flex-start; padding: 0; }
 .danger-link:hover { text-decoration: underline; }
+
+/* ================= Översikt: din bevakning ================= */
+.watch-strip { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.watch-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.watch-row { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px; scrollbar-width: thin; }
+.watch-tile { flex: 0 0 196px; scroll-snap-align: start; display: flex; flex-direction: column; gap: 10px; padding: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; color: var(--ink); text-decoration: none; min-width: 0; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+.watch-tile:hover { border-color: var(--ink-2); box-shadow: 0 4px 14px rgba(17, 18, 20, 0.06); }
+.watch-tile.is-skel { height: 92px; background: linear-gradient(90deg, var(--card), var(--line-soft), var(--card)); background-size: 200% 100%; animation: skel 1.2s linear infinite; }
+@keyframes skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.watch-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.watch-name b { font-weight: 500; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.watch-name .avatar { flex: none; }
+.watch-nums { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.watch-empty { flex: 1 1 auto; flex-direction: row; align-items: center; color: var(--muted); }
+@media (max-width: 600px) { .watch-tile { flex-basis: 160px; } }
+.watch-nums .num { white-space: nowrap; font-size: 15px; }
+.watch-nums .pill { flex: none; }
+@media (max-width: 600px) { .watch-tile { flex-basis: 172px; padding: 12px; } .watch-nums .num { font-size: 14px; } }
