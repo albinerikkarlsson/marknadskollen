@@ -27,6 +27,8 @@ const ICON = {
   logo: 'M4 17l5-6 4 3 7-9',
   spark: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z',
   copy: 'M9 9h10v10H9zM5 15V5h10',
+  trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
+  chat: 'M4 5h16v11H9l-5 4z',
   arrow: 'M5 12h14M13 6l6 6-6 6',
   pie: 'M12 3v9h9M12 3a9 9 0 1 0 9 9',
   play: 'M4 19V9M10 19V5M16 19v-7M22 19H2',
@@ -1091,7 +1093,7 @@ function viewOm() {
     <section class="card om-person">
       ${OM.bild ? `<img src="${esc(OM.bild)}" alt="${esc(OM.namn)}" class="om-photo" width="120" height="120">` : `<span class="avatar om-photo" aria-hidden="true">${esc(OM.namn.split(' ').map((w) => w[0]).join('').slice(0, 2))}</span>`}
       <div><b style="font-size:20px;font-weight:500">${esc(OM.namn)}</b><div class="muted">${esc([OM.roll, OM.stad].filter(Boolean).join(' · '))}</div></div>
-      ${OM.mejl ? `<a class="btn ghost" href="mailto:${esc(OM.mejl)}">Mejla ${p ? 'oss' : 'mig'}: ${esc(OM.mejl)}</a>` : ''}
+      ${OM.mejl ? `<div class="om-contact"><a class="btn" href="mailto:${esc(OM.mejl)}">${svg('chat', 15, '#FFFFFF')} Mejla ${p ? 'oss' : 'mig'}</a><a class="small om-mail" href="mailto:${esc(OM.mejl)}">${esc(OM.mejl)}</a></div>` : ''}
       <p class="small muted" style="margin:0">${OM.orgnr ? `Organisationsnummer ${esc(OM.orgnr)}.` : `Finanskollen drivs just nu av ${esc(OM.namn)} som privatperson.`}</p>
     </section>
     <div class="stack" style="gap:20px">
@@ -1139,7 +1141,7 @@ function viewIntegritet() {
       <li><b>Konto:</b> din e-postadress, ditt namn och ett lösenord. Lösenordet sparas krypterat och kan inte läsas av någon, inte heller av oss.</li>
       <li><b>Inställningar:</b> vilka aktier du bevakar, dina prislarm och om du har gått igenom startguiden.</li>
       <li><b>Portföljer:</b> innehaven du själv skriver in under Min portfölj och dina låtsasaffärer i övningsportföljen. De syns bara för dig.</li>
-      <li><b>Frågor till AI-assistenten:</b> skickas till Anthropic (Claude) för att få ett svar, men sparas inte av oss. Konversationen finns bara i din webbläsare tills du stänger fliken.</li>
+      <li><b>Frågor till AI-assistenten:</b> skickas till Anthropic (Claude) för att få ett svar, men sparas inte av oss. Dina konversationer sparas bara i din webbläsare på den här enheten, och du kan ta bort dem när du vill under Fråga AI.</li>
       <li><b>I din webbläsare:</b> din inloggning, din bevakning och dina val sparas lokalt (localStorage) så att sidan går snabbt. Det är inte spårningscookies och försvinner om du rensar webbläsaren.</li>
       <li><b>Tekniska loggar:</b> när du besöker sidan sparar vår webbhotell en kort logg med bland annat din IP-adress, för att kunna hitta fel och stoppa attacker. Loggarna rensas automatiskt.</li>
     </ul>
@@ -1178,6 +1180,7 @@ async function deleteAccount() {
   const res = await fetch(c.url + '/rest/v1/rpc/delete_my_account', { method: 'POST', headers: { apikey: c.anon, authorization: 'Bearer ' + t, 'content-type': 'application/json' }, body: '{}' });
   if (res.status === 404) throw Object.assign(new Error('saknas'), { code: 'missing' });
   if (!res.ok) throw new Error('Radering misslyckades (' + res.status + ')');
+  try { localStorage.removeItem(chatsKey()); } catch { /* privat läge */ }
   for (const k of ['mk-session', 'mk-sync-user', WKEY, LKEY, 'mk-larm-skickat', 'mk-onboarded', NKEY, 'mk-portfolj', 'mk-ova']) { try { localStorage.removeItem(k); } catch { /* privat läge */ } }
   ACC.session = null; ACC.user = null;
 }
@@ -1385,10 +1388,10 @@ function mountPortfolj() {
   const formFor = (sym, namn) => {
     $('#pf-form').innerHTML = `<form class="pf-form" data-pfbuy="${esc(sym)}" novalidate>
       <div class="picked"><span class="avatar">${esc(short(sym))}</span><span class="grow"><b style="display:block;font-weight:500">${esc(namn || nameOf(sym))}</b><span class="small muted">${esc(sym)}</span></span></div>
-      <div class="pf-fields three">
-        <label class="field"><span>Belopp du köpte för</span><input name="belopp" type="number" min="1" step="any" inputmode="decimal" placeholder="Till exempel 5000" required></label>
-        <label class="field"><span>Valuta</span><select class="select field-select" name="valuta">${PF_VALUTOR.map((v) => `<option value="${v}" ${v === (sym.endsWith('.ST') ? 'SEK' : 'SEK') ? 'selected' : ''}>${v === 'SEK' ? 'kronor (SEK)' : v === 'USD' ? 'dollar (USD)' : 'euro (EUR)'}</option>`).join('')}</select></label>
-        <label class="field"><span>Datum</span><input name="datum" type="date" max="${todayIso}" value="${todayIso}" required></label>
+      <div class="pf-fields">
+        <label class="field"><span>Belopp</span><input name="belopp" type="number" min="1" step="any" inputmode="decimal" placeholder="T.ex. 5 000" required></label>
+        <label class="field"><span>Valuta</span><select class="select field-select" name="valuta">${PF_VALUTOR.map((v) => `<option value="${v}" ${v === 'SEK' ? 'selected' : ''}>${v === 'SEK' ? 'SEK, kronor' : v === 'USD' ? 'USD, dollar' : 'EUR, euro'}</option>`).join('')}</select></label>
+        <label class="field"><span>Datum för köpet</span><input name="datum" type="date" max="${todayIso}" value="${todayIso}" required></label>
         <label class="field"><span>Klockslag</span><input name="tid" type="time" value="12:00" required></label>
       </div>
       <div class="pf-preview" data-preview><span class="small muted">Fyll i belopp, datum och tid så hämtar vi kursen vid köpet.</span></div>
@@ -1770,7 +1773,6 @@ function mountOva() {
 }
 
 /* ================= AI-assistent ================= */
-const CHAT_KEY = 'mk-chatt';
 const CHAT_IDEER = [
   ['Grunder', [['Vad är skillnaden mellan en aktie och en fond?'], ['Hur fungerar ränta på ränta?'], ['Vad är en indexfond och varför väljer många det?']]],
   ['Risk och trygghet', [['Hur känner jag igen ett investeringsbedrägeri?'], ['Vad betyder det att en aktie är blankad?'], ['Hur mycket risk är lagom för en nybörjare?']]],
@@ -1804,35 +1806,70 @@ const splitForslag = (t) => {
 
 function viewFraga() {
   return `${topbar([['Översikt', '/'], ['Fråga AI', '/fraga']], false)}
-  <div class="chat-wrap">
-    <div class="chat-head">
-      <span class="brand-mark ai-mark">${svg('spark', 20, '#FFFFFF')}</span>
-      <div class="grow"><h1 class="title" style="font-size:clamp(26px,4vw,34px)">Fråga Finanskollen</h1><p class="muted" style="margin:2px 0 0">Ställ frågor om aktier, fonder, sparande och risk. Svaren bygger på fakta och ger aldrig köptips.</p></div>
-      <button class="btn ghost small" type="button" data-chatnew hidden>${svg('plus', 14)} Ny konversation</button>
-    </div>
-    <div id="chat-log" class="chat-log" aria-live="polite"></div>
-    <form class="composer" data-chatform>
-      <div class="composer-ctx" data-ctx></div>
-      <label class="sr-only" for="chat-in">Din fråga</label>
-      <textarea id="chat-in" rows="1" maxlength="1500" placeholder="Skriv en fråga, till exempel: Vad är ett bra sätt att börja spara?"></textarea>
-      <div class="composer-row">
-        <button class="btn ghost small" type="button" data-ctxpick>${svg('search', 14)} Fråga om ett bolag</button>
-        <span class="small faint grow" data-left></span>
-        <button class="btn send" type="submit" aria-label="Skicka">${svg('arrow', 18, '#FFFFFF')}</button>
+  <div class="chat-shell">
+    <aside class="chat-side" aria-label="Dina konversationer">
+      <button class="btn chat-newbtn" type="button" data-chatnew>${svg('plus', 15, '#FFFFFF')} Ny konversation</button>
+      <details class="chat-hist" open><summary><span class="label-up">Dina konversationer</span><span class="small muted" data-histcount></span></summary>
+        <div class="chat-list" data-histlist></div>
+        <button type="button" class="linkbtn small danger-link" data-histall hidden>Ta bort alla konversationer</button>
+        <p class="small faint" style="margin:0">Sparas bara i den här webbläsaren.</p>
+      </details>
+    </aside>
+    <div class="chat-wrap">
+      <div class="chat-head">
+        <span class="brand-mark ai-mark">${svg('spark', 20, '#FFFFFF')}</span>
+        <div class="grow"><h1 class="title" style="font-size:clamp(26px,4vw,34px)">Fråga Finanskollen</h1><p class="muted" style="margin:2px 0 0">Ställ frågor om aktier, fonder, sparande och risk. Svaren bygger på fakta och ger aldrig köptips.</p></div>
       </div>
-    </form>
-    <div data-ctxsearch hidden class="card" style="padding:10px 14px">${pickerHTML('chat-q', 'Sök bolag att fråga om')}</div>
-    <p class="small faint" style="margin:0;text-align:center">AI kan ha fel. Kontrollera viktiga uppgifter och fatta egna beslut. Finanskollen ger ingen investeringsrådgivning.</p>
+      <div id="chat-log" class="chat-log" aria-live="polite"></div>
+      <form class="composer" data-chatform>
+        <div class="composer-ctx" data-ctx></div>
+        <label class="sr-only" for="chat-in">Din fråga</label>
+        <textarea id="chat-in" rows="1" maxlength="1500" placeholder="Skriv en fråga, till exempel: Vad är ett bra sätt att börja spara?"></textarea>
+        <div class="composer-row">
+          <button class="btn ghost small" type="button" data-ctxpick>${svg('search', 14)} Fråga om ett bolag</button>
+          <span class="small faint grow" data-left></span>
+          <button class="btn send" type="submit" aria-label="Skicka">${svg('arrow', 18, '#FFFFFF')}</button>
+        </div>
+      </form>
+      <div data-ctxsearch hidden class="card" style="padding:10px 14px">${pickerHTML('chat-q', 'Sök bolag att fråga om')}</div>
+      <p class="small faint" style="margin:0;text-align:center">AI kan ha fel. Kontrollera viktiga uppgifter och fatta egna beslut. Finanskollen ger ingen investeringsrådgivning.</p>
+    </div>
   </div>`;
 }
 
+// Sparade konversationer: per användare, bara i den här webbläsaren
+const chatsKey = () => 'mk-chattar-' + (ACC.user?.id || 'gast');
+const getChats = () => { const v = readLS(chatsKey(), []); return Array.isArray(v) ? v.filter((c) => c && c.id && Array.isArray(c.m)) : []; };
+const putChats = (list) => { try { localStorage.setItem(chatsKey(), JSON.stringify(list.slice(0, 40))); } catch { /* fullt eller privat läge */ } };
+const chatWhen = (iso) => { const d = new Date(iso); const today = new Date().toDateString() === d.toDateString(); return today ? 'I dag ' + d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }); };
+
 function mountFraga(params) {
-  let chat = (() => { try { const v = JSON.parse(sessionStorage.getItem(CHAT_KEY) || 'null'); return v && Array.isArray(v.m) ? v : null; } catch { return null; } })() || { m: [], sym: null };
-  if (cleanSym(params.get('s'))) chat.sym = cleanSym(params.get('s'));
+  const fresh = () => ({ id: uid(), m: [], sym: null, skapad: new Date().toISOString() });
+  // Öppna en sparad konversation (?k=) eller börja en ny
+  let chat = getChats().find((c) => c.id === params.get('k')) || fresh();
+  if (cleanSym(params.get('s'))) { chat = fresh(); chat.sym = cleanSym(params.get('s')); }
   let pfAsk = params.get('om') === 'portfolj';
-  let busy = false;
-  const persist = () => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify({ m: chat.m.slice(-20), sym: chat.sym })); } catch { /* privat läge */ } };
+  if (pfAsk) chat = fresh();
+  let busy = false; let confirmId = null; let confirmTimer;
+  const persist = () => {
+    if (chat.borta || !chat.m.some((m) => m.roll === 'user')) return;
+    const first = chat.m.find((m) => m.roll === 'user').text;
+    const rec = { id: chat.id, titel: first.length > 70 ? first.slice(0, 68).trimEnd() + ' …' : first, skapad: chat.skapad, andrad: new Date().toISOString(), sym: chat.sym, m: chat.m.filter((m) => !m.streaming).slice(-40).map((m) => ({ roll: m.roll, text: m.text })) };
+    putChats([rec, ...getChats().filter((c) => c.id !== chat.id)]);
+    drawHist();
+  };
   const log = $('#chat-log'); const input = $('#chat-in');
+  const setUrl = () => history.replaceState(null, '', chat.m.length ? '/fraga?k=' + chat.id : '/fraga');
+  const drawHist = () => {
+    const list = getChats();
+    $('[data-histcount]').textContent = list.length ? `${list.length} st` : '';
+    $('[data-histall]').hidden = list.length < 2;
+    $('[data-histlist]').innerHTML = list.length ? list.map((c) => `
+      <div class="chat-item ${c.id === chat.id ? 'active' : ''}">
+        <button type="button" class="chat-open" data-open="${esc(c.id)}" ${c.id === chat.id ? 'aria-current="true"' : ''}>${svg('chat', 15)}<span class="grow"><span class="chat-title">${esc(c.titel)}</span><span class="small faint">${esc(chatWhen(c.andrad || c.skapad))}${c.sym ? ' · ' + esc(nameOf(c.sym)) : ''}</span></span></button>
+        <button type="button" class="chat-del ${confirmId === c.id ? 'confirm' : ''}" data-del="${esc(c.id)}" aria-label="${confirmId === c.id ? 'Bekräfta: ta bort konversationen' : 'Ta bort konversationen'}">${confirmId === c.id ? 'Ta bort?' : svg('trash', 15)}</button>
+      </div>`).join('') : '<p class="small muted" style="margin:0">Inga sparade konversationer än. Dina frågor sparas här automatiskt.</p>';
+  };
 
   const drawCtx = () => {
     $('[data-ctx]').innerHTML = chat.sym ? `<span class="ctx-chip">${svg('info', 13)} Frågar om <b>${esc(nameOf(chat.sym))}</b><button type="button" aria-label="Ta bort bolaget" data-ctxclear>×</button></span>` : pfAsk ? `<span class="ctx-chip">${svg('info', 13)} Frågar om <b>din portfölj</b><button type="button" aria-label="Sluta fråga om portföljen" data-pfclear>×</button></span>` : '';
@@ -1847,7 +1884,7 @@ function mountFraga(params) {
     </div></div>`;
   };
   const draw = () => {
-    $('[data-chatnew]').hidden = !chat.m.length;
+    setUrl(); drawHist();
     if (!chat.m.length) {
       log.innerHTML = `<div class="chat-empty">${pfAsk ? `<div class="idea-group" style="grid-column:1/-1"><span class="label-up">Din portfölj</span><button type="button" class="idea" data-ask="Hur ser risken ut i min portfölj och vad borde jag tänka på?">Hur ser risken ut i min portfölj och vad borde jag tänka på?</button><button type="button" class="idea" data-ask="Är min portfölj tillräckligt spridd?">Är min portfölj tillräckligt spridd?</button></div>` : ''}${CHAT_IDEER.map(([g, list]) => `<div class="idea-group"><span class="label-up">${esc(g)}</span>${list.map(([q, s]) => `<button type="button" class="idea" data-ask="${esc(q)}" ${s ? `data-asksym="${esc(s)}"` : ''}>${esc(q)}</button>`).join('')}</div>`).join('')}</div>`;
     } else log.innerHTML = chat.m.map((m, i) => msgHTML(m, i, i === chat.m.length - 1)).join('');
@@ -1881,13 +1918,28 @@ function mountFraga(params) {
   input.addEventListener('input', () => { autosize(); const left = 1500 - input.value.length; $('[data-left]').textContent = left < 200 ? `${left} tecken kvar` : ''; });
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(input.value); } });
   $('[data-chatform]').addEventListener('submit', (e) => { e.preventDefault(); ask(input.value); });
-  bindPicker('chat-q', (sym) => { chat.sym = sym; pfAsk = false; $('[data-ctxsearch]').hidden = true; persist(); drawCtx(); input.focus(); });
+  bindPicker('chat-q', (sym) => { chat.sym = sym; pfAsk = false; $('[data-ctxsearch]').hidden = true; drawCtx(); input.focus(); });
   $('.main').addEventListener('click', (e) => {
     const a = e.target.closest('[data-ask]'); if (a) { if (a.dataset.asksym) { chat.sym = a.dataset.asksym; pfAsk = false; } ask(a.dataset.ask); return; }
     if (e.target.closest('[data-ctxpick]')) { const s = $('[data-ctxsearch]'); s.hidden = !s.hidden; if (!s.hidden) $('#chat-q').focus(); return; }
-    if (e.target.closest('[data-ctxclear]')) { chat.sym = null; persist(); drawCtx(); return; }
+    if (e.target.closest('[data-ctxclear]')) { chat.sym = null; drawCtx(); return; }
     if (e.target.closest('[data-pfclear]')) { pfAsk = false; drawCtx(); return; }
-    if (e.target.closest('[data-chatnew]')) { chat = { m: [], sym: null }; pfAsk = false; persist(); draw(); input.focus(); return; }
+    if (e.target.closest('[data-chatnew]')) { if (busy) return; chat = fresh(); pfAsk = false; draw(); input.focus(); return; }
+    const o = e.target.closest('[data-open]'); if (o) { if (busy) return; const c = getChats().find((x) => x.id === o.dataset.open); if (c) { chat = { ...c }; pfAsk = false; draw(); log.scrollIntoView({ block: 'start' }); if (innerWidth < 900) $('.chat-hist').open = false; } return; }
+    const d = e.target.closest('[data-del]'); if (d) {
+      const id = d.dataset.del; clearTimeout(confirmTimer);
+      if (confirmId !== id) { confirmId = id; drawHist(); confirmTimer = setTimeout(() => { confirmId = null; drawHist(); }, 4000); return; }
+      confirmId = null; putChats(getChats().filter((c) => c.id !== id));
+      if (chat.id === id) { if (busy) chat.borta = true; else { chat = fresh(); draw(); } } else drawHist();
+      toast('Konversationen är borttagen', ''); return;
+    }
+    if (e.target.closest('[data-histall]')) {
+      const box = document.createElement('div'); box.className = 'modal-back';
+      box.innerHTML = `<div class="modal card" role="dialog" aria-modal="true" aria-labelledby="hall-h"><h2 class="section" id="hall-h" style="font-size:22px">Ta bort alla konversationer?</h2><p style="margin:0">Alla ${getChats().length} sparade konversationer tas bort från den här webbläsaren. Det går inte att ångra.</p><div class="chips" style="justify-content:flex-end"><button class="btn ghost" type="button" data-no>Avbryt</button><button class="btn danger" type="button" data-yes>Ta bort alla</button></div></div>`;
+      document.body.append(box);
+      box.addEventListener('click', (ev) => { if (ev.target === box || ev.target.closest('[data-no]')) box.remove(); if (ev.target.closest('[data-yes]')) { putChats([]); box.remove(); if (!busy) { chat = fresh(); draw(); } else { chat.borta = true; drawHist(); } toast('Alla konversationer är borttagna', ''); } });
+      return;
+    }
     const c = e.target.closest('[data-copy]'); if (c) { const m = chat.m[Number(c.dataset.copy)]; navigator.clipboard?.writeText(splitForslag(m.text).text).then(() => toast('Kopierat', '')).catch(() => {}); }
   });
   draw(); input.focus();

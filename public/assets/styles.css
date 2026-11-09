@@ -583,3 +583,47 @@ body.nosidebar .sidebar { display: none; }
 .chart-key i.dash { width: 14px; height: 0; border-radius: 0; border-top: 2px dashed var(--faint); background: none; }
 .pf-tl-facts { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 10px; }
 .mini-bar > span.hi { background: var(--down); } .mini-bar > span.mid { background: #C58A00; } .mini-bar > span.lo { background: var(--up); }
+
+/* ================= Formulär: jämna rader ================= */
+.pf-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 14px; align-items: end; }
+.field > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.field input, .field-select { height: 50px; padding: 0 14px; font-size: 16px; border: 1px solid var(--line); border-radius: 12px; background-color: #FFFFFF; color: var(--ink); }
+.field-select { padding-right: 34px; background-position: right 14px center; }
+.field input[type="date"], .field input[type="time"] { font-variant-numeric: tabular-nums; }
+@media (max-width: 420px) { .pf-fields { grid-template-columns: 1fr; } }
+
+/* ================= Om oss: kontakt ================= */
+.om-contact { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; min-width: 0; }
+.om-mail { color: var(--ink); overflow-wrap: anywhere; word-break: break-all; }
+
+/* ================= Sparade konversationer ================= */
+.chat-shell { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 24px; align-items: start; }
+.chat-shell .chat-wrap { max-width: 860px; margin: 0; }
+.chat-side { position: sticky; top: 20px; display: flex; flex-direction: column; gap: 14px; }
+.chat-newbtn { width: 100%; justify-content: center; }
+.chat-hist { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.chat-hist > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; cursor: default; }
+.chat-hist > summary::-webkit-details-marker { display: none; }
+.chat-hist[open] > * + * { margin-top: 10px; }
+.chat-list { display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow: auto; }
+.chat-item { display: flex; align-items: center; gap: 4px; border-radius: 12px; }
+.chat-item:hover, .chat-item.active { background: #F2F3F5; }
+.chat-open { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 9px 8px; border: 0; background: none; font: inherit; color: var(--ink); text-align: left; cursor: pointer; border-radius: 12px; }
+.chat-open svg { flex: none; margin-top: 3px; color: var(--muted); }
+.chat-open .grow { display: flex; flex-direction: column; min-width: 0; }
+.chat-title { font-size: 14px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.chat-del { flex: none; height: 32px; min-width: 32px; padding: 0 8px; border-radius: 10px; border: 0; background: none; color: var(--faint); cursor: pointer; display: inline-grid; place-items: center; font: inherit; font-size: 13px; opacity: 0; transition: opacity 0.15s ease; }
+.chat-item:hover .chat-del, .chat-item.active .chat-del, .chat-del:focus-visible, .chat-del.confirm { opacity: 1; }
+.chat-del:hover { color: var(--down); background: var(--down-bg); }
+.chat-del.confirm { color: #FFFFFF; background: var(--down); }
+@media (hover: none) { .chat-del { opacity: 1; } }
+@media (max-width: 1000px) {
+  .chat-shell { grid-template-columns: 1fr; }
+  .chat-side { position: static; }
+  .chat-hist > summary { cursor: pointer; }
+  .chat-hist > summary::after { content: '▾'; color: var(--muted); }
+  .chat-hist:not([open]) > summary::after { content: '▸'; }
+}
+
+.danger-link { color: var(--down); text-decoration: none; align-self: flex-start; padding: 0; }
+.danger-link:hover { text-decoration: underline; }
