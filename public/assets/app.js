@@ -215,7 +215,8 @@ const NAV = [
   { group: 'Översikt', items: [
     { id: 'oversikt', href: '/', label: 'Översikt', icon: 'home' },
     { id: 'nyheter', href: '/nyheter', label: 'Nyheter', icon: 'news' },
-    { id: 'portfolj', href: '/portfolj', label: 'Min portfölj', icon: 'pie' }
+    { id: 'portfolj', href: '/portfolj', label: 'Min portfölj', icon: 'pie' },
+    { id: 'idag', href: '/idag', label: 'Din dag', icon: 'chart' }
   ] },
   { group: 'Börsen', items: [
     { id: 'sok', href: '/sok', label: 'Sök och riskkoll', icon: 'search' },
@@ -3234,7 +3235,7 @@ function route() {
   if (path === '/nyheter') return { active: 'nyheter', title: 'Nyheter', html: viewNyheter(), mount: mountNyheter };
   if (path === '/bevakning') return { active: 'bevakning', title: 'Bevakning', html: viewBevakning(), mount: mountBevakning };
   if (path === '/portfolj') return { active: 'portfolj', title: 'Min portfölj', html: viewPortfolj(), mount: mountPortfolj };
-  if (path === '/idag') return { active: 'portfolj', title: 'Din dag', html: viewDinDag(), mount: mountDinDag };
+  if (path === '/idag') return { active: 'idag', title: 'Din dag', html: viewDinDag(), mount: mountDinDag };
   if (path === '/kalender') return { active: 'kalender', title: 'Kalender', html: viewKalender(), mount: mountKalender };
   if (path === '/ova') return { active: 'ova', title: 'Övningsportfölj', html: viewOva(), mount: mountOva };
   if (path === '/fraga') { history.replaceState(null, '', '/'); return route(); }
