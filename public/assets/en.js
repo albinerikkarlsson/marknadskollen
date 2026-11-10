@@ -1,6 +1,11 @@
 // Engelsk översättning av Finanskollen. Nyckeln är den svenska texten, med {n} där siffror,
 // valutakoder och månadsnamn står. Laddas bara när någon valt engelska.
 const D = {
+  'Loggar du in med Google får vi ditt namn, din e-postadress och din profilbild från Google. Vi får aldrig ditt lösenord, och Google ser inte vad du gör på Finanskollen.': "If you sign in with Google, we receive your name, email address and profile picture from Google. We never receive your password, and Google can't see what you do on Finanskollen.",
+  'Logga in med Google': "Sign in with Google",
+  'Skapa konto med Google': "Create account with Google",
+  'eller med e-post': "or with email",
+  'Du är inloggad med Google.': "You're signed in with Google.",
   // ---------- Översikt för inloggade ----------
   'Öppna →': 'Open →',
   'Alla →': 'All →',
@@ -858,7 +863,6 @@ const D = {
   'Riskkoll, kursdiagram, nyheter med AI-sammanfattning, insynshandel och blankning. Logga in eller skapa ett gratis konto för att fortsätta.': 'Risk check, price charts, news with AI summaries, insider trading and short selling. Log in or create a free account to continue.',
   'Skapa konto': 'Create account',
   'Namn': 'Name',
-  'Till exempel Albin Karlsson': 'For example Alex Smith',
   'E-post': 'Email',
   'Lösenord': 'Password',
   'Lösenord (minst {n} tecken)': 'Password (at least {n} characters)',

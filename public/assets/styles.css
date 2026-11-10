@@ -830,3 +830,9 @@ body.nosidebar .sidebar { display: none; }
   .ov-chip { flex: none; }
   .ov-big { font-size: 28px; }
 }
+
+/* Inloggning med Google */
+.google-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+.google-btn:hover { border-color: var(--ink-2); }
+.auth-or { display: flex; align-items: center; gap: 12px; color: var(--faint); font-size: 13px; }
+.auth-or::before, .auth-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }

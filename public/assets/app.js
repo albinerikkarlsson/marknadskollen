@@ -1456,6 +1456,7 @@ function viewIntegritet() {
     <ul class="om-list">
       <li>Kurser, nyheter och register hämtas av vår server från Yahoo Finance, Finnhub, Finansinspektionen och Wikipedia. Din IP-adress och dina uppgifter skickas inte till dem.</li>
       <li>AI-sammanfattningarna skapas av Anthropic (Claude). Bara nyhetsrubriker skickas dit, aldrig något om dig.</li>
+      <li>Loggar du in med Google får vi ditt namn, din e-postadress och din profilbild från Google. Vi får aldrig ditt lösenord, och Google ser inte vad du gör på Finanskollen.</li>
       <li>Har du valt veckobrevet skickas det via Resend, en tjänst för e-post. De får din e-postadress och mejlets innehåll, inget annat.</li>
       <li>Typsnittet ligger på vår egen server, så inget skickas till Google.</li>
     </ul>
@@ -2413,6 +2414,20 @@ async function accCfg() {
   }
   return ACC.cfg;
 }
+// Vilka inloggningssätt som är påslagna i Supabase. Google-knappen visas bara när Google är påslaget.
+let PROVIDERS = null;
+async function authProviders() {
+  if (PROVIDERS) return PROVIDERS;
+  const c = await accCfg(); if (!c) return {};
+  try { const r = await fetch(c.url + '/auth/v1/settings', { headers: { apikey: c.anon } }); const j = await r.json(); PROVIDERS = j?.external || {}; } catch { PROVIDERS = {}; }
+  return PROVIDERS;
+}
+async function googleLogin() {
+  const c = await accCfg(); if (!c) return;
+  writeLS('mk-oauth', 'google');
+  location.href = `${c.url}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(location.origin + '/konto')}`;
+}
+const GOOGLE_G = '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.2C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.2 5.6c4.2-3.9 7.1-9.6 7.1-17z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.2C1 16.4 0 20.1 0 24s1 7.6 2.6 10.9l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.2-5.6c-2 1.4-4.7 2.3-8.7 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>';
 async function auth(path, body, method = 'POST', tok) {
   const c = await accCfg();
   if (!c) throw Object.assign(new Error('Inloggning är inte påslagen'), { code: 'off' });
@@ -2523,8 +2538,10 @@ async function bootAccount() {
     setSession({ access_token: h.get('access_token'), refresh_token: h.get('refresh_token'), expires_in: h.get('expires_in') });
     recovery = h.get('type') === 'recovery';
     ACC.fromLink = !recovery;
+    ACC.viaGoogle = readLS('mk-oauth', null) === 'google';
     history.replaceState(null, '', location.pathname + location.search);
   }
+  try { localStorage.removeItem('mk-oauth'); } catch { /* privat läge */ }
   if (h.get('error_description')) { toast('Länken fungerade inte', h.get('error_description').replace(/\+/g, ' ')); history.replaceState(null, '', location.pathname + location.search); }
   if (!(await accCfg()) || !ACC.session) return;
   const t = await token(); if (!t) return;
@@ -2646,7 +2663,8 @@ async function mountKonto() {
         <button type="button" role="tab" data-mode="login" aria-selected="${mode === 'login'}">Logga in</button>
         <button type="button" role="tab" data-mode="signup" aria-selected="${mode === 'signup'}">Skapa konto</button>
       </div>
-      ${mode === 'signup' ? '<label class="field"><span>Namn</span><input name="name" type="text" required maxlength="60" autocomplete="name" placeholder="Till exempel Albin Karlsson"></label>' : ''}
+      ${mode !== 'forgot' && PROVIDERS?.google ? `<button class="btn ghost google-btn" type="button" data-google>${GOOGLE_G}<span>${mode === 'signup' ? 'Skapa konto med Google' : 'Logga in med Google'}</span></button><div class="auth-or"><span>eller med e-post</span></div>` : ''}
+      ${mode === 'signup' ? '<label class="field"><span>Namn</span><input name="name" type="text" required maxlength="60" autocomplete="name"></label>' : ''}
       <label class="field"><span>E-post</span><input name="email" type="email" required autocomplete="email" inputmode="email"></label>
       ${mode !== 'forgot' ? `<label class="field"><span>Lösenord${mode === 'signup' ? ' (minst 8 tecken)' : ''}</span><input name="password" type="password" minlength="${mode === 'signup' ? 8 : 1}" required autocomplete="${mode === 'signup' ? 'new-password' : 'current-password'}"></label>` : ''}
       <p class="small" role="status" data-msg style="margin:0;min-height:1em"></p>
@@ -2654,7 +2672,7 @@ async function mountKonto() {
       ${mode === 'login' ? '<button class="linkbtn small" type="button" data-mode="forgot">Glömt lösenordet?</button>' : mode === 'forgot' ? '<button class="linkbtn small" type="button" data-mode="login">Tillbaka till inloggning</button>' : '<p class="small faint" style="margin:0">Vi sparar bara din e-post, din bevakning, dina larm och dina portföljer. Inga betaluppgifter.</p>'}
     </form>`;
     const f = box.querySelector('form');
-    f.addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (b) { mode = b.dataset.mode; draw(); } });
+    f.addEventListener('click', (e) => { if (e.target.closest('[data-google]')) { googleLogin(); return; } const b = e.target.closest('[data-mode]'); if (b) { mode = b.dataset.mode; draw(); } });
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(f); const email = String(fd.get('email') || '').trim(); const password = String(fd.get('password') || '');
@@ -2684,6 +2702,8 @@ async function mountKonto() {
     });
   };
   draw();
+  // Visa Google-knappen när vi vet att Google är påslaget
+  if (!PROVIDERS) authProviders().then((p) => { if (p.google && box.isConnected && !box.querySelector('[data-google]') && mode !== 'forgot' && box.querySelector('form [data-mode]')) draw(); });
 }
 
 /* ================= Notiser och prislarm ================= */
@@ -3269,7 +3289,7 @@ window.addEventListener('popstate', render);
   document.body.classList.remove('booting');
   render();
   // Kom man in via bekräftelselänken i mejlet: välkomna och gå vidare
-  if (ACC.user && ACC.fromLink) { toast(`Välkommen${firstName() ? ', ' + firstName() : ''}!`, 'Din e-post är bekräftad och du är inloggad.'); goAfterLogin(); }
+  if (ACC.user && ACC.fromLink) { toast(`Välkommen${firstName() ? ', ' + firstName() : ''}!`, ACC.viaGoogle ? 'Du är inloggad med Google.' : 'Din e-post är bekräftad och du är inloggad.'); goAfterLogin(); }
 })();
 setTimeout(checkAlarms, 5000);
 setTimeout(checkKoll, 12000);
