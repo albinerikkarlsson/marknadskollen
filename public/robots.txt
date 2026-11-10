@@ -5,5 +5,6 @@ Disallow: /portfolj
 Disallow: /ova
 Disallow: /bevakning
 Disallow: /kalender
+Disallow: /statistik
 
 Sitemap: https://finanskollen.live/sitemap.xml

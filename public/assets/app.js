@@ -243,6 +243,7 @@ function sidebar(active) {
             ${svg(it.icon)}<span>${it.id === 'konto' && ACC.user ? 'Mitt konto' : it.label}</span>${it.badge && watchCount && !locked() ? `<span class="nav-badge">${watchCount}</span>` : ''}
           </a>`).join('')}
       </div>`).join('')}
+    ${isAdmin() ? `<div class="nav-group"><span class="nav-label">Ägare</span><a class="nav-link" href="/statistik" data-link ${active === 'statistik' ? 'aria-current="page"' : ''}>${svg('chart')}<span>Statistik</span></a></div>` : ''}
     <div class="nav-foot">Data från Yahoo Finance, Finnhub och Finansinspektionen. Ingen investeringsrådgivning.</div>
   </nav>`;
 }
@@ -1080,7 +1081,7 @@ async function mountBolag(sym) {
     }
     return;
   }
-  document.title = `${s.namn} · Finanskollen`; // bolagsnamn översätts inte
+  { const nm = String(s.namn).replace(/\s*\(publ\.?\)/i, '').trim(); const tk = String(s.sym || sym).replace(/\.[A-Z]{1,3}$/, ''); document.title = EN ? `${nm} (${tk}) stock: risk, insider trading and short selling · Finanskollen` : `${nm} (${tk}) aktie: risk, insynshandel och blankning · Finanskollen`; } // bolagsnamn översätts inte
   setMeta({}, EN ? `${s.namn}: risk check ${s.poang != null ? s.poang + ' of 10' : ''}, price chart, insider trading, short selling and news. Free, without buy tips.` : `${s.namn}: riskkoll ${s.poang != null ? s.poang + ' av 10' : ''}, kursdiagram, insynshandel, blankning och nyheter. Gratis och utan köptips.`);
   const crumb = $('.crumbs .here'); if (crumb) crumb.textContent = s.namn;
   el.innerHTML = bolagHTML(s);
@@ -1440,6 +1441,7 @@ function viewIntegritet() {
     <ul class="om-list">
       <li><b>Konto:</b> din e-postadress, ditt namn och ett lösenord. Lösenordet sparas krypterat och kan inte läsas av någon, inte heller av oss.</li>
       <li><b>Inställningar:</b> vilka aktier du bevakar, dina prislarm, dina val för insyns- och blankningslarm, om du vill ha veckobrevet och om du har gått igenom startguiden.</li>
+      <li><b>Besöksstatistik:</b> vi räknar hur många som besöker sidan, vilka sidor de läser, varifrån de kommer (till exempel google.com) och om de använder mobil eller dator. Inga cookies används och inget sparas i din webbläsare. För att räkna unika besökare används en förvrängd kod av IP-adress och webbläsare som raderas efter högst två dygn. IP-adressen sparas aldrig.</li>
       <li><b>Portföljer:</b> innehaven du själv skriver in eller importerar under Min portfölj och dina låtsasaffärer i övningsportföljen. De syns bara för dig.</li>
       <li><b>Import från banken:</b> filen från Avanza eller Nordnet läses bara i din webbläsare. Själva filen skickas aldrig till oss, bara köpen du väljer att lägga in.</li>
       <li><b>I din webbläsare:</b> din inloggning, din bevakning och dina val sparas lokalt (localStorage) så att sidan går snabbt. Det är inte spårningscookies och försvinner om du rensar webbläsaren.</li>
@@ -3136,6 +3138,7 @@ function route() {
   if (path === '/fraga') { history.replaceState(null, '', '/'); return route(); }
   if (path === '/aktier') return { active: 'aktier', title: 'Alla aktier', html: viewAktier(), mount: () => mountAktier(params) };
   if (path === '/jamfor') return { active: 'jamfor', title: 'Jämför', html: viewJamfor(), mount: () => mountJamfor(params) };
+  if (path === '/statistik') return ACC.user ? { active: 'statistik', title: 'Statistik', html: viewStatistik(), mount: mountStatistik } : { active: 'statistik', title: 'Statistik', html: `${topbar([['Statistik', '/statistik']], false)}<div class="empty">Logga in för att se statistiken.</div>` };
   if (path === '/konto') return { active: 'konto', title: ACC.user ? 'Mitt konto' : 'Logga in', html: viewKonto(), mount: mountKonto };
   const m = path.match(/^\/bolag\/([^/]+)$/);
   if (m) {
@@ -3169,6 +3172,72 @@ function setMeta(r, desc) {
   set('link[rel="canonical"]', 'href', url);
 }
 
+/* ================= Besöksstatistik utan cookies ================= */
+// Varje sidvisning räknas i Supabase (funktionen rakna_besok). Inget sparas i webbläsaren.
+// Bara sidans ägare kan läsa siffrorna, på /statistik.
+const ADMIN_ID = '58911bfa-5fbd-4179-8e61-0ee24b77ac42';
+const isAdmin = () => ACC.user?.id === ADMIN_ID;
+let lastHit = null; let firstHit = true;
+async function trackVisit() {
+  const p = location.pathname;
+  if (p === lastHit || /^(localhost|127\.|\[::1\])/.test(location.hostname) || navigator.webdriver) return;
+  lastHit = p;
+  // Bolagssidor räknas per bolag, privata sidor bara som sin sida
+  const sida = p.length > 100 ? p.slice(0, 100) : p;
+  let kalla = 'intern';
+  if (firstHit) {
+    const qs = new URLSearchParams(location.search);
+    const utm = (qs.get('utm_source') || qs.get('ref') || '').toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, 40);
+    let ref = ''; try { ref = document.referrer ? new URL(document.referrer).hostname.replace(/^www\./, '') : ''; } catch { /* okänd */ }
+    kalla = utm || (ref && ref !== location.hostname ? ref : 'direkt');
+  }
+  firstHit = false;
+  try {
+    const c = await accCfg(); if (!c || isAdmin()) return;
+    fetch(c.url + '/rest/v1/rpc/rakna_besok', { method: 'POST', keepalive: true, headers: { apikey: c.anon, 'content-type': 'application/json', ...(c.anon.startsWith('eyJ') ? { authorization: 'Bearer ' + c.anon } : {}) }, body: JSON.stringify({ p_sida: sida, p_kalla: kalla, p_enhet: matchMedia('(max-width: 760px)').matches ? 'mobil' : 'dator' }) }).catch(() => {});
+  } catch { /* statistik får aldrig störa sidan */ }
+}
+
+function viewStatistik() {
+  return `${topbar([['Statistik', '/statistik']], false)}
+  <div class="section-head"><div><h1 class="title">Statistik</h1><p class="muted" style="margin:6px 0 0">Besök på Finanskollen. Räknas utan cookies. Bara du ser den här sidan.</p></div>
+    <div class="ov-seg" role="tablist" aria-label="Period">${[[7, '7 dagar'], [30, '30 dagar'], [90, '90 dagar']].map(([d, t]) => `<button type="button" role="tab" data-stdagar="${d}" aria-selected="${d === 30}">${t}</button>`).join('')}</div></div>
+  <div id="st-body">${loading('Hämtar statistiken …')}</div>
+  ${footer()}`;
+}
+async function mountStatistik() {
+  const box = $('#st-body'); let dagar = 30;
+  const draw = async () => {
+    box.innerHTML = loading('Hämtar statistiken …');
+    let d;
+    try { const c = await accCfg(); const t = await token(); const res = await fetch(c.url + '/rest/v1/rpc/besok_statistik', { method: 'POST', headers: { apikey: c.anon, authorization: 'Bearer ' + t, 'content-type': 'application/json' }, body: JSON.stringify({ p_dagar: dagar }) });
+      d = await res.json(); if (!res.ok) throw Object.assign(new Error(d?.message || ''), { status: res.status }); }
+    catch (e) { box.innerHTML = `<div class="empty">${e.status === 404 ? 'Statistiken är inte påslagen än. Kör SQL-filen kor-detta.sql i Supabase.' : e.status === 403 || /behörighet/i.test(e.message) ? 'Du har inte behörighet att se statistiken.' : 'Det gick inte att hämta statistiken just nu.'}</div>`; return; }
+    if (!$('#st-body')) return;
+    const days = d.dagar || []; const sum = (k, arr = days) => arr.reduce((a, x) => a + (x[k] || 0), 0);
+    const idag = days[days.length - 1] || { visningar: 0, besokare: 0 }; const v7 = days.slice(-7);
+    const max = Math.max(1, ...days.map((x) => x.visningar));
+    const list = (rows, key, label) => rows.length ? rows.map((r) => `<div class="st-row"><span class="grow">${esc(label(r[key]))}</span><b class="num">${nf(r.visningar, 0)}</b></div>`).join('') : '<p class="small muted" style="margin:0">Inga besök än.</p>';
+    box.innerHTML = `
+      <div class="st-kpis">
+        <div class="ov-card"><span class="small muted">Besökare i dag</span><b class="num">${nf(idag.besokare, 0)}</b><span class="small muted num">${nf(idag.visningar, 0)} sidvisningar</span></div>
+        <div class="ov-card"><span class="small muted">Senaste 7 dagarna</span><b class="num">${nf(sum('besokare', v7), 0)}</b><span class="small muted num">${nf(sum('visningar', v7), 0)} sidvisningar</span></div>
+        <div class="ov-card"><span class="small muted">Hela perioden</span><b class="num">${nf(sum('besokare'), 0)}</b><span class="small muted num">${nf(sum('visningar'), 0)} sidvisningar</span></div>
+      </div>
+      <section class="ov-card" style="margin-top:14px"><div class="ov-cardhead"><h2>Sidvisningar per dag</h2><span class="small muted">Besökare räknas en gång per dag</span></div>
+        <div class="st-bars" role="img" aria-label="Sidvisningar per dag">${days.map((x) => `<span title="${esc(x.dag)}: ${x.visningar} sidvisningar, ${x.besokare} besökare"><i style="height:${Math.round((x.visningar / max) * 100)}%"></i></span>`).join('')}</div>
+        <div class="st-axis small muted num"><span>${esc(days[0]?.dag || '')}</span><span>${esc(idag.dag || '')}</span></div></section>
+      <div class="st-grid">
+        <section class="ov-card"><div class="ov-cardhead"><h2>Mest besökta sidor</h2></div>${list(d.sidor || [], 'sida', (s) => s)}</section>
+        <section class="ov-card"><div class="ov-cardhead"><h2>Varifrån de kommer</h2></div>${list(d.kallor || [], 'kalla', (s) => (s === 'direkt' ? 'Direkt eller okänt' : s))}
+          <p class="small muted" style="margin:10px 0 0">Tips: lägg till <b>?ref=tiktok</b> på länken i din profil så syns den här.</p></section>
+        <section class="ov-card"><div class="ov-cardhead"><h2>Mobil eller dator</h2></div>${list(d.enheter || [], 'enhet', (s) => (s === 'mobil' ? 'Mobil' : 'Dator'))}</section>
+      </div>`;
+  };
+  $('#main').addEventListener('click', (e) => { const b = e.target.closest('[data-stdagar]'); if (!b) return; dagar = Number(b.dataset.stdagar); document.querySelectorAll('[data-stdagar]').forEach((x) => x.setAttribute('aria-selected', String(x === b))); draw(); });
+  draw();
+}
+
 function refreshNav(active) { $('#sidebar').innerHTML = sidebar(active); }
 
 function render() {
@@ -3185,6 +3254,7 @@ function render() {
   fresh.innerHTML = r.html;
   main.replaceWith(fresh);
   r.mount?.();
+  trackVisit();
 }
 
 function navigate(href) {

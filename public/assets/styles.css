@@ -838,3 +838,18 @@ body.nosidebar .sidebar { display: none; }
 .auth-or::before, .auth-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 .google-slot { display: flex; justify-content: center; min-height: 44px; }
 .google-slot > div { max-width: 100%; }
+
+/* Statistik (bara för sidans ägare) */
+.st-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+.st-kpis .ov-card { display: flex; flex-direction: column; gap: 2px; }
+.st-kpis b { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
+.st-bars { display: flex; align-items: flex-end; gap: 3px; height: 140px; }
+.st-bars span { flex: 1; height: 100%; display: flex; align-items: flex-end; min-width: 2px; }
+.st-bars i { display: block; width: 100%; min-height: 2px; background: var(--ink); border-radius: 4px 4px 1px 1px; }
+.st-bars span:hover i { background: #3D6FB6; }
+.st-axis { display: flex; justify-content: space-between; margin-top: 6px; }
+.st-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; align-items: start; }
+.st-row { display: flex; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line-soft); font-size: 13px; }
+.st-row:first-of-type { border-top: 0; }
+.st-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) { .st-kpis, .st-grid { grid-template-columns: minmax(0, 1fr); } }
