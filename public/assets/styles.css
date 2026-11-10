@@ -853,3 +853,35 @@ body.nosidebar .sidebar { display: none; }
 .st-row:first-of-type { border-top: 0; }
 .st-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 900px) { .st-kpis, .st-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Din dag */
+.ov-gainlink { text-decoration: none; }
+.ov-gainlink:hover { outline: 1px solid rgba(155,227,184,.45); }
+.stat-link { text-decoration: none; color: inherit; border-radius: 14px; }
+.stat-link:hover { background: var(--surface); }
+.dd-bors { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; padding: 7px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); }
+.dd-bors i { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.dd-bors.oppen i { background: var(--up); box-shadow: 0 0 0 3px var(--up-bg); }
+.dd-bors.fore i { background: #C98A2B; }
+.dd-hero { margin-top: 16px; padding: 22px; }
+.dd-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.dd-top > div { display: flex; flex-direction: column; gap: 2px; }
+.dd-sent { margin: 0; font-size: 14px; color: rgba(255,255,255,.8); max-width: 520px; }
+.dd-sent b { color: #fff; font-weight: 600; }
+.dd-chart { margin-top: 16px; }
+.dd-svg { display: block; width: 100%; height: 200px; }
+.dd-axis { display: flex; justify-content: space-between; color: rgba(255,255,255,.55); margin-top: 6px; gap: 8px; }
+.dd-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; align-items: start; }
+.dd-row { display: grid; grid-template-columns: auto minmax(0, 1.4fr) minmax(80px, 1fr) auto; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line-soft); color: var(--ink); text-decoration: none; }
+.dd-row:first-of-type { border-top: 0; }
+.dd-row:hover .dd-name b { text-decoration: underline; }
+.dd-name { display: flex; flex-direction: column; min-width: 0; }
+.dd-name b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-bar { display: grid; grid-template-columns: 1fr 1fr; height: 10px; }
+.dd-neg { display: flex; justify-content: flex-end; border-right: 1px solid var(--line); }
+.dd-neg i, .dd-pos i { display: block; height: 100%; border-radius: 3px; }
+.dd-neg i { background: var(--down); } .dd-pos i { background: var(--up); }
+.dd-num { display: flex; flex-direction: column; align-items: flex-end; min-width: 84px; }
+.dd-num b { font-weight: 600; }
+.dd-sep { padding: 12px 0 2px; border-top: 1px solid var(--line-soft); margin-top: 4px; }
+@media (max-width: 900px) { .dd-grid { grid-template-columns: minmax(0, 1fr); } .dd-row { grid-template-columns: auto minmax(0, 1fr) auto; } .dd-bar { display: none; } }

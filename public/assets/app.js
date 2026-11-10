@@ -160,6 +160,11 @@ const MARKET = [
   { sym: 'USO', namn: 'Olja', sub: 'United States Oil Fund' }
 ];
 
+// Har aktien handlats i dag? Före börsöppning skickar källan gårdagens förändring, och den ska inte räknas som i dag.
+const sthlmDay = (d) => new Date(d).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
+const tradedToday = (tid) => !!tid && sthlmDay(tid) === sthlmDay(Date.now());
+const dayShort = (iso) => new Date(iso).toLocaleDateString(L, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Stockholm' });
+const d1Label = (d1, tid) => `${pct(d1)} ${tid && !tradedToday(tid) ? dayShort(tid) : EN ? 'today' : 'i dag'}`;
 async function getQuotes(syms) {
   const out = {};
   const list = [...new Set(syms)];
@@ -169,7 +174,7 @@ async function getQuotes(syms) {
   for (let i = 0; i < list.length; i += 12) chunks.push(list.slice(i, i + 12));
   const res = await Promise.all(chunks.map((c) => api('/api/quote?s=' + c.map(encodeURIComponent).join(','), 30e3)));
   for (const r of res) {
-    if (r?.quotes) { out.__hamtad = out.__hamtad || r.hamtad; for (const q of r.quotes) out[q.sym] = q; }
+    if (r?.quotes) { out.__hamtad = out.__hamtad || r.hamtad; for (const q of r.quotes) out[q.sym] = { ...q, idag: tradedToday(q.tid) }; }
     else out.__error = out.__error || r;
   }
   if (out.__hamtad) delete out.__error;
@@ -637,7 +642,7 @@ async function mountOversiktMin() {
     pb.innerHTML = `<div class="ov-cardhead"><h2>Min portfölj</h2><a href="/portfolj" data-link>Öppna →</a></div>
       <b class="ov-big num">${sekBig(tot)}</b>
       <div class="ov-gains">
-        <div class="${idag < 0 ? 'neg' : ''}"><span>I dag</span><b class="num">${idag ? krDiff(idag) : '–'}</b><span class="num">${idag && tot ? pctDiff((idag / (tot - idag)) * 100) : ''}</span></div>
+        <a href="/idag" data-link class="ov-gainlink ${idag < 0 ? 'neg' : ''}"><span>${pdata.dagIdag || !pdata.refDag ? 'I dag' : esc(dayShort(pdata.refDag + 'T12:00:00'))} ›</span><b class="num">${idag ? krDiff(idag) : '–'}</b><span class="num">${idag && tot ? pctDiff((idag / (tot - idag)) * 100) : ''}</span></a>
         <div class="${vinst != null && vinst < 0 ? 'neg' : ''}"><span>Sedan köp</span><b class="num">${vinst != null ? krDiff(vinst) : '–'}</b><span class="num">${vinst != null && insatt ? pctDiff((vinst / insatt) * 100) : ''}</span></div>
       </div>
       <div class="ov-chartbox"><div class="ov-charthead"><span id="ov-chg">${EN ? 'Value over time' : 'Värde över tid'}</span><div class="ov-seg dark" role="tablist" aria-label="Period">${[['1m', '1 mån'], ['6m', '6 mån'], ['1y', '1 år'], ['all', 'Allt']].map(([k, t]) => `<button role="tab" type="button" data-ovrange="${k}" aria-selected="${k === '6m'}">${t}</button>`).join('')}</div></div><div id="ov-chart"><div class="ov-chart-empty"></div></div></div>
@@ -659,7 +664,7 @@ async function mountOversiktMin() {
   /* ---- Dagens koll ---- */
   const kb = $('#ov-koll-body');
   if (!all.length) { kb.innerHTML = '<p class="small muted" style="margin:0">Bevaka några aktier eller lägg in dina köp, så visar vi vad som händer i dem här.</p>'; return; }
-  const moves = all.map((s) => ({ s, q: quotes[s] })).filter((x) => x.q?.d1 != null).sort((a, b) => b.q.d1 - a.q.d1);
+  const moves = all.map((s) => ({ s, q: quotes[s] })).filter((x) => x.q?.d1 != null && x.q.idag).sort((a, b) => b.q.d1 - a.q.d1);
   const best = moves[0]; const worst = moves.length > 1 ? moves[moves.length - 1] : null;
   const tile = (x, label) => { if (!x) return ''; const d = x.q.d1; const per = x.q.kurs - x.q.kurs / (1 + d / 100);
     return `<a class="ov-tile ${d < 0 ? 'neg' : ''}" href="/bolag/${encodeURIComponent(x.s)}" data-link><span class="small">${label}</span><b>${esc(ovName(x.s))}</b><span class="ov-tilepct num">${pct(d, 1)}</span><span class="small num">${pmSign(per)}${kr(Math.abs(per))} ${esc(cur(x.q.valuta))} ${EN ? 'per share' : 'per aktie'}</span></a>`; };
@@ -693,6 +698,97 @@ async function mountOversiktMin() {
     const sum = kop + salj;
     b.innerHTML = `<div class="ov-blockhead"><span>Ledningen handlar · senaste 7 dagarna</span></div>${sum ? `<div class="ov-bar"><span class="up" style="width:${(kop / sum) * 100}%"></span><span class="down" style="width:${(salj / sum) * 100}%"></span></div>
       <div class="ov-barleg num"><span class="up"><span>Köp</span> ${esc(mny(kop, 'SEK'))}</span><span class="down"><span>Sälj</span> ${esc(mny(salj, 'SEK'))}</span></div>` : '<p class="small muted" style="margin:0">Inga insynsaffärer i dina svenska bolag de senaste 7 dagarna.</p>'}`;
+  });
+}
+
+/* ================= Din dag: vad hände med portföljen i dag ================= */
+// Öppettider per börs i börsens egen tidszon. Helgdagar räknas inte, men en aktie som inte handlats i dag visas som stängd.
+const BORS = [
+  [/\.ST$/, 'Stockholm', 'Europe/Stockholm', '09:00', '17:30'], [/\.OL$/, 'Oslo', 'Europe/Oslo', '09:00', '16:20'], [/\.CO$/, 'Köpenhamn', 'Europe/Copenhagen', '09:00', '17:00'],
+  [/\.HE$/, 'Helsingfors', 'Europe/Helsinki', '10:00', '18:30'], [/\.(DE|F)$/, 'Frankfurt', 'Europe/Berlin', '09:00', '17:30'], [/\.L$/, 'London', 'Europe/London', '08:00', '16:30'],
+  [/\.(PA|AS|BR|MI|MC)$/, 'Europa', 'Europe/Paris', '09:00', '17:30'], [/^[^.]+$/, 'USA', 'America/New_York', '09:30', '16:00']];
+const borsOf = (sym) => { const b = BORS.find(([rx]) => rx.test(sym)) || BORS[0]; return { namn: b[1], tz: b[2], open: b[3], close: b[4] }; };
+const localHm = (tz, d = new Date()) => { const p = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false }).formatToParts(d); const g = (t) => p.find((x) => x.type === t)?.value; return { hm: `${g('hour')}:${g('minute')}`, wd: g('weekday') }; };
+// Börsens öppning och stängning omräknat till svensk tid i dag
+const toSthlm = (tz, hm) => { const [h, m] = hm.split(':').map(Number); const now = new Date(); const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now);
+  for (let off = -14; off <= 14; off += 0.5) { const d = new Date(`${ymd}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00Z`); const t = new Date(d.getTime() - off * 3600e3); if (localHm(tz, t).hm === hm) return t.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' }); } return hm; };
+function borsStatus(sym, tid) {
+  const b = borsOf(sym); const { hm, wd } = localHm(b.tz); const helg = wd === 'Sat' || wd === 'Sun';
+  const opens = toSthlm(b.tz, b.open), closes = toSthlm(b.tz, b.close);
+  if (helg) return { kod: 'stangd', txt: EN ? 'Closed today' : 'Stängd i dag', bors: b.namn };
+  if (hm < b.open) return { kod: 'fore', txt: (EN ? 'Opens ' : 'Öppnar ') + opens, bors: b.namn };
+  if (hm >= b.close) return { kod: 'stangd', txt: (EN ? 'Closed ' : 'Stängde ') + closes, bors: b.namn };
+  if (tid && !tradedToday(tid)) return { kod: 'stangd', txt: EN ? 'Not traded today' : 'Ingen handel i dag', bors: b.namn };
+  return { kod: 'oppen', txt: (EN ? 'Open until ' : 'Öppen till ') + closes, bors: b.namn };
+}
+
+function viewDinDag() {
+  return `${topbar([['Översikt', '/'], ['Min portfölj', '/portfolj'], ['Din dag', '/idag']])}
+  <div class="section-head"><div><h1 class="title">Din dag</h1><p class="muted" style="margin:6px 0 0" id="dd-sub">Hur portföljen har rört sig i dag och vilka aktier som påverkade mest.</p></div><div class="chips" id="dd-bors"></div></div>
+  <div id="dd-body">${loading('Räknar på din dag …')}</div>
+  ${footer()}`;
+}
+async function mountDinDag() {
+  const port = getPort(); const box = $('#dd-body');
+  if (!port.length) { box.innerHTML = `<div class="empty">Du har inga köp i portföljen än. <a href="/portfolj" data-link>Lägg till ett köp</a> så ser du här hur din dag går.</div>`; return; }
+  const d = await pfData(port); if (!$('#dd-body')) return;
+  const { hold, tot, idag, refDag, dagIdag } = d;
+  // Börsernas läge just nu
+  const borser = {}; for (const h of hold) { const st = borsStatus(h.sym, h.tid); h.status = st; borser[st.bors] = borser[st.bors] || st; }
+  $('#dd-bors').innerHTML = Object.values(borser).map((b) => `<span class="dd-bors ${b.kod}"><i></i>${esc(b.bors)} · ${esc(b.txt)}</span>`).join('');
+  if (refDag) $('#dd-sub').textContent = dagIdag ? `${dayShort(refDag + 'T12:00:00')} · ${EN ? 'compared with the previous close' : 'jämfört med gårdagens stängning'}` : (EN ? `No trading yet today. Showing the last trading day, ${dayShort(refDag + 'T12:00:00')}.` : `Ingen handel än i dag. Här är senaste börsdagen, ${dayShort(refDag + 'T12:00:00')}.`);
+  const counted = hold.filter((h) => h.idag != null);
+  const up = counted.filter((h) => h.idag > 0).sort((a, b) => b.idag - a.idag), down = counted.filter((h) => h.idag < 0).sort((a, b) => a.idag - b.idag);
+  const maxAbs = Math.max(1, ...counted.map((h) => Math.abs(h.idag)));
+  const notYet = hold.filter((h) => h.idag == null);
+  const sentence = [up[0] ? `${EN ? 'Biggest lift' : 'Mest upp'}: <b>${esc(ovName(up[0].sym))}</b> ${krDiff(up[0].idag)}` : '', down[0] ? `${EN ? 'Biggest drag' : 'Mest ner'}: <b>${esc(ovName(down[0].sym))}</b> ${krDiff(down[0].idag)}` : ''].filter(Boolean).join(' · ');
+  const row = (h) => { const w = h.idag != null ? Math.round((Math.abs(h.idag) / maxAbs) * 100) : 0;
+    return `<a class="dd-row" href="/bolag/${encodeURIComponent(h.sym)}" data-link>${symFlag(h.sym)}
+      <span class="dd-name"><b>${esc(ovName(h.sym))}</b><span class="small muted">${esc(h.status.bors)} · ${esc(h.status.txt)}</span></span>
+      <span class="dd-bar"><span class="dd-neg">${h.idag < 0 ? `<i style="width:${w}%"></i>` : ''}</span><span class="dd-pos">${h.idag > 0 ? `<i style="width:${w}%"></i>` : ''}</span></span>
+      <span class="dd-num num"><b style="color:var(--${h.idag == null ? 'muted' : tone(h.idag)})">${h.idag != null ? krDiff(h.idag) : '–'}</b><span class="small muted">${h.d1Dag != null ? pct(h.d1Dag, 1) : (EN ? 'not traded yet' : 'inte handlad än')}</span></span></a>`; };
+  box.innerHTML = `
+    <section class="ov-card ov-dark dd-hero">
+      <div class="dd-top"><div><span class="small" style="color:rgba(255,255,255,.6)">${dagIdag ? (EN ? 'Today' : 'I dag') : esc(dayShort(refDag + 'T12:00:00'))}</span>
+        <b class="ov-big num" style="color:${idag < 0 ? '#FFB4AC' : '#9BE3B8'}">${idag ? krDiff(idag) : '0 kr'}</b>
+        <span class="num" style="color:${idag < 0 ? '#FFB4AC' : '#9BE3B8'}">${idag && tot ? pctDiff((idag / (tot - idag)) * 100) : ''}</span></div>
+        <p class="dd-sent">${sentence || (EN ? 'No movement yet today.' : 'Ingen rörelse än i dag.')}</p></div>
+      <div id="dd-chart" class="dd-chart"><div class="small" style="color:rgba(255,255,255,.55)">${EN ? 'Loading the day …' : 'Hämtar dagens kurser …'}</div></div>
+    </section>
+    <div class="dd-grid">
+      <section class="ov-card"><div class="ov-cardhead"><h2>Så påverkade dina aktier dagen</h2><span class="small muted">${EN ? 'In kronor' : 'I kronor'}</span></div>
+        ${[...up, ...down].map(row).join('')}${notYet.length ? `<div class="dd-sep small muted">${EN ? 'Not traded yet today' : 'Har inte handlats i dag än'}</div>${notYet.map(row).join('')}` : ''}</section>
+      <section class="ov-card"><div class="ov-cardhead"><h2>Nyheter om dem som rörde sig mest</h2></div><div id="dd-news">${loading('Hämtar nyheter …')}</div></section>
+    </div>
+    <p class="small faint" style="margin:14px 0 0">Förändringen räknas i aktiens egen valuta mot föregående stängning och räknas om till kronor med dagens växelkurs. Valutans rörelse under dagen ingår inte. Aktier vars börs inte har öppnat räknas inte, så gårdagens rörelse blandas aldrig in.</p>`;
+
+  // Kurvan för dagen, var femte minut
+  const day = refDag;
+  Promise.all(counted.map((h) => api(`/api/chart?s=${encodeURIComponent(h.sym)}&r=1d`, 5 * 60e3).catch(() => null))).then((cs) => {
+    const el = $('#dd-chart'); if (!el) return;
+    const series = counted.map((h, i) => { const c = cs[i]; const pts = (c?.punkter || []).filter(([t]) => sthlmDay(t * 1000) === day); const base = c?.prevClose ?? (h.kurs != null && h.d1 != null ? h.kurs / (1 + h.d1 / 100) : null);
+      return { per: h.varde != null && h.kurs ? h.varde / h.kurs : 0, base, pts }; }).filter((x) => x.base && x.pts.length);
+    if (!series.length) { el.innerHTML = `<div class="small" style="color:rgba(255,255,255,.55)">${EN ? 'No intraday prices yet.' : 'Inga kurser under dagen än.'}</div>`; return; }
+    const t0 = Math.min(...series.map((x) => x.pts[0][0])), t1 = Math.max(...series.map((x) => x.pts[x.pts.length - 1][0]));
+    const pts = []; for (let t = t0; t <= t1; t += 300) { let v = 0; for (const x of series) { let p = null; for (const q of x.pts) { if (q[0] <= t) p = q[1]; else break; } v += p != null ? (p - x.base) * x.per : 0; } pts.push([t, v]); }
+    const W = 900, H = 200; const vals = pts.map((p) => p[1]); const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals); const pad = (hi - lo) * 0.12 || 10;
+    const X = (t) => ((t - t0) / ((t1 - t0) || 1)) * W, Y = (v) => H - ((v - (lo - pad)) / ((hi + pad) - (lo - pad))) * H;
+    const line = pts.map(([t, v], i) => `${i ? 'L' : 'M'}${X(t).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ');
+    const last = pts[pts.length - 1][1]; const col = last < 0 ? '#FFB4AC' : '#9BE3B8';
+    const hm = (t) => new Date(t * 1000).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="dd-svg" role="img" aria-label="${EN ? 'Portfolio change during the day' : 'Portföljens förändring under dagen'}">
+      <line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" stroke="rgba(255,255,255,.25)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>
+      <path d="${line} L${W} ${Y(0)} L0 ${Y(0)} Z" fill="${col}" opacity=".12"/>
+      <path d="${line}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>
+      <div class="dd-axis small num"><span>${hm(t0)}</span><span>${EN ? 'Dashed line = yesterday\'s close' : 'Streckad linje = gårdagens stängning'}</span><span>${hm(t1)}</span></div>`;
+  });
+  // Nyheter från dagen om de tre som påverkade mest
+  const top = counted.slice().sort((a, b) => Math.abs(b.idag) - Math.abs(a.idag)).slice(0, 3);
+  Promise.all(top.map((h) => api('/api/news?s=' + encodeURIComponent(h.sym), 10 * 60e3).then((n) => (n?.items || []).map((x) => prepNews(x, null, h.sym))).catch(() => []))).then((res) => {
+    const el = $('#dd-news'); if (!el) return;
+    const since = Date.now() - 36 * 3600e3; const seen = new Set();
+    const items = res.flat().filter((n) => new Date(n.datum).getTime() >= since).filter((n) => { const k = n.lank || n.rubrik; if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => String(b.datum).localeCompare(String(a.datum))).slice(0, 6);
+    el.innerHTML = items.length ? items.map(newsRow).join('') : `<p class="small muted" style="margin:0">${EN ? 'No news in the last day about the stocks that moved most.' : 'Inga nyheter det senaste dygnet om aktierna som rörde sig mest.'}</p>`;
   });
 }
 
@@ -877,7 +973,7 @@ async function mountBevakning() {
     if (!$('#watchtable')) return;
     const rows = watch.map((s) => ({ sym: s, namn: nameOf(s), q: quotes[s] || {} }));
     const larm = getLarm();
-    const alarms = rows.filter((r) => larm[r.sym] && r.q.d1 != null && Math.abs(r.q.d1) >= larm[r.sym]);
+    const alarms = rows.filter((r) => larm[r.sym] && r.q.d1 != null && r.q.idag && Math.abs(r.q.d1) >= larm[r.sym]);
     $('#alarms').innerHTML = alarms.length ? `<div class="grid g3">${alarms.map((a, i) => `
       <div class="card ${i === 0 ? 'dark rings' : ''} stack" style="gap:8px">
         <span class="pill ${i === 0 ? 'inv' : tone(a.q.d1)}" style="align-self:flex-start">Larm · rörelse över ${larm[a.sym]} %</span>
@@ -919,7 +1015,7 @@ function priceBlock(s, big = 40) {
   if (s.saknarKurs) return `<div class="stack" style="gap:4px;align-items:flex-end;text-align:right"><span class="muted" style="font-size:20px">Kurs saknas</span><span class="small faint" style="max-width:300px">Ingen datakälla har en kurs för ${esc(s.sym)} just nu.</span></div>`;
   return `<div class="stack" style="gap:8px;align-items:flex-end">
     <span class="num price-big" style="font-size:${big}px;letter-spacing:-0.02em;line-height:1">${kr(s.kurs)} <span class="muted" style="font-size:16px">${esc(cur(s.valuta))}</span></span>
-    <span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${s.d1 != null ? `<span class="pill ${tone(s.d1)}">${pct(s.d1)} i dag</span>` : ''}<span class="pill outline" title="Tid för senaste affären enligt ${esc(s.kalla || 'datakällan')}">Senaste kurs ${esc(when(s.kursTid || s.hamtad))}</span></span>
+    <span style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${s.d1 != null ? `<span class="pill ${tone(s.d1)}">${esc(d1Label(s.d1, s.kursTid))}</span>` : ''}<span class="pill outline" title="Tid för senaste affären enligt ${esc(s.kalla || 'datakällan')}">Senaste kurs ${esc(when(s.kursTid || s.hamtad))}</span></span>
   </div>`;
 }
 
@@ -1809,14 +1905,19 @@ async function pfData(port) {
     const varde = bs.every((b) => b.varde != null) ? bs.reduce((a, b) => a + b.varde, 0) : null;
     const kand = bs.filter((b) => b.insattSek != null);
     const insatt = kand.length === bs.length ? kand.reduce((a, b) => a + b.insattSek, 0) : null;
-    const d1 = quotes[s]?.d1 ?? st?.d1 ?? null;
+    const d1 = quotes[s]?.d1 ?? st?.d1 ?? null; const tid = quotes[s]?.tid ?? st?.kursTid ?? null;
     return {
       sym: s, namn: nameOf(s), bs, antal, varde, insatt, vinst: varde != null && insatt != null ? varde - insatt : null,
       snitt: kand.length && kand.every((b) => b.kurs) ? kand.reduce((a, b) => a + b.kurs * b.antal, 0) / kand.reduce((a, b) => a + b.antal, 0) : null,
-      kurs: kursNu(s), valuta: valOf(s), d1, idag: varde != null && d1 != null ? varde - varde / (1 + d1 / 100) : null,
+      kurs: kursNu(s), valuta: valOf(s), d1, tid, dag: tid ? sthlmDay(tid) : null,
       ...holdMeta(s, st)
     };
   });
+  // Dagens förändring: bara aktier som handlats i dag. Har ingen handlats än i dag (helg, före 09.00) visas senaste börsdagen.
+  const dagar = hold.map((h) => h.dag).filter(Boolean).sort();
+  const refDag = dagar.includes(sthlmDay(Date.now())) ? sthlmDay(Date.now()) : dagar[dagar.length - 1] || null;
+  for (const h of hold) { h.raknas = h.dag === refDag; h.d1Dag = h.raknas ? h.d1 : null; h.idag = h.raknas && h.varde != null && h.d1 != null ? h.varde - h.varde / (1 + h.d1 / 100) : null; }
+  const dagIdag = refDag === sthlmDay(Date.now());
   const tot = hold.reduce((a, h) => a + (h.varde || 0), 0);
   // Vinst räknas på de köp där vi vet vad du betalade
   const kanda = buys.filter((b) => b.insattSek != null && b.varde != null);
@@ -1828,7 +1929,7 @@ async function pfData(port) {
   const scored = hold.filter((h) => h.poang != null && h.varde);
   const risk = scored.length ? scored.reduce((a, h) => a + h.poang * h.varde, 0) / scored.reduce((a, h) => a + h.varde, 0) : null;
 
-  return { syms, quotes, S, valOf, fxNow, buys, hold, tot, insatt, kandaInsatt, okanda, vinst, idag, risk };
+  return { syms, quotes, S, valOf, fxNow, buys, hold, tot, insatt, kandaInsatt, okanda, vinst, idag, risk, refDag, dagIdag };
 }
 
 // Värdet dag för dag jämfört med insatta pengar, för tidslinjen
@@ -2017,7 +2118,7 @@ function mountPortfolj() {
       <div class="stat"><span class="small muted">Värde nu</span><span class="num big">${sekBig(tot)}</span></div>
       <div class="stat"><span class="small muted">Insatt</span><span class="num">${kandaInsatt ? sekBig(insatt) : '–'}</span><span class="small faint">${first ? 'sedan ' + esc(new Date(first).toLocaleDateString(L, { day: 'numeric', month: 'short', year: 'numeric' })) : ''}${okanda ? ` · ${okanda} köp utan belopp räknas inte` : ''}</span></div>
       <div class="stat"><span class="small muted">Vinst eller förlust</span><span class="num" style="color:var(--${tone(vinst)})">${vinst != null ? `${vinst >= 0 ? '+' : '−'}${sekBig(Math.abs(vinst))}` : '–'}</span><span class="small" style="color:var(--${tone(vinst)})">${vinst != null && insatt ? pct((vinst / insatt) * 100, 1) : ''}</span></div>
-      <div class="stat"><span class="small muted">I dag</span><span class="num" style="color:var(--${tone(idag)})">${idag ? `${idag > 0 ? '+' : '−'}${sekBig(Math.abs(idag))}` : '–'}</span><span class="small faint">${tot && idag ? pct((idag / (tot - idag)) * 100, 1) : ''}</span></div>
+      <a class="stat stat-link" href="/idag" data-link><span class="small muted">I dag ›</span><span class="num" style="color:var(--${tone(idag)})">${idag ? `${idag > 0 ? '+' : '−'}${sekBig(Math.abs(idag))}` : '–'}</span><span class="small faint">${tot && idag ? pct((idag / (tot - idag)) * 100, 1) : ''}</span></a>
       <div class="stat"><span class="small muted">Riskkoll för hela portföljen${tip('Riskkoll')}</span><span class="num">${risk != null ? `${nf(risk, 1)} / 10` : '–'}</span>${lv ? `<span class="pill ${lv.c}" style="align-self:flex-start">${lv.t}</span>` : ''}</div>
     </div>`;
 
@@ -2258,7 +2359,7 @@ function mountOva() {
     if (!$('#ov-list')) return;
     const hold = syms.map((s) => {
       const h = ova.innehav[s]; const p = priceSek(s); const varde = p != null ? p * h.antal : null; const d1 = quotes[s]?.d1 ?? S[s]?.d1 ?? null;
-      return { sym: s, namn: nameOf(s), antal: h.antal, insatt: h.kostnad, varde, vinst: varde != null ? varde - h.kostnad : null, d1, idag: varde != null && d1 != null ? varde - varde / (1 + d1 / 100) : null, kurs: quotes[s]?.kurs ?? null, valuta: quotes[s]?.valuta || 'SEK', ...holdMeta(s, S[s]) };
+      return { sym: s, namn: nameOf(s), antal: h.antal, insatt: h.kostnad, varde, vinst: varde != null ? varde - h.kostnad : null, d1, idag: varde != null && d1 != null && tradedToday(quotes[s]?.tid ?? S[s]?.kursTid) ? varde - varde / (1 + d1 / 100) : null, kurs: quotes[s]?.kurs ?? null, valuta: quotes[s]?.valuta || 'SEK', ...holdMeta(s, S[s]) };
     });
     const innehav = hold.reduce((a, h) => a + (h.varde ?? h.insatt), 0);
     const tot = ova.kassa + innehav; const res = tot - START_KASSA;
@@ -2922,7 +3023,7 @@ async function checkAlarms() {
     const sent = readLS('mk-larm-skickat', {});
     for (const k of Object.keys(sent)) if (!k.startsWith(today)) delete sent[k];
     for (const x of syms) {
-      const d1 = q[x]?.d1; if (d1 == null || Math.abs(d1) < larm[x]) continue;
+      const d1 = q[x]?.d1; if (d1 == null || !q[x].idag || Math.abs(d1) < larm[x]) continue;
       const key = `${today}|${x}|${d1 < 0 ? 'ner' : 'upp'}`; if (sent[key]) continue;
       sent[key] = 1;
       showNotice(`${nameOf(x)} är ${d1 < 0 ? 'ner' : 'upp'} ${pct(Math.abs(d1), 1).replace('+', '')} i dag`, `Ditt larm är satt på ± ${larm[x]} %. Senaste kurs ${kr(q[x].kurs)}.`, '/bolag/' + encodeURIComponent(x));
@@ -3079,7 +3180,7 @@ function mountJamfor(params) {
     const head = CMP.map((s) => `<div class="card stack cmp-head" style="gap:10px">
         <span class="label-up">${esc(s.lista || s.sym)}</span>
         <a href="/bolag/${encodeURIComponent(s.sym)}" data-link style="color:inherit;text-decoration:none;font-size:22px;font-weight:500;line-height:1.2">${esc(s.namn)}</a>
-        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><span class="num" style="font-size:28px">${s.kurs != null ? kr(s.kurs) : '–'} <span class="muted" style="font-size:14px">${esc(cur(s.valuta))}</span></span>${s.d1 != null ? `<span class="pill ${tone(s.d1)}">${pct(s.d1)} i dag</span>` : ''}</div>
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><span class="num" style="font-size:28px">${s.kurs != null ? kr(s.kurs) : '–'} <span class="muted" style="font-size:14px">${esc(cur(s.valuta))}</span></span>${s.d1 != null ? `<span class="pill ${tone(s.d1)}">${esc(d1Label(s.d1, s.kursTid))}</span>` : ''}</div>
         <div style="display:flex;align-items:center;gap:10px"><span class="small muted">Riskkoll</span>${s.poang != null ? `<b class="num" style="font-size:20px">${s.poang} / 10</b><span class="pill ${LV[lvlOf(s.poang)].c}">${LV[lvlOf(s.poang)].t}</span>` : '<span class="small muted">För lite data</span>'}</div>
       </div>`).join('');
     const names = [...new Set(CMP.flatMap((s) => (s.faktorer || []).map((f) => f[0])))];
@@ -3109,7 +3210,7 @@ const cleanSym = (s) => { const v = String(s || '').trim().toUpperCase(); return
 function route() {
   // Sidor som alla får se, även utan konto
   const PUBLIC = ['/om', '/integritet', '/ordlista'];
-  const PRIVATE = ['/portfolj', '/ova', '/bevakning', '/kalender'];
+  const PRIVATE = ['/portfolj', '/ova', '/bevakning', '/kalender', '/idag'];
   const here = location.pathname.replace(/\/+$/, '') || '/';
   if (here === '/om') return { active: 'om', title: 'Om oss', html: viewOm(), mount: () => {} };
   if (here === '/integritet') return { active: 'integritet', title: 'Integritet', html: viewIntegritet(), mount: () => {} };
@@ -3133,6 +3234,7 @@ function route() {
   if (path === '/nyheter') return { active: 'nyheter', title: 'Nyheter', html: viewNyheter(), mount: mountNyheter };
   if (path === '/bevakning') return { active: 'bevakning', title: 'Bevakning', html: viewBevakning(), mount: mountBevakning };
   if (path === '/portfolj') return { active: 'portfolj', title: 'Min portfölj', html: viewPortfolj(), mount: mountPortfolj };
+  if (path === '/idag') return { active: 'portfolj', title: 'Din dag', html: viewDinDag(), mount: mountDinDag };
   if (path === '/kalender') return { active: 'kalender', title: 'Kalender', html: viewKalender(), mount: mountKalender };
   if (path === '/ova') return { active: 'ova', title: 'Övningsportfölj', html: viewOva(), mount: mountOva };
   if (path === '/fraga') { history.replaceState(null, '', '/'); return route(); }

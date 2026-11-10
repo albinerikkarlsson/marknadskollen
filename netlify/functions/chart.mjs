@@ -1,10 +1,11 @@
 import { cached, fail, cleanSymbol, ApiError } from '../lib/finnhub.mjs';
 import { yChart } from '../lib/yahoo.mjs';
 
+// GET /api/chart?s=VOLV-B.ST&r=1d               →  dagens kurser var femte minut, plus föregående stängning
 // GET /api/chart?s=VOLV-B.ST&r=1m|6m|1y|5y      →  stängningskurser för kursdiagrammet
 // GET /api/chart?s=VOLV-B.ST&from=2025-03-14     →  dagliga stängningskurser från ett datum (för portföljens tidslinje)
 // GET /api/chart?s=VOLV-B.ST&t=1741943400        →  kursen vid en viss tidpunkt (sekunder), för ett köp i portföljen
-const RANGES = { '1m': ['1mo', '1d', 900], '6m': ['6mo', '1d', 1800], '1y': ['1y', '1d', 3600], '5y': ['5y', '1wk', 6 * 3600] };
+const RANGES = { '1d': ['1d', '5m', 300], '1m': ['1mo', '1d', 900], '6m': ['6mo', '1d', 1800], '1y': ['1y', '1d', 3600], '5y': ['5y', '1wk', 6 * 3600] };
 const DAY = 86400;
 
 export default async (req) => {
@@ -45,6 +46,8 @@ export default async (req) => {
       c = await yChart(sym, range, interval);
     }
     const punkter = c.points.map(([t, v]) => [t, Math.round(v * 10000) / 10000]);
+    const prevClose = r === '1d' ? (c.meta?.chartPreviousClose ?? c.meta?.previousClose ?? null) : undefined;
+    if (r === '1d') return cached({ sym, r, valuta: c.meta?.currency || null, punkter, prevClose, kurs: c.quote?.kurs ?? null, kursTid: c.quote?.tid ?? null, hamtad: new Date().toISOString() }, ttl);
     if (punkter.length < 2) throw new ApiError(404, 'för få kurser');
     // Senaste kursen läggs till om den är nyare än sista stängningen
     const k = c.quote?.kurs; const tq = c.meta?.regularMarketTime;
