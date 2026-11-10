@@ -2410,7 +2410,7 @@ const locked = () => !!ACC.cfg && !ACC.user;
 async function accCfg() {
   if (ACC.cfg === undefined) {
     const c = await api('/api/config', 5 * 60e3);
-    ACC.cfg = c?.supabase || false; ACC.ai = !!c?.ai;
+    ACC.cfg = c?.supabase || false; ACC.ai = !!c?.ai; ACC.googleId = c?.google || null;
   }
   return ACC.cfg;
 }
@@ -2426,6 +2426,36 @@ async function googleLogin() {
   const c = await accCfg(); if (!c) return;
   writeLS('mk-oauth', 'google');
   location.href = `${c.url}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(location.origin + '/konto')}`;
+}
+// Googles egen knapp (Google Identity Services). Rutan öppnas på finanskollen.live och inte på Supabase-adressen.
+// Fungerar inte skriptet faller vi tillbaka på vanlig inloggning via Supabase.
+let GIS = null;
+function loadGis() {
+  if (GIS) return GIS;
+  GIS = new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true; sc.onload = () => (window.google?.accounts?.id ? ok(window.google.accounts.id) : no(new Error('gis'))); sc.onerror = () => { GIS = null; no(new Error('gis')); }; document.head.append(sc); });
+  return GIS;
+}
+const sha256hex = async (t) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)))].map((b) => b.toString(16).padStart(2, '0')).join('');
+async function mountGoogleButton(slot, mode, onMsg) {
+  if (!ACC.googleId || !slot) return false;
+  try {
+    const gid = await loadGis(); if (!slot.isConnected) return true;
+    const raw = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    gid.initialize({
+      client_id: ACC.googleId, nonce: await sha256hex(raw), ux_mode: 'popup', use_fedcm_for_button: true,
+      callback: async (resp) => {
+        onMsg('Loggar in …');
+        try {
+          const j = await auth('/token?grant_type=id_token', { provider: 'google', id_token: resp.credential, nonce: raw });
+          setSession(j); ACC.user = j.user; await loadCloud();
+          toast(`Välkommen${firstName() ? ', ' + firstName() : ''}!`, 'Du är inloggad med Google.'); goAfterLogin();
+        } catch (err) { onMsg(authErr(err)); }
+      }
+    });
+    slot.innerHTML = '';
+    gid.renderButton(slot, { type: 'standard', theme: 'outline', size: 'large', shape: 'pill', text: mode === 'signup' ? 'signup_with' : 'signin_with', locale: EN ? 'en' : 'sv', width: Math.min(400, Math.max(220, Math.round(slot.getBoundingClientRect().width) || 320)) });
+    return true;
+  } catch { return false; }
 }
 const GOOGLE_G = '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.2C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.2 5.6c4.2-3.9 7.1-9.6 7.1-17z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.2C1 16.4 0 20.1 0 24s1 7.6 2.6 10.9l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.2-5.6c-2 1.4-4.7 2.3-8.7 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>';
 async function auth(path, body, method = 'POST', tok) {
@@ -2663,7 +2693,7 @@ async function mountKonto() {
         <button type="button" role="tab" data-mode="login" aria-selected="${mode === 'login'}">Logga in</button>
         <button type="button" role="tab" data-mode="signup" aria-selected="${mode === 'signup'}">Skapa konto</button>
       </div>
-      ${mode !== 'forgot' && PROVIDERS?.google ? `<button class="btn ghost google-btn" type="button" data-google>${GOOGLE_G}<span>${mode === 'signup' ? 'Skapa konto med Google' : 'Logga in med Google'}</span></button><div class="auth-or"><span>eller med e-post</span></div>` : ''}
+      ${mode !== 'forgot' && PROVIDERS?.google ? `<div class="google-slot" data-gslot><button class="btn ghost google-btn" type="button" data-google>${GOOGLE_G}<span>${mode === 'signup' ? 'Skapa konto med Google' : 'Logga in med Google'}</span></button></div><div class="auth-or"><span>eller med e-post</span></div>` : ''}
       ${mode === 'signup' ? '<label class="field"><span>Namn</span><input name="name" type="text" required maxlength="60" autocomplete="name"></label>' : ''}
       <label class="field"><span>E-post</span><input name="email" type="email" required autocomplete="email" inputmode="email"></label>
       ${mode !== 'forgot' ? `<label class="field"><span>Lösenord${mode === 'signup' ? ' (minst 8 tecken)' : ''}</span><input name="password" type="password" minlength="${mode === 'signup' ? 8 : 1}" required autocomplete="${mode === 'signup' ? 'new-password' : 'current-password'}"></label>` : ''}
@@ -2672,6 +2702,9 @@ async function mountKonto() {
       ${mode === 'login' ? '<button class="linkbtn small" type="button" data-mode="forgot">Glömt lösenordet?</button>' : mode === 'forgot' ? '<button class="linkbtn small" type="button" data-mode="login">Tillbaka till inloggning</button>' : '<p class="small faint" style="margin:0">Vi sparar bara din e-post, din bevakning, dina larm och dina portföljer. Inga betaluppgifter.</p>'}
     </form>`;
     const f = box.querySelector('form');
+    // Googles egen knapp ersätter vår när klient-ID finns. Annars ligger vår knapp kvar och går via Supabase.
+    const gslot = f.querySelector('[data-gslot]');
+    if (gslot && ACC.googleId) { const keep = gslot.innerHTML; mountGoogleButton(gslot, mode, (t) => { f.querySelector('[data-msg]').textContent = t; }).then((ok) => { if (!ok && gslot.isConnected) gslot.innerHTML = keep; }); }
     f.addEventListener('click', (e) => { if (e.target.closest('[data-google]')) { googleLogin(); return; } const b = e.target.closest('[data-mode]'); if (b) { mode = b.dataset.mode; draw(); } });
     f.addEventListener('submit', async (e) => {
       e.preventDefault();

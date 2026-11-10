@@ -836,3 +836,5 @@ body.nosidebar .sidebar { display: none; }
 .google-btn:hover { border-color: var(--ink-2); }
 .auth-or { display: flex; align-items: center; gap: 12px; color: var(--faint); font-size: 13px; }
 .auth-or::before, .auth-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.google-slot { display: flex; justify-content: center; min-height: 44px; }
+.google-slot > div { max-width: 100%; }
