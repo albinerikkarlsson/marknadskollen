@@ -1826,7 +1826,7 @@ const getPort = () => {
 };
 const fmtTid = (iso) => new Date(iso).toLocaleString(L, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
 const fmtDag = (t) => new Date(t * 1000).toLocaleDateString(L, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Stockholm' });
-const nfAntal = (n) => nf(n, n >= 100 ? 1 : n >= 1 ? 2 : 4);
+const nfAntal = (n) => (Number.isInteger(n) ? nf(n, 0) : nf(n, n >= 100 ? 1 : n >= 1 ? 2 : 4));
 
 // Kurs och växelkurs vid en tidpunkt. Valuta X till kronor via "XSEK=X".
 async function priceAt(sym, t) { return api(`/api/chart?s=${encodeURIComponent(sym)}&t=${t}`, 24 * 60 * 60e3); }
@@ -3082,10 +3082,17 @@ async function mountKalender() {
   const ev = events(kal, 0, 92);
   const plan = await dividendPlan(kal); if (!$('#kal-list')) return;
   const nextR = ev.find((e) => e.typ === 'rapport'); const nextU = ev.find((e) => e.typ === 'ex' || e.typ === 'utbet');
+  // Inget beslutat datum: visa när utdelningen brukar komma, utifrån förra årets X-dag. Märks alltid som uppskattning.
+  const today = isoDay(Date.now());
+  const guess = !nextU ? kal.filter((k) => k.utdelningPerAktie && k.exUtdelning && k.exUtdelning < today).map((k) => { const d = new Date(k.exUtdelning + 'T12:00:00'); while (isoDay(d) < today) d.setFullYear(d.getFullYear() + 1); return { k, dag: isoDay(d) }; }).sort((a, b) => a.dag.localeCompare(b.dag))[0] : null;
+  const monthYear = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString(L, { month: 'long', year: 'numeric' });
   $('#kal-sum').innerHTML = `<div class="statbar card pf-stats">
     <div class="stat"><span class="small muted">Väntad utdelning per år</span><span class="num big">${port.length ? sekBig(plan.total) : '–'}</span><span class="small faint">${port.length ? 'för aktierna i Min portfölj' : 'lägg in köp i Min portfölj'}</span></div>
     <div class="stat"><span class="small muted">Nästa rapport</span><span class="num">${nextR ? esc(whenTxt(nextR.dag)) : '–'}</span><span class="small faint">${nextR ? esc(nameOf(nextR.k.sym)) : ''}</span></div>
-    <div class="stat"><span class="small muted">Nästa utdelningsdag</span><span class="num">${nextU ? esc(whenTxt(nextU.dag)) : '–'}</span><span class="small faint">${nextU ? esc(nameOf(nextU.k.sym)) : ''}</span></div></div>`;
+    <div class="stat"><span class="small muted">Nästa utdelningsdag</span>${nextU ? `<span class="num">${esc(whenTxt(nextU.dag))}</span><span class="small faint">${esc(nameOf(nextU.k.sym))}</span>`
+      : guess ? `<span class="num">${EN ? 'Approx.' : 'Ca'} ${esc(monthYear(guess.dag))}</span><span class="small faint">${esc(nameOf(guess.k.sym))} · ${EN ? 'estimated from last year, not decided yet' : 'uppskattat från förra året, inte beslutat än'}</span>`
+      : `<span class="num">${EN ? 'Not decided' : 'Inte beslutad'}</span><span class="small faint">${EN ? 'No known dividend for your stocks' : 'Ingen känd utdelning för dina aktier'}</span>`}</div></div>
+  <p class="small muted" style="margin:10px 0 0">${EN ? 'Most Swedish companies pay dividends once a year. The dates are decided at the annual general meeting in spring and are usually proposed in the year-end report in January or February.' : 'De flesta svenska bolag delar ut en gång per år. Datumen beslutas på årsstämman på våren och brukar föreslås i bokslutsrapporten i januari eller februari.'}</p>`;
   const months = {};
   for (const e of ev) { const m = new Date(e.dag + 'T12:00:00').toLocaleDateString(L, { month: 'long', year: 'numeric' }); (months[m] = months[m] || []).push(e); }
   const own = (s) => port.includes(s);
@@ -3095,7 +3102,7 @@ async function mountKalender() {
     return `<a class="koll-row" href="/bolag/${encodeURIComponent(e.k.sym)}" data-link><span class="koll-date"><b>${esc(fmtDayShort(e.dag))}</b></span>${av(e.k.sym)}<span class="grow"><b>${esc(nameOf(e.k.sym))}</b><span class="small muted">${esc(evtLabel(e))}${extra ? ' · ' + esc(extra) : ''}</span></span>${own(e.k.sym) ? '<span class="pill outline">Äger</span>' : ''}</a>`;
   }).join('')}</div>`).join('') : '<div class="empty">Inga kända rapporter eller utdelningsdagar de närmaste tre månaderna.</div>';
   $('#kal-utd').innerHTML = !port.length ? '<p class="small muted" style="margin:0">Lägg in dina köp i Min portfölj, så räknar vi ut hur mycket utdelning du kan vänta dig.</p>'
-    : `${plan.rows.length ? plan.rows.map((x) => `<a class="koll-row" href="/bolag/${encodeURIComponent(x.k.sym)}" data-link>${av(x.k.sym)}<span class="grow"><b>${esc(nameOf(x.k.sym))}</b><span class="small muted">${esc(nfAntal(x.antal))} st · ${esc(kr(x.k.utdelningPerAktie))} ${esc(cur(x.k.valuta))} per aktie${x.k.direktavkastning != null ? ` · ${nf(x.k.direktavkastning, 1)} %` : ''}</span></span><b class="num small">${x.perAr != null ? sek(x.perAr) : '–'}</b></a>`).join('') : ''}
+    : `${plan.rows.length ? plan.rows.map((x) => `<a class="koll-row" href="/bolag/${encodeURIComponent(x.k.sym)}" data-link>${av(x.k.sym)}<span class="grow"><b>${esc(nameOf(x.k.sym))}</b><span class="small muted">${esc(nfAntal(x.antal))} st · ${esc(kr(x.k.utdelningPerAktie))} ${esc(cur(x.k.valuta))} ${EN ? 'per share' : 'per aktie'}${x.k.direktavkastning != null ? ` · ${nf(x.k.direktavkastning, 1)} %` : ''}${x.k.exUtdelning ? ` · ${x.k.exUtdelning >= isoDay(Date.now()) ? (EN ? 'ex-date' : 'X-dag') : (EN ? 'last ex-date' : 'förra X-dagen')} ${esc(new Date(x.k.exUtdelning + 'T12:00:00').toLocaleDateString(L, { day: 'numeric', month: 'short', year: 'numeric' }))}` : ''}</span></span><b class="num small">${x.perAr != null ? sek(x.perAr) : '–'}</b></a>`).join('') : ''}
       ${plan.utan.length ? `<p class="small muted" style="margin:6px 0 0">Ingen känd utdelning: ${esc(plan.utan.map(nameOf).join(', '))}.</p>` : ''}`;
 }
 
