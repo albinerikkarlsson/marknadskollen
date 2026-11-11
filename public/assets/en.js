@@ -100,6 +100,12 @@ const D = {
   // ---------- Öppen startsida, import, dagens koll, kalender, larm, veckobrev ----------
   'Populära aktier': 'Popular stocks',
   'Gratis · Ingen reklam · Inga köptips': 'Free · No ads · No buy tips',
+  'Se exakt vad som hände med dina aktier i dag': 'See exactly what happened to your stocks today',
+  'Testa med dina aktier': 'Try it with your stocks',
+  'Se ett exempel': 'See an example',
+  'Inget konto behövs för att testa.': 'No account needed to try it.',
+  'så sparas portföljen och du kan få larm.': 'so your portfolio is saved and you can get alerts.',
+  ': vilka aktier som drog upp eller ner portföljen, och hur mycket valutan påverkade': ': which stocks pulled your portfolio up or down, and how much the currency mattered',
   'Förstå risken innan du köper en aktie': 'Understand the risk before you buy a stock',
   'Finanskollen visar risken i över {n} svenska och amerikanska aktier på enkel svenska. Se vad ledningen själv köper och säljer, hur många som satsar på att kursen ska falla och vad nyheterna säger.': 'Finanskollen shows the risk in over {n} Swedish and US stocks in plain language. See what management itself buys and sells, how many are betting on the price falling and what the news says.',
   'Skapa gratis konto': 'Create a free account',

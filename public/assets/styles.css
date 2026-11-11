@@ -915,3 +915,8 @@ body.nosidebar .sidebar { display: none; }
 .dd-total { display: flex; justify-content: space-between; padding: 12px 0 0; margin-top: 4px; border-top: 1px solid var(--line); font-weight: 600; }
 @media (max-width: 600px) { .dd-arrow { display: none; } }
 .dd-warn { margin: 12px 0 0; padding: 8px 12px; border-radius: 10px; background: rgba(255,200,120,.12); color: #FFD9A8; }
+.guest-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 14px 18px; border-radius: 16px; background: var(--card, #fff); border: 1px solid var(--line, rgba(0,0,0,.08)); font-size: 14px; line-height: 1.45; }
+.guest-bar > div { flex: 1 1 320px; min-width: 0; }
+.guest-bar b { font-weight: 600; }
+.guest-bar span { color: var(--muted); }
+.guest-bar .btn { flex: none; }

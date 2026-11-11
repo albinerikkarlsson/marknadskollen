@@ -399,11 +399,14 @@ const visitorHero = () => `
   <section class="card visitor-hero" aria-labelledby="vh-h">
     <div class="stack" style="gap:14px;max-width:640px">
       <span class="pill outline" style="align-self:flex-start">Gratis · Ingen reklam · Inga köptips</span>
-      <h2 id="vh-h" class="vh-title">Förstå risken innan du köper en aktie</h2>
+      <h2 id="vh-h" class="vh-title">Se exakt vad som hände med dina aktier i dag</h2>
+      <div class="chips"><a class="btn" href="/portfolj" data-link>Testa med dina aktier</a><button type="button" class="btn ghost" data-demo-load="/idag">Se ett exempel</button></div>
+      <span class="small muted" style="margin-top:-4px">Inget konto behövs för att testa.</span>
       <p class="muted" style="margin:0;font-size:16.5px">Finanskollen visar risken i över 3 000 svenska och amerikanska aktier på enkel svenska. Se vad ledningen själv köper och säljer, hur många som satsar på att kursen ska falla och vad nyheterna säger.</p>
-      <div class="chips"><a class="btn" href="/konto?ny=1" data-link>Skapa gratis konto</a><a class="btn ghost" href="/aktier" data-link>Se alla aktier</a></div>
+      <p class="small" style="margin:0"><a href="/konto?ny=1" data-link>Skapa gratis konto</a> så sparas portföljen och du kan få larm.</p>
     </div>
     <ul class="vh-points">
+      <li>${svg('check', 16)}<span><b>Din dag</b>: vilka aktier som drog upp eller ner portföljen, och hur mycket valutan påverkade</span></li>
       <li>${svg('check', 16)}<span><b>Riskkoll för varje aktie</b> från 1 till 10, del för del</span></li>
       <li>${svg('check', 16)}<span><b>Din portfölj</b> med tidslinje, utdelningar och rapportdagar</span></li>
       <li>${svg('check', 16)}<span><b>Larm</b> när kursen rör sig, ledningen handlar eller blankningen ökar</span></li>
@@ -416,6 +419,7 @@ function viewOversikt() {
   if (minOversikt()) return viewOversiktMin();
   return `
   ${topbar([['Översikt', '/']])}
+  ${locked() ? visitorHero() : ''}
   <div class="ticker num" aria-label="Marknaden" id="ticker">
     ${MARKET.map((m) => `<span><span class="muted">${esc(m.namn)}</span><span data-q="${m.sym}">…</span></span>`).join('')}
   </div>
@@ -425,7 +429,7 @@ function viewOversikt() {
     <h1 class="title">Börsen i dag</h1>
   </div>
 
-  ${locked() ? visitorHero() : `<div id="koll"></div>`}
+  ${locked() ? '' : `<div id="koll"></div>`}
 
   <section class="watch-strip" aria-labelledby="mina-h">
     <div class="watch-head"><h2 class="label-up" id="mina-h" style="margin:0">${locked() ? 'Populära aktier' : 'Din bevakning'}</h2><a class="more small" href="${locked() ? '/aktier' : '/bevakning'}" data-link>Visa alla →</a></div>
@@ -763,6 +767,7 @@ function viewDinDag() {
       <label class="dd-date"><span class="sr-only">Välj dag</span><input type="date" id="dd-date" max="${today}" value="${esc(dag && dag < today ? dag : today)}"></label>
       <button type="button" class="dd-step" data-step="1" aria-label="Nästa börsdag">›</button>
       <button type="button" class="dd-todaybtn" id="dd-today" ${!dag || dag >= today ? 'hidden' : ''}>I dag</button></div></div>
+  ${guestBar()}
   <div class="chips" id="dd-bors" style="margin-top:12px"></div>
   <div id="dd-body">${loading('Räknar på din dag …')}</div>
   ${footer()}`;
@@ -806,7 +811,7 @@ async function mountDinDag() {
     do { d = new Date(d.getTime() + step * 864e5); } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
     const iso = d.toISOString().slice(0, 10); if (iso <= today) go(iso);
   }));
-  if (!port.length) { box.innerHTML = `<div class="empty">Du har inga köp i portföljen än. <a href="/portfolj" data-link>Lägg till ett köp</a> så ser du här hur din dag går.</div>`; return; }
+  if (!port.length) { box.innerHTML = `<div class="empty">Du har inga köp i portföljen än. <a href="/portfolj" data-link>Lägg till ett köp</a> så ser du här hur din dag går.${locked() ? `<div class="chips" style="justify-content:center;margin-top:12px">${demoBtn()}</div>` : ''}</div>`; return; }
   const first = port.map((b) => b.tid).filter(Boolean).sort()[0]; if (first) inp.min = sthlmDay(first);
   const q = new URLSearchParams(location.search).get('dag');
   const past = !!(q && /^\d{4}-\d{2}-\d{2}$/.test(q) && q < today);
@@ -1851,6 +1856,36 @@ const nfAntal = (n) => (Number.isInteger(n) ? nf(n, 0) : nf(n, n >= 100 ? 1 : n 
 
 // Kurs och växelkurs vid en tidpunkt. Valuta X till kronor via "XSEK=X".
 async function priceAt(sym, t) { return api(`/api/chart?s=${encodeURIComponent(sym)}&t=${t}`, 24 * 60 * 60e3); }
+// Exempelportfölj för besökare: 10 000 kr i fyra välkända aktier för ett halvår sedan, med de riktiga kurserna den dagen
+const DEMO_SYMS = ['VOLV-B.ST', 'INVE-B.ST', 'ERIC-B.ST', 'AAPL'];
+const isDemo = () => getPort().some((b) => b.demo);
+async function loadDemo() {
+  let d = new Date(Date.now() - 182 * 864e5); while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d = new Date(d.getTime() - 864e5);
+  const t = Math.floor(new Date(d.toISOString().slice(0, 10) + 'T15:00:00Z').getTime() / 1000);
+  const buys = (await Promise.all(DEMO_SYMS.map(async (sym) => {
+    const p = await priceAt(sym, t).catch(() => null); if (!p?.kurs) return null;
+    const r = await fxAt(p.valuta, t).catch(() => null); if (!r) return null;
+    const insattSek = 10000;
+    return { id: 'demo-' + uid(), demo: true, sym, belopp: 10000, valuta: 'SEK', kurs: p.kurs, kursValuta: p.valuta || 'SEK', kursTid: p.kursTid, antal: insattSek / r / p.kurs, insattSek, tid: new Date(t * 1000).toISOString() };
+  }))).filter(Boolean);
+  if (!buys.length) throw new Error('demo');
+  writeLS(PKEY, buys);
+}
+function clearDemo() { writeLS(PKEY, getPort().filter((b) => !b.demo)); }
+// Visas på portföljsidorna för den som inte har konto
+const guestBar = () => {
+  if (!locked()) return '';
+  if (isDemo()) return `<div class="guest-bar"><div><b>${EN ? 'This is an example portfolio.' : 'Det här är en exempelportfölj.'}</b> <span>${EN ? 'Made-up purchases of 10,000 SEK each, six months ago, with the real prices. Not buy tips.' : 'Påhittade köp för 10 000 kr styck för ett halvår sedan, med de riktiga kurserna. Inga köptips.'}</span></div><button type="button" class="btn small" data-demo-clear>${EN ? 'Clear and add my own' : 'Töm och lägg in mina egna'}</button></div>`;
+  return `<div class="guest-bar"><div><b>${EN ? "You're trying it without an account." : 'Du testar utan konto.'}</b> <span>${EN ? 'Your stocks are only saved in this browser. With a free account they are saved, show up on all your devices and you can get alerts.' : 'Dina aktier sparas bara i den här webbläsaren. Med ett gratis konto sparas de, syns på alla dina enheter och du kan få larm.'}</span></div><a class="btn small" href="/konto?ny=1" data-link>${EN ? 'Create free account' : 'Skapa gratis konto'}</a></div>`;
+};
+const demoBtn = (label) => (locked() && !getPort().length ? `<button type="button" class="btn ghost small" data-demo-load>${label || (EN ? 'Show an example portfolio' : 'Visa en exempelportfölj')}</button>` : '');
+document.addEventListener('click', async (e) => {
+  const load = e.target.closest('[data-demo-load]'); const clear = e.target.closest('[data-demo-clear]');
+  if (load) { e.preventDefault(); load.disabled = true; load.textContent = EN ? 'Fetching prices …' : 'Hämtar kurser …';
+    try { await loadDemo(); const to = load.dataset.demoLoad || location.pathname; if (to !== location.pathname) history.pushState(null, '', to); render(); }
+    catch { load.disabled = false; load.textContent = EN ? 'Could not fetch prices right now. Try again' : 'Kurserna kunde inte hämtas just nu. Försök igen'; } }
+  if (clear) { e.preventDefault(); clearDemo(); history.pushState(null, '', '/portfolj'); render(); }
+});
 async function fxAt(c, t) {
   if (!c || c === 'SEK') return 1;
   const base = c === 'GBp' || c === 'GBX' ? 'GBP' : c;
@@ -1964,6 +1999,7 @@ async function findSym(g) {
 function viewPortfolj() {
   return `${topbar([['Översikt', '/'], ['Min portfölj', '/portfolj']])}
   <div class="stack" style="gap:6px"><span class="eyebrow">Lägg in dina köp med belopp, datum och tid. Vi räknar ut resten med de riktiga kurserna.</span><h1 class="title">Min portfölj</h1></div>
+  ${guestBar()}
   <div id="pf-sum"></div>
   <section class="card co-section" aria-labelledby="pf-tl-h">
     <div class="section-head" style="align-items:center"><div><span class="label-up">Tidslinje</span><h2 class="section" id="pf-tl-h" style="margin-top:4px">Så har dina pengar utvecklats</h2></div>
@@ -2292,7 +2328,7 @@ function mountPortfolj() {
     if (!port.length) {
       $('#pf-sum').innerHTML = '';
       $('#pf-tl').innerHTML = '<div class="empty">Tidslinjen visas när du har lagt in ditt första köp.</div>';
-      $('#pf-list').innerHTML = '<div class="empty">Du har inga köp inlagda än. Sök fram aktien du köpte nedanför, och skriv belopp, datum och tid.</div>';
+      $('#pf-list').innerHTML = `<div class="empty">Du har inga köp inlagda än. Sök fram aktien du köpte nedanför, och skriv belopp, datum och tid.${locked() ? `<div class="chips" style="justify-content:center;margin-top:12px">${demoBtn(EN ? 'Or show an example portfolio' : 'Eller visa en exempelportfölj')}</div>` : ''}</div>`;
       $('#pf-side').innerHTML = `<section class="card co-section"><span class="label-up">Så fungerar det</span><ol class="om-list">
         <li><b>Sök fram aktien</b> eller fonden du köpte.</li>
         <li><b>Skriv beloppet</b> och valutan du betalade med, till exempel 5 000 kr.</li>
@@ -2805,6 +2841,7 @@ async function loadCloud() {
   } catch (e) { ACC.table = tableMissing(e) ? false : ACC.table; }
   if (!d) d = ACC.user?.user_metadata || {};
   applyCloud(d);
+  if (!migrate && DIRTY.size) saveNow().catch(() => {});
   // Flytta data från metadata till tabellen en gång, och gör metadata liten igen
   if (migrate) { for (const f of Object.values(FIELD)) DIRTY.add(f); await saveNow().catch(() => {}); const t = await token(); if (t) auth('/user', { data: { bevakning: null, larm: null, portfolj: null, ova: null, namn: null } }, 'PUT', t).then((u) => { ACC.user = u; }).catch(() => {}); }
 }
@@ -2820,7 +2857,13 @@ function applyCloud(d) {
     if (cloud) writeLS(WKEY, first && Array.isArray(own) ? [...new Set([...cloud, ...own])].slice(0, 60) : cloud);
     if (!skip('larm') && d.larm && typeof d.larm === 'object') writeLS(LKEY, first ? { ...d.larm, ...getLarm() } : d.larm);
     if (!skip('koll') && d.koll && typeof d.koll === 'object') writeLS(KKEY, d.koll);
-    if (!skip('portfolj') && Array.isArray(d.portfolj) && (!first || !getPort().length)) writeLS(PKEY, d.portfolj);
+    if (first && getPort().some((b) => b.demo)) writeLS(PKEY, getPort().filter((b) => !b.demo));
+    if (!skip('portfolj') && Array.isArray(d.portfolj)) {
+      const own = getPort();
+      if (!first || !own.length) writeLS(PKEY, d.portfolj);
+      else { const ids = new Set(d.portfolj.map((b) => b.id)); const extra = own.filter((b) => !ids.has(b.id));
+        writeLS(PKEY, [...d.portfolj, ...extra]); if (extra.length) DIRTY.add('portfolj'); }
+    } else if (first && getPort().length) DIRTY.add('portfolj');
     if (!skip('ova') && d.ova && typeof d.ova.kassa === 'number' && (!first || !readLS(OKEY, null))) {
       // Behåll en längre lokal historik om den hör till samma övningsportfölj
       const loc = readLS(OKEY, null);
@@ -2835,7 +2878,7 @@ function applyCloud(d) {
 }
 let saveTimer;
 const cloudData = () => {
-  const watch = getWatch(); const port = getPort(); const ova = readLS(OKEY, null);
+  const watch = getWatch(); const port = getPort().filter((b) => !b.demo); const ova = readLS(OKEY, null);
   const syms = [...new Set([...watch, ...port.map((x) => x.sym), ...Object.keys(ova?.innehav || {})])];
   // Tabellen rymmer hela historiken. Kontots metadata hålls liten, därför bara de senaste 40 affärerna där.
   const hist = (ova?.historik || []).slice(ACC.table ? -1000 : -40);
@@ -3164,6 +3207,7 @@ document.addEventListener('change', (e) => { const c = e.target.closest?.('[data
 function viewKalender() {
   return `${topbar([['Översikt', '/'], ['Kalender', '/kalender']])}
   <div class="stack" style="gap:6px"><span class="eyebrow">Rapporter och utdelningar för aktierna du äger och bevakar</span><h1 class="title">Kalender</h1></div>
+  ${guestBar()}
   <div id="kal-sum"></div>
   <div class="pf-layout">
     <section class="card co-section" style="min-width:0"><span class="label-up">De kommande tre månaderna</span><div id="kal-list">${loading('Hämtar kalendern …')}</div></section>
@@ -3443,7 +3487,8 @@ function route() {
   }
   if ((location.pathname.replace(/\/+$/, '') || '/') === '/valkommen' && ACC.user) return { active: '', title: 'Välkommen', html: viewValkommen(), mount: mountValkommen };
   // Inte inloggad: de personliga sidorna kräver konto. Resten är öppet för alla.
-  if (locked() && PRIVATE.some((x) => here === x || here.startsWith(x + '/'))) {
+  const GUEST_OK = ['/portfolj', '/idag', '/kalender'];
+  if (locked() && !GUEST_OK.includes(here) && PRIVATE.some((x) => here === x || here.startsWith(x + '/'))) {
     writeLS('mk-efter-login', location.pathname + location.search);
     history.replaceState(null, '', '/konto');
   }
