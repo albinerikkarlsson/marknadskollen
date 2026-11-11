@@ -27,7 +27,8 @@ export default async (req) => {
     const look = ALIAS[key] || q;
     let results = await fromYahoo(look).catch((e) => { console.warn('[search] Yahoo:', e?.message); return null; });
     if (!results) results = await fromFinnhub(look).catch(() => []);
-    results = [...(FIXED[key] || []), ...results.filter((x) => !MINOR.has(x.borsen) || !results.some((y) => y !== x && !MINOR.has(y.borsen) && norm(y.namn) === norm(x.namn)))];
+    const main = results.filter((x) => !MINOR.has(x.borsen));
+    results = [...(FIXED[key] || []), ...(main.length ? main : results)];
     return cached({ results: order(results, ALIAS[key] ? look : raw, klass).slice(0, 12) }, 86400);
   } catch (e) { return fail(e); }
 };
@@ -74,7 +75,7 @@ export function order(list, raw, klass) {
   const want = norm(raw.replace(/\s+(ser\.?\s*)?[abcd](-?aktien?)?$/i, ''));
   // Bolag vars namn är precis det man skrev (t.ex. "AB Volvo" för "volvo") går före liknande namn
   const base = (r) => r.sym.split('.')[0].replace(/-[A-D]$/, '');
-  const rank = (r) => (r.borsen === 'IDX' ? -40 : 0) + (r.borsen === 'ST' && base(r) === exact ? -25 : 0) + (r.sym === exact || r.sym.split('.')[0] === exact ? -20 : 0) + (norm(r.namn) === want ? -1 : 0) + (r.borsen === 'ST' ? 0 : r.borsen === 'US' ? 1 : r.borsen === 'OTC' ? 3 : 2) * 3;
+  const rank = (r) => (r.borsen === 'IDX' ? -100 : 0) + (r.borsen === 'ST' && base(r) === exact ? -25 : 0) + (r.sym === exact || r.sym.split('.')[0] === exact ? -20 : 0) + (norm(r.namn) === want ? -1 : 0) + (r.borsen === 'ST' ? 0 : r.borsen === 'US' ? 1 : r.borsen === 'OTC' ? 3 : 2) * 3;
   const cls = (r) => (!r.klass ? 0 : klass ? (r.klass === klass ? 0 : 2) : r.klass === 'B' ? 0 : r.klass === 'A' ? 1 : 2);
   const seen = new Set();
   return list
