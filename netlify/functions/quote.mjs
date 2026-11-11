@@ -14,7 +14,7 @@ export default async (req) => {
     missing.forEach((s, i) => { if (res[i].status === 'fulfilled') f[s] = quoteOrNull(res[i].value); });
     const quotes = syms.map((sym) => {
       const q = y[sym] || f[sym];
-      return q ? { sym, kurs: q.kurs, d1: q.d1 == null ? null : Math.round(q.d1 * 100) / 100, tid: q.tid || null, namn: q.namn || null, valuta: q.valuta || null } : { sym, kurs: null, d1: null };
+      return q ? { sym, kurs: q.kurs, d1: q.d1 == null ? null : Math.round(q.d1 * 100) / 100, prev: q.prev ?? q.forra ?? null, tid: q.tid || null, namn: q.namn || null, valuta: q.valuta || null } : { sym, kurs: null, d1: null };
     });
     if (quotes.every((q) => q.kurs == null)) {
       const err = res.find((r) => r.status === 'rejected')?.reason;

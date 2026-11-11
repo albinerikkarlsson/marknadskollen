@@ -666,7 +666,7 @@ async function mountOversiktMin() {
     pb.innerHTML = `<div class="ov-cardhead"><h2>Min portfölj</h2><a href="/portfolj" data-link>Öppna →</a></div>
       <b class="ov-big num">${sekBig(tot)}</b>
       <div class="ov-gains">
-        <a href="/idag" data-link class="ov-gainlink ${idag < 0 ? 'neg' : ''}"><span>${pdata.dagIdag || !pdata.refDag ? 'I dag' : esc(dayShort(pdata.refDag + 'T12:00:00'))} ›</span><b class="num">${idag ? krDiff(idag) : '–'}</b><span class="num">${idag && tot ? pctDiff((idag / (tot - idag)) * 100) : ''}</span></a>
+        <a href="/idag" data-link class="ov-gainlink ${idag < 0 ? 'neg' : ''}"><span>${pdata.dagIdag || !pdata.refDag ? 'I dag' : esc(dayShort(pdata.refDag + 'T12:00:00'))} ›</span><b class="num">${idag ? krDiff(idag) : '–'}</b><span class="num">${idag && pdata.idagPct != null ? pctDiff(pdata.idagPct) : ''}</span></a>
         <div class="${vinst != null && vinst < 0 ? 'neg' : ''}"><span>Sedan köp</span><b class="num">${vinst != null ? krDiff(vinst) : '–'}</b><span class="num">${vinst != null && insatt ? pctDiff((vinst / insatt) * 100) : ''}</span></div>
       </div>
       <div class="ov-chartbox"><div class="ov-charthead"><span id="ov-chg">${EN ? 'Value over time' : 'Värde över tid'}</span><div class="ov-seg dark" role="tablist" aria-label="Period">${[['1m', '1 mån'], ['6m', '6 mån'], ['1y', '1 år'], ['all', 'Allt']].map(([k, t]) => `<button role="tab" type="button" data-ovrange="${k}" aria-selected="${k === '6m'}">${t}</button>`).join('')}</div></div><div id="ov-chart"><div class="ov-chart-empty"></div></div></div>
@@ -675,12 +675,12 @@ async function mountOversiktMin() {
     // Diagrammet
     let range = '6m'; let ser = null;
     const drawChart = () => { const c = $('#ov-chart'); if (!c || !ser) return;
-      if (ser.error) { c.innerHTML = `<p class="small" style="margin:0;color:rgba(255,255,255,0.6)">${ser.error === 'nobuys' ? 'Diagrammet kräver köp med datum.' : 'Diagrammet visas när det finns minst två dagars kurser.'}</p>`; return; }
+      if (ser.error) { c.innerHTML = `<p class="small" style="margin:0;color:rgba(255,255,255,0.6)">${ser.error === 'nobuys' ? 'Diagrammet kräver köp med datum.' : ser.error === 'fetch' ? 'Kurserna för diagrammet kunde inte hämtas just nu. Prova igen om en stund.' : 'Diagrammet visas när det finns minst två dagars kurser.'}</p>`; return; }
       const V = rangeCut(ser.value, range, ser.tNow); const I = rangeCut(ser.invested, range, ser.tNow);
       const ch = V[V.length - 1][1] - V[0][1];
       $('#ov-chg').innerHTML = `${EN ? 'Value over time' : 'Värde över tid'} · <span style="color:${ch < 0 ? '#FFB4AC' : '#9BE3B8'}">${krDiff(ch)} (${pctDiff(V[0][1] ? (ch / V[0][1]) * 100 : 0)})</span>`;
       c.innerHTML = miniMoney(V, I); };
-    pfSeries(pdata).then((x) => { ser = x; drawChart(); }).catch(() => {});
+    pfSeries(pdata).then((x) => { ser = x; drawChart(); }).catch(() => { ser = { error: 'fetch' }; drawChart(); });
     pb.addEventListener('click', (e) => { const b = e.target.closest('[data-ovrange]'); if (!b) return; range = b.dataset.ovrange; pb.querySelectorAll('[data-ovrange]').forEach((x) => x.setAttribute('aria-selected', String(x === b))); drawChart(); });
     getKalender(port.map((x) => x.sym)).then(dividendPlan).then((plan) => { const u = $('#ov-utd'); if (u) u.textContent = plan.rows.length ? sekBig(plan.total) : '–'; }).catch(() => { const u = $('#ov-utd'); if (u) u.textContent = '–'; });
   }
@@ -710,7 +710,7 @@ async function mountOversiktMin() {
   getKalender(all).then((kal) => {
     for (const e of events(kal, 0, 10)) { const el = $(`.ov-ev[data-day="${e.dag}"]`); if (!el) continue;
       el.insertAdjacentHTML('beforeend', `<a class="${e.typ === 'rapport' ? 'rep' : 'utd'}" href="/bolag/${encodeURIComponent(e.k.sym)}" data-link title="${esc(nameOf(e.k.sym) + ': ' + evtLabel(e))}">${esc(ovName(e.k.sym).split(/[ ,]/)[0])}</a>`); }
-  }).catch(() => {});
+  }).catch(() => { $('#ov-week')?.insertAdjacentHTML('afterend', `<p class="small muted" style="margin:6px 0 0">${EN ? 'Reports and dividends could not be fetched right now.' : 'Rapporter och utdelningar kunde inte hämtas just nu.'}</p>`); });
   // Insynsaffärer i dina svenska bolag
   const se = all.filter(isSwedish).slice(0, 8); const since = isoDay(Date.now() - 7 * dayMs);
   const fiBox = () => $('#ov-fi');
@@ -767,35 +767,33 @@ function viewDinDag() {
   <div id="dd-body">${loading('Räknar på din dag …')}</div>
   ${footer()}`;
 }
-// Dagens siffror (som översikten)
+// I dag: samma beräkning som översikten
 async function ddToday(port) {
   const d = await pfData(port);
   for (const h of d.hold) h.status = borsStatus(h.sym, h.tid);
-  return { ...d, dag: d.refDag, live: d.dagIdag, intraday: (h) => `/api/chart?s=${encodeURIComponent(h.sym)}&r=1d`, base: (h, c) => c?.prevClose ?? (h.kurs != null && h.d1 != null ? h.kurs / (1 + h.d1 / 100) : null), per: (h) => (h.varde != null && h.kurs ? h.varde / h.kurs : 0) };
+  return { items: d.hold, fx: d.fxD, dag: d.refDag, live: d.dagIdag, ...d.day, tot: d.tot };
 }
 // En tidigare dag: stängningskursen den dagen mot dagen innan, för de aktier man ägde när dagen var slut
 async function ddPast(port, dag) {
   const end = new Date(dag + 'T23:59:59').getTime();
-  const owned = {}; for (const b of port) { if (!b.tid || new Date(b.tid).getTime() <= end) owned[b.sym] = (owned[b.sym] || 0) + b.antal; }
-  const syms = Object.keys(owned).filter((s) => owned[s] > 0);
+  const bys = port.filter((b) => !b.tid || new Date(b.tid).getTime() <= end);
+  const syms = [...new Set(bys.map((b) => b.sym))];
   const from = new Date(new Date(dag + 'T12:00:00Z').getTime() - 12 * 864e5).toISOString().slice(0, 10);
   const charts = await Promise.all(syms.map((s) => api(`/api/chart?s=${encodeURIComponent(s)}&from=${from}`, 6 * 3600e3).catch(() => null)));
-  const valuta = Object.fromEntries(syms.map((s, i) => [s, charts[i]?.valuta || 'SEK']));
+  const valuta = Object.fromEntries(syms.map((s, i) => [s, charts[i]?.valuta || bys.find((b) => b.sym === s)?.kursValuta || 'SEK']));
   const curs = [...new Set(Object.values(valuta).filter((v) => v !== 'SEK'))];
-  const fxc = await Promise.all(curs.map((c) => api(`/api/chart?s=${encodeURIComponent((c === 'GBp' || c === 'GBX' ? 'GBP' : c) + 'SEK=X')}&from=${from}`, 6 * 3600e3).catch(() => null)));
-  const closeOn = (pts, day) => { let v = null; for (const [t, p] of pts || []) { if (sthlmDay(t * 1000) <= day) v = p; } return v; };
-  const fxOf = (c) => { if (c === 'SEK') return 1; const i = curs.indexOf(c); const v = closeOn(fxc[i]?.punkter, dag); return v == null ? null : c === 'GBp' || c === 'GBX' ? v / 100 : v; };
-  const hold = syms.map((s, i) => {
-    const pts = (charts[i]?.punkter || []).filter(([t]) => sthlmDay(t * 1000) <= dag);
-    const last = pts[pts.length - 1]; const traded = last && sthlmDay(last[0] * 1000) === dag; const prev = traded ? pts[pts.length - 2]?.[1] : null;
-    const fx = fxOf(valuta[s]); const close = last?.[1] ?? null;
-    const varde = close != null && fx != null ? owned[s] * close * fx : null;
-    const idag = traded && prev && fx != null ? owned[s] * (close - prev) * fx : null;
-    return { sym: s, antal: owned[s], kurs: close, prev, fx, varde, idag, d1Dag: traded && prev ? (close / prev - 1) * 100 : null,
-      status: { kod: traded ? 'stangd' : 'stangd', bors: borsOf(s).namn, txt: traded ? (EN ? 'Traded' : 'Handlades') : (EN ? 'No trading that day' : 'Ingen handel den dagen') } };
+  const fxc = await Promise.all(curs.map((c) => api(`/api/chart?s=${encodeURIComponent(fxPair(c))}&from=${from}`, 6 * 3600e3).catch(() => null)));
+  const fx = { SEK: { F0: 1, F1: 1 } };
+  curs.forEach((c, i) => { const d = closesByDay(fxc[i]?.punkter).filter(([day]) => day <= dag); const last = d[d.length - 1]; const prev = d.filter(([day]) => day < dag).pop();
+    if (last) fx[c] = { F1: last[1] * fxScale(c), F0: (prev || last)[1] * fxScale(c), pair: fxPair(c), scale: fxScale(c) }; });
+  const items = syms.map((s, i) => {
+    const d = closesByDay(charts[i]?.punkter).filter(([day]) => day <= dag);
+    const last = d[d.length - 1]; const traded = !!last && last[0] === dag; const prev = traded ? d[d.length - 2] : null;
+    return { sym: s, valuta: valuta[s], buys: bys.filter((b) => b.sym === s), traded, P1: last?.[1] ?? null, P0: traded ? prev?.[1] ?? null : last?.[1] ?? null,
+      status: { kod: 'stangd', bors: borsOf(s).namn, txt: traded ? (EN ? 'Traded' : 'Handlades') : (EN ? 'No trading that day' : 'Ingen handel den dagen') } };
   });
-  const tot = hold.reduce((a, h) => a + (h.varde || 0), 0); const idag = hold.reduce((a, h) => a + (h.idag || 0), 0);
-  return { hold, tot, idag, dag, live: false, past: true, intraday: (h) => `/api/chart?s=${encodeURIComponent(h.sym)}&dag=${dag}`, base: (h) => h.prev, per: (h) => h.antal * (h.fx || 0) };
+  const day = dayMath(items, fx, dag);
+  return { items, fx, dag, live: false, past: true, ...day, tot: day.end };
 }
 async function mountDinDag() {
   const port = getPort(); const box = $('#dd-body'); const today = sthlmDay(Date.now());
@@ -811,72 +809,95 @@ async function mountDinDag() {
   if (!port.length) { box.innerHTML = `<div class="empty">Du har inga köp i portföljen än. <a href="/portfolj" data-link>Lägg till ett köp</a> så ser du här hur din dag går.</div>`; return; }
   const first = port.map((b) => b.tid).filter(Boolean).sort()[0]; if (first) inp.min = sthlmDay(first);
   const q = new URLSearchParams(location.search).get('dag');
-  const past = q && /^\d{4}-\d{2}-\d{2}$/.test(q) && q < today;
-  const m = past ? await ddPast(port, q) : await ddToday(port);
+  const past = !!(q && /^\d{4}-\d{2}-\d{2}$/.test(q) && q < today);
+  const fail = (txt) => { box.innerHTML = `<div class="empty" style="margin-top:16px">${txt} <button class="btn btn-ghost" id="dd-retry" type="button" style="margin-left:6px">${EN ? 'Try again' : 'Försök igen'}</button></div>`; $('#dd-retry')?.addEventListener('click', () => { memo.clear?.(); render(); }); };
+  let m;
+  try { m = past ? await ddPast(port, q) : await ddToday(port); }
+  catch { if ($('#dd-body')) fail(EN ? 'The prices could not be fetched right now, so your day cannot be calculated.' : 'Kurserna kunde inte hämtas just nu, så din dag kan inte räknas ut.'); return; }
   if (!$('#dd-body')) return;
-  const { hold, tot, idag, dag } = m;
+  if (m.items.length && m.items.every((it) => it.missing)) {
+    $('#dd-bors').hidden = true;
+    fail(past ? (EN ? 'The prices for that day could not be fetched right now, so the day cannot be calculated.' : 'Kurserna för den dagen kunde inte hämtas just nu, så dagen kan inte räknas ut.')
+      : (EN ? 'The prices could not be fetched right now, so your day cannot be calculated.' : 'Kurserna kunde inte hämtas just nu, så din dag kan inte räknas ut.'));
+    return;
+  }
+  const { items, dag } = m; const change = m.change;
   const wd = new Date(dag + 'T12:00:00Z').getUTCDay();
-  $('#dd-bors').hidden = !!past;
+  $('#dd-bors').hidden = past;
   if (past) {
     $('#dd-sub').textContent = `${dayShort(dag + 'T12:00:00')} · ${EN ? 'closing prices compared with the day before' : 'stängningskurser jämfört med dagen innan'}`;
-    if (!hold.length) { box.innerHTML = `<div class="empty" style="margin-top:16px">${EN ? "You didn't own any stocks in the portfolio that day." : 'Du ägde inga aktier i portföljen den dagen.'}</div>`; return; }
-    if (wd === 0 || wd === 6 || hold.every((h) => h.idag == null)) { box.innerHTML = `<div class="empty" style="margin-top:16px">${EN ? 'The markets were closed that day. Pick another day.' : 'Börserna var stängda den dagen. Välj en annan dag.'}</div>`; return; }
+    if (!items.length) { box.innerHTML = `<div class="empty" style="margin-top:16px">${EN ? "You didn't own any stocks in the portfolio that day." : 'Du ägde inga aktier i portföljen den dagen.'}</div>`; return; }
+    if (wd === 0 || wd === 6 || items.every((it) => !it.traded)) { box.innerHTML = `<div class="empty" style="margin-top:16px">${EN ? 'The markets were closed that day. Pick another day.' : 'Börserna var stängda den dagen. Välj en annan dag.'}</div>`; return; }
   } else {
-    const borser = {}; for (const h of hold) borser[h.status.bors] = borser[h.status.bors] || h.status;
+    const borser = {}; for (const h of items) borser[h.status.bors] = borser[h.status.bors] || h.status;
     $('#dd-bors').innerHTML = Object.values(borser).map((b) => `<span class="dd-bors ${b.kod}"><i></i>${esc(b.bors)} · ${esc(b.txt)}</span>`).join('');
     if (dag) $('#dd-sub').textContent = m.live ? `${dayShort(dag + 'T12:00:00')} · ${EN ? 'compared with the previous close' : 'jämfört med gårdagens stängning'}` : (EN ? `No trading yet today. Showing the last trading day, ${dayShort(dag + 'T12:00:00')}.` : `Ingen handel än i dag. Här är senaste börsdagen, ${dayShort(dag + 'T12:00:00')}.`);
   }
-  const counted = hold.filter((h) => h.idag != null);
-  const up = counted.filter((h) => h.idag > 0).sort((a, b) => b.idag - a.idag), down = counted.filter((h) => h.idag <= 0).sort((a, b) => a.idag - b.idag);
-  const maxAbs = Math.max(1, ...counted.map((h) => Math.abs(h.idag)));
-  const notYet = hold.filter((h) => h.idag == null);
-  const sentence = [up[0] ? `${EN ? 'Biggest lift' : 'Mest upp'}: <b>${esc(ovName(up[0].sym))}</b> ${krDiff(up[0].idag)}` : '', down[0] && down[0].idag < 0 ? `${EN ? 'Biggest drag' : 'Mest ner'}: <b>${esc(ovName(down[0].sym))}</b> ${krDiff(down[0].idag)}` : ''].filter(Boolean).join(' · ');
-  const row = (h) => { const w = h.idag != null ? Math.round((Math.abs(h.idag) / maxAbs) * 100) : 0;
-    return `<a class="dd-row" href="/bolag/${encodeURIComponent(h.sym)}" data-link>${symFlag(h.sym)}
-      <span class="dd-name"><b>${esc(ovName(h.sym))}</b><span class="small muted">${esc(h.status.bors)} · ${esc(h.status.txt)}</span></span>
-      <span class="dd-bar"><span class="dd-neg">${h.idag < 0 ? `<i style="width:${w}%"></i>` : ''}</span><span class="dd-pos">${h.idag > 0 ? `<i style="width:${w}%"></i>` : ''}</span></span>
-      <span class="dd-num num"><b style="color:var(--${h.idag == null ? 'muted' : tone(h.idag)})">${h.idag != null ? krDiff(h.idag) : '–'}</b><span class="small muted">${h.d1Dag != null ? pct(h.d1Dag, 1) : past ? (EN ? 'no trading' : 'ingen handel') : (EN ? 'not traded yet' : 'inte handlad än')}</span></span></a>`; };
-  const base0 = tot - idag;
+  // Rader: aktierna och valutans rörelse, sorterade efter påverkan i kronor
+  const stocks = items.filter((h) => h.idag != null && !h.missing);
+  const fxRows = Object.entries(m.fxEff || {}).map(([c, v]) => ({ fx: c, idag: v, pct: m.fx[c] ? (m.fx[c].F1 / m.fx[c].F0 - 1) * 100 : null }));
+  const rows = [...stocks, ...fxRows].sort((a, b) => b.idag - a.idag);
+  // Hela kronor som summerar exakt till dagens resultat (största rest får avrundningen)
+  { const target = Math.round(change); const fl = rows.map((x) => Math.floor(x.idag)); let left = target - fl.reduce((a, v) => a + v, 0);
+    const order = rows.map((x, i) => [x.idag - Math.floor(x.idag), i]).sort((a, b) => b[0] - a[0]);
+    rows.forEach((x, i) => { x.kr = fl[i]; }); for (const [, i] of order) { if (left <= 0) break; rows[i].kr += 1; left -= 1; } }
+  const maxAbs = Math.max(1, ...rows.map((h) => Math.abs(h.idag)));
+  const notYet = items.filter((h) => h.idag == null && !h.missing); const missing = items.filter((h) => h.missing);
+  const up = stocks.filter((h) => h.idag > 0).sort((a, b) => b.idag - a.idag), down = stocks.filter((h) => h.idag < 0).sort((a, b) => a.idag - b.idag);
+  const sentence = [up[0] ? `${EN ? 'Biggest lift' : 'Mest upp'}: <b>${esc(ovName(up[0].sym))}</b> ${krDiff(up[0].kr ?? up[0].idag)}` : '', down[0] ? `${EN ? 'Biggest drag' : 'Mest ner'}: <b>${esc(ovName(down[0].sym))}</b> ${krDiff(down[0].kr ?? down[0].idag)}` : ''].filter(Boolean).join(' · ');
+  const bar = (v) => { const w = Math.round((Math.abs(v) / maxAbs) * 100); return `<span class="dd-bar"><span class="dd-neg">${v < 0 ? `<i style="width:${w}%"></i>` : ''}</span><span class="dd-pos">${v > 0 ? `<i style="width:${w}%"></i>` : ''}</span></span>`; };
+  const row = (h) => h.fx ? `<div class="dd-row"><span class="dd-fx">${esc(h.fx)}</span>
+      <span class="dd-name"><b>${EN ? `Currency ${esc(h.fx)}/SEK` : `Valutan ${esc(h.fx)}/SEK`}</b><span class="small muted">${EN ? 'How the exchange rate changed the value of your foreign stocks' : 'Hur växelkursen ändrade värdet på dina utländska aktier'}</span></span>
+      ${bar(h.idag)}<span class="dd-num num"><b style="color:var(--${tone(h.idag)})">${krDiff(h.kr ?? h.idag)}</b><span class="small muted">${h.pct != null ? pct(h.pct, 2) : ''}</span></span></div>`
+    : `<a class="dd-row" href="/bolag/${encodeURIComponent(h.sym)}" data-link>${symFlag(h.sym)}
+      <span class="dd-name"><b>${esc(ovName(h.sym))}</b><span class="small muted">${esc(h.status.bors)} · ${esc(h.status.txt)}${h.nya?.length ? ` · ${EN ? 'bought today' : 'köpt under dagen'}` : ''}</span></span>
+      ${h.idag != null ? bar(h.idag) : '<span class="dd-bar"></span>'}
+      <span class="dd-num num"><b style="color:var(--${h.idag == null ? 'muted' : tone(h.idag)})">${h.idag != null ? krDiff(h.kr ?? h.idag) : '–'}</b><span class="small muted">${h.d1Dag != null ? pct(h.d1Dag, 1) : past ? (EN ? 'no trading' : 'ingen handel') : h.missing ? (h.missWhy === 'fx' ? (EN ? 'exchange rate missing' : 'växelkurs saknas') : (EN ? 'price missing' : 'kurs saknas')) : (EN ? 'not traded yet' : 'inte handlad än')}</span></span></a>`;
+  const startLbl = EN ? 'Start of the day' : 'Början av dagen', endLbl = m.live ? (EN ? 'Now' : 'Nu') : (EN ? 'End of the day' : 'Slutet av dagen');
   box.innerHTML = `
     <section class="ov-card ov-dark dd-hero">
       <div class="dd-top"><div><span class="small" style="color:rgba(255,255,255,.6)">${m.live ? (EN ? 'Today' : 'I dag') : esc(dayShort(dag + 'T12:00:00'))}</span>
-        <b class="ov-big num" style="color:${idag < 0 ? '#FFB4AC' : '#9BE3B8'}">${idag ? krDiff(idag) : '0 kr'}</b>
-        <span class="num" style="color:${idag < 0 ? '#FFB4AC' : '#9BE3B8'}">${idag && base0 ? pctDiff((idag / base0) * 100) : ''}${past && tot ? ` · ${EN ? 'value at close' : 'värde vid stängning'} ${sekBig(tot)}` : ''}</span></div>
+        <b class="ov-big num" style="color:${change < 0 ? '#FFB4AC' : '#9BE3B8'}">${Math.round(change) ? krDiff(change) : '0 kr'}</b>
+        <span class="num" style="color:${change < 0 ? '#FFB4AC' : '#9BE3B8'}">${m.pct != null ? pctDiff(m.pct) : ''}</span></div>
         <p class="dd-sent">${sentence || (EN ? 'No movement.' : 'Ingen rörelse.')}</p></div>
+      ${missing.length ? `<p class="dd-warn small">${EN ? `${missing.length === 1 ? '1 stock' : `${missing.length} stocks`} could not be fetched and ${missing.length === 1 ? 'is' : 'are'} not included in the numbers below.` : `${missing.length === 1 ? '1 aktie' : `${missing.length} aktier`} kunde inte hämtas och räknas inte med i siffrorna nedan.`}</p>` : ''}
+      <div class="dd-flow">
+        <div><span>${startLbl}</span><b class="num">${sekBig(m.start)}</b><span>${past ? (EN ? 'previous close' : 'föregående stängning') : (EN ? "yesterday's close" : 'gårdagens stängning')}</span></div>
+        <span class="dd-arrow" aria-hidden="true">→</span>
+        ${m.added ? `<div><span>${EN ? 'Added during the day' : 'Insatt under dagen'}</span><b class="num">+${sekBig(m.added)}</b><span>${EN ? 'purchases' : 'köp'}</span></div><span class="dd-arrow" aria-hidden="true">→</span>` : ''}
+        <div><span>${endLbl}</span><b class="num">${sekBig(m.end)}</b><span>${m.live ? (EN ? 'latest prices' : 'senaste kurserna') : (EN ? 'at close' : 'vid stängning')}</span></div>
+      </div>
       <div id="dd-chart" class="dd-chart"><div class="small" style="color:rgba(255,255,255,.55)">${EN ? 'Loading the day …' : 'Hämtar dagens kurser …'}</div></div>
     </section>
     <div class="dd-grid">
       <section class="ov-card"><div class="ov-cardhead"><h2>Så påverkade dina aktier dagen</h2><span class="small muted">${EN ? 'In kronor' : 'I kronor'}</span></div>
-        ${[...up, ...down].map(row).join('')}${notYet.length ? `<div class="dd-sep small muted">${past ? (EN ? 'No trading that day' : 'Ingen handel den dagen') : (EN ? 'Not traded yet today' : 'Har inte handlats i dag än')}</div>${notYet.map(row).join('')}` : ''}</section>
+        ${rows.map(row).join('')}
+        ${notYet.length ? `<div class="dd-sep small muted">${past ? (EN ? 'No trading that day' : 'Ingen handel den dagen') : (EN ? 'Not traded yet today' : 'Har inte handlats i dag än')}</div>${notYet.map(row).join('')}` : ''}
+        ${missing.length ? `<div class="dd-sep small muted">${EN ? 'Could not be fetched, not included in the total' : 'Kunde inte hämtas, räknas inte med i summan'}</div>${missing.map(row).join('')}` : ''}
+        <div class="dd-total"><span>${EN ? 'Total' : 'Summa'}</span><b class="num" style="color:var(--${tone(change)})">${krDiff(change)}</b></div></section>
       <section class="ov-card"><div class="ov-cardhead"><h2>Nyheter om dem som rörde sig mest</h2></div><div id="dd-news">${loading('Hämtar nyheter …')}</div></section>
     </div>
-    <p class="small faint" style="margin:14px 0 0">${past ? 'Förändringen räknas på stängningskursen den dagen mot dagen innan, för de aktier du ägde när dagen var slut, och räknas om till kronor med växelkursen den dagen.' : 'Förändringen räknas i aktiens egen valuta mot föregående stängning och räknas om till kronor med dagens växelkurs. Valutans rörelse under dagen ingår inte. Aktier vars börs inte har öppnat räknas inte, så gårdagens rörelse blandas aldrig in.'}</p>`;
+    <p class="small faint" style="margin:14px 0 0">${EN ? "Start of the day is what your stocks were worth at the previous close. End of the day is what they are worth now, or at the day's close. The difference is exactly the stocks' moves plus the currency's move. Purchases during the day count as money added, not as profit." : 'Början av dagen är vad dina aktier var värda vid föregående stängning. Slutet är vad de är värda nu, eller vid dagens stängning. Skillnaden är exakt aktiernas rörelse plus valutans rörelse. Köp under dagen räknas som insatta pengar, inte som vinst.'}</p>`;
 
-  // Kurvan för dagen, var femte minut
-  Promise.all(counted.map((h) => api(m.intraday(h), past ? 6 * 3600e3 : 5 * 60e3).catch(() => null))).then((cs) => {
-    const el = $('#dd-chart'); if (!el) return;
-    const series = counted.map((h, i) => { const c = cs[i]; const pts = (c?.punkter || []).filter(([t]) => sthlmDay(t * 1000) === dag); return { per: m.per(h), base: m.base(h, c), pts }; }).filter((x) => x.base && x.pts.length);
-    if (!series.length) { el.innerHTML = `<div class="small" style="color:rgba(255,255,255,.55)">${past ? (EN ? 'Prices every five minutes are only available for the last 60 days.' : 'Kurser var femte minut finns bara för de senaste 60 dagarna.') : (EN ? 'No intraday prices yet.' : 'Inga kurser under dagen än.')}</div>`; return; }
-    const t0 = Math.min(...series.map((x) => x.pts[0][0])), t1 = Math.max(...series.map((x) => x.pts[x.pts.length - 1][0]));
-    const pts = []; for (let t = t0; t <= t1; t += 300) { let v = 0; for (const x of series) { let p = null; for (const q of x.pts) { if (q[0] <= t) p = q[1]; else break; } v += p != null ? (p - x.base) * x.per : 0; } pts.push([t, v]); }
-    const W = 900, H = 200; const vals = pts.map((p) => p[1]); const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals); const pad = (hi - lo) * 0.12 || 10;
-    const X = (t) => ((t - t0) / ((t1 - t0) || 1)) * W, Y = (v) => H - ((v - (lo - pad)) / ((hi + pad) - (lo - pad))) * H;
-    const line = pts.map(([t, v], i) => `${i ? 'L' : 'M'}${X(t).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ');
-    const last = pts[pts.length - 1][1]; const col = last < 0 ? '#FFB4AC' : '#9BE3B8';
-    const hm = (t) => new Date(t * 1000).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
-    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="dd-svg" role="img" aria-label="${EN ? 'Portfolio change during the day' : 'Portföljens förändring under dagen'}">
-      <line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" stroke="rgba(255,255,255,.25)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>
-      <path d="${line} L${W} ${Y(0)} L0 ${Y(0)} Z" fill="${col}" opacity=".12"/>
-      <path d="${line}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>
-      <div class="dd-axis small num"><span>${hm(t0)}</span><span>${past ? (EN ? 'Dashed line = previous close' : 'Streckad linje = föregående stängning') : (EN ? 'Dashed line = yesterday\'s close' : 'Streckad linje = gårdagens stängning')}</span><span>${hm(t1)}</span></div>`;
-  });
+  dayCurve(m).then((c) => { const el = $('#dd-chart'); if (!el) return;
+    if (c.error) { const T = {
+        old: ['Prices every five minutes are only available for the last 60 days, so the curve for this day cannot be shown. The numbers above are still correct.', 'Kurser var femte minut finns bara för de senaste 60 dagarna, så kurvan för den här dagen kan inte visas. Siffrorna ovan stämmer ändå.'],
+        fetch: ['The prices for the curve could not be fetched right now. The numbers above are still correct. Try again in a while.', 'Kurserna för kurvan kunde inte hämtas just nu. Siffrorna ovan stämmer ändå. Prova igen om en stund.'],
+        none: ['None of your stocks have traded yet, so there is no curve to show.', 'Ingen av dina aktier har handlats än, så det finns ingen kurva att visa.'],
+        live: ['The curve appears when there are prices from today for all your stocks.', 'Kurvan visas när det finns kurser från i dag för alla dina aktier.'],
+        partial: ['Prices every five minutes are missing for some of your stocks that day, so the curve cannot be shown. The numbers above are still correct.', 'Kurser var femte minut saknas för några av dina aktier den dagen, så kurvan kan inte visas. Siffrorna ovan stämmer ändå.'] }[c.error] || ['The curve cannot be shown right now.', 'Kurvan kan inte visas just nu.'];
+      el.innerHTML = `<div class="small" style="color:rgba(255,255,255,.6)">${EN ? T[0] : T[1]}</div>`; return; }
+    drawDayCurve(el, c.pts, past); }).catch(() => { const el = $('#dd-chart'); if (el) el.innerHTML = `<div class="small" style="color:rgba(255,255,255,.6)">${EN ? 'The curve could not be shown right now. The numbers above are still correct.' : 'Kurvan kunde inte visas just nu. Siffrorna ovan stämmer ändå.'}</div>`; });
   // Nyheter från dagen om de tre som påverkade mest
-  const top = counted.slice().sort((a, b) => Math.abs(b.idag) - Math.abs(a.idag)).slice(0, 3);
-  Promise.all(top.map((h) => api('/api/news?s=' + encodeURIComponent(h.sym), 10 * 60e3).then((n) => (n?.items || []).map((x) => prepNews(x, null, h.sym))).catch(() => []))).then((res) => {
+  const top = stocks.slice().sort((a, b) => Math.abs(b.idag) - Math.abs(a.idag)).slice(0, 3);
+  Promise.all(top.map((h) => api('/api/news?s=' + encodeURIComponent(h.sym), 10 * 60e3).then((n) => (n?.error ? null : (n?.items || []).map((x) => prepNews(x, null, h.sym)))).catch(() => null))).then((res0) => {
     const el = $('#dd-news'); if (!el) return;
+    if (!top.length) { el.innerHTML = `<p class="small muted" style="margin:0">${EN ? 'None of your stocks have moved yet, so there is no news to show.' : 'Ingen av dina aktier har rört sig än, så det finns inga nyheter att visa.'}</p>`; return; }
+    if (res0.every((x) => x == null)) { el.innerHTML = `<p class="small muted" style="margin:0">${EN ? 'The news could not be fetched right now. Try again in a while.' : 'Nyheterna kunde inte hämtas just nu. Prova igen om en stund.'}</p>`; return; }
+    const res = res0.map((x) => x || []);
     const dayStart = new Date(dag + 'T00:00:00').getTime(); const from = past ? dayStart - 6 * 3600e3 : Date.now() - 36 * 3600e3; const to = past ? dayStart + 30 * 3600e3 : Infinity; const seen = new Set();
-    const items = res.flat().filter((n) => { const t = new Date(n.datum).getTime(); return t >= from && t <= to; }).filter((n) => { const k = n.lank || n.rubrik; if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => String(b.datum).localeCompare(String(a.datum))).slice(0, 6);
-    el.innerHTML = items.length ? items.map(newsRow).join('') : `<p class="small muted" style="margin:0">${past ? (EN ? 'No news saved from that day about these stocks. News is kept for a limited time.' : 'Inga nyheter från den dagen om de här aktierna. Nyheter finns bara kvar en begränsad tid.') : (EN ? 'No news in the last day about the stocks that moved most.' : 'Inga nyheter det senaste dygnet om aktierna som rörde sig mest.')}</p>`;
+    const list = res.flat().filter((n) => { const t = new Date(n.datum).getTime(); return t >= from && t <= to; }).filter((n) => { const k = n.lank || n.rubrik; if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => String(b.datum).localeCompare(String(a.datum))).slice(0, 6);
+    el.innerHTML = list.length ? list.map(newsRow).join('') : `<p class="small muted" style="margin:0">${past ? (EN ? 'No news saved from that day about these stocks. News is kept for a limited time.' : 'Inga nyheter från den dagen om de här aktierna. Nyheter finns bara kvar en begränsad tid.') : (EN ? 'No news in the last day about the stocks that moved most.' : 'Inga nyheter det senaste dygnet om aktierna som rörde sig mest.')}</p>`;
   });
 }
 
@@ -1974,6 +1995,85 @@ function viewPortfolj() {
 }
 
 // Portföljens siffror, gemensamt för Min portfölj och översikten
+/* ---- Exakt dagsresultat i kronor ----
+   Början av dagen = antal × föregående stängningskurs × växelkursen då.
+   Slutet = antal × kursen nu (eller dagens stängning) × växelkursen nu.
+   Köp under dagen räknas som insatta pengar, inte som vinst. Aktiernas rörelse + valutans rörelse = slut − början − insatt, exakt. */
+const fxPair = (c) => (c === 'GBp' || c === 'GBX' ? 'GBP' : c) + 'SEK=X';
+const fxScale = (c) => (c === 'GBp' || c === 'GBX' ? 0.01 : 1);
+async function fxDay(currencies, dag) {
+  const out = { SEK: { F0: 1, F1: 1 } }; const need = [...new Set(currencies.filter((c) => c && c !== 'SEK'))]; if (!need.length) return out;
+  const q = await getQuotes(need.map(fxPair));
+  for (const c of need) { const x = q[fxPair(c)]; if (!x?.kurs) continue; const k = fxScale(c);
+    const same = !!x.tid && sthlmDay(x.tid) === dag; const prev = same ? (x.prev ?? (x.d1 != null ? x.kurs / (1 + x.d1 / 100) : x.kurs)) : x.kurs;
+    out[c] = { F0: prev * k, F1: x.kurs * k, pair: fxPair(c), scale: k }; }
+  return out;
+}
+function dayMath(items, fx, dag) {
+  let start = 0, added = 0, end = 0; const fxEff = {};
+  for (const it of items) {
+    const f = fx[it.valuta] || (it.valuta === 'SEK' ? { F0: 1, F1: 1 } : null);
+    it.nya = it.buys.filter((b) => b.tid && sthlmDay(b.tid) === dag && b.insattSek != null);
+    it.qOld = it.buys.filter((b) => !it.nya.includes(b)).reduce((a, b) => a + b.antal, 0);
+    if (it.P1 == null || it.P0 == null || !f) { it.missing = true; it.missWhy = it.P1 == null || it.P0 == null ? 'kurs' : 'fx'; it.idag = null; it.d1Dag = null; continue; }
+    const qNew = it.nya.reduce((a, b) => a + b.antal, 0), cost = it.nya.reduce((a, b) => a + b.insattSek, 0);
+    it.F0 = f.F0; it.F1 = f.F1;
+    it.start = it.qOld * it.P0 * f.F0; it.added = cost; it.end = (it.qOld + qNew) * it.P1 * f.F1;
+    const stock = it.qOld * (it.P1 - it.P0) * f.F1 + (qNew * it.P1 * f.F1 - cost);
+    it.fxEff = it.qOld * it.P0 * (f.F1 - f.F0);
+    it.idag = it.traded || it.nya.length ? stock : null;
+    it.d1Dag = it.traded && it.P0 ? (it.P1 / it.P0 - 1) * 100 : null;
+    start += it.start; added += cost; end += it.end;
+    if (it.valuta !== 'SEK' && Math.abs(it.fxEff) > 0.005) fxEff[it.valuta] = (fxEff[it.valuta] || 0) + it.fxEff;
+  }
+  const change = end - start - added;
+  return { start, added, end, change, pct: start + added > 0 ? (change / (start + added)) * 100 : null, fxEff };
+}
+// Kurvan för dagen var femte minut. Börjar på 0 vid föregående stängning och slutar exakt på dagens resultat.
+async function dayCurve(m) {
+  const { items, fx, dag, live } = m;
+  const url = (sym) => (live ? `/api/chart?s=${encodeURIComponent(sym)}&r=1d` : `/api/chart?s=${encodeURIComponent(sym)}&dag=${dag}`);
+  const ttl = live ? 5 * 60e3 : 6 * 3600e3;
+  const traded = items.filter((it) => it.traded && !it.missing);
+  const curs = Object.keys(fx).filter((c) => c !== 'SEK' && items.some((it) => it.valuta === c && !it.missing));
+  const [S, F] = await Promise.all([Promise.all(traded.map((it) => api(url(it.sym), ttl).catch(() => null))), Promise.all(curs.map((c) => api(url(fx[c].pair), ttl).catch(() => null)))]);
+  const onDay = (c) => (c?.punkter || []).filter(([t]) => sthlmDay(t * 1000) === dag);
+  const P = new Map(traded.map((it, i) => [it.sym, onDay(S[i])]));
+  if (!traded.length) return { error: 'none' };
+  if ([...P.values()].some((p) => !p.length)) {
+    const failed = traded.some((it, i) => !S[i] || S[i].error);
+    const old = !live && Date.now() - new Date(dag + 'T12:00:00Z').getTime() > 57 * 864e5;
+    return { error: old ? 'old' : failed ? 'fetch' : live ? 'live' : 'partial' };
+  }
+  const FX = Object.fromEntries(curs.map((c, i) => [c, onDay(F[i]).map(([t, v]) => [t, v * fx[c].scale])]));
+  const at = (pts, t, fb) => { let v = fb; for (const [pt, pv] of pts) { if (pt <= t) v = pv; else break; } return v; };
+  const times = [...new Set([...P.values()].flatMap((p) => p.map((x) => x[0])))].sort((a, b) => a - b);
+  const val = (t) => { let v = 0;
+    for (const it of items) { if (it.missing) continue; const Ft = it.valuta === 'SEK' ? 1 : at(FX[it.valuta] || [], t, it.F0); const Pt = it.traded ? at(P.get(it.sym), t, it.P0) : it.P0;
+      v += it.qOld * (Pt * Ft - it.P0 * it.F0);
+      for (const n of it.nya) if (new Date(n.tid).getTime() / 1000 <= t + 300) v += n.antal * Pt * Ft - n.insattSek; }
+    return v; };
+  const pts = [[times[0], 0], ...times.map((t) => [t + 300, val(t)])];
+  const tEnd = live ? Math.max(Math.floor(Date.now() / 1000), pts[pts.length - 1][0]) : pts[pts.length - 1][0];
+  if (live) pts.push([tEnd, m.change]); else pts[pts.length - 1] = [tEnd, m.change];
+  return { pts };
+}
+function drawDayCurve(el, pts, past) {
+  const W = 900, H = 200; const t0 = pts[0][0], t1 = pts[pts.length - 1][0];
+  const vals = pts.map((p) => p[1]); const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals); const pad = (hi - lo) * 0.12 || 10;
+  const X = (t) => ((t - t0) / ((t1 - t0) || 1)) * W, Y = (v) => H - ((v - (lo - pad)) / ((hi + pad) - (lo - pad))) * H;
+  const line = pts.map(([t, v], i) => `${i ? 'L' : 'M'}${X(t).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ');
+  const last = pts[pts.length - 1][1]; const col = last < 0 ? '#FFB4AC' : '#9BE3B8';
+  const hm = (t) => new Date(t * 1000).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="dd-svg" role="img" aria-label="${EN ? 'Portfolio change during the day' : 'Portföljens förändring under dagen'}">
+    <line x1="0" x2="${W}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="rgba(255,255,255,.25)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>
+    <path d="${line} L${X(t1).toFixed(1)} ${Y(0).toFixed(1)} L${X(t0).toFixed(1)} ${Y(0).toFixed(1)} Z" fill="${col}" opacity=".12"/>
+    <path d="${line}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>
+    <div class="dd-axis small num"><span>${hm(t0)}</span><span>${past ? (EN ? 'Dashed line = start of the day (previous close)' : 'Streckad linje = början av dagen (föregående stängning)') : (EN ? 'Dashed line = start of the day (yesterday\'s close)' : 'Streckad linje = början av dagen (gårdagens stängning)')}</span><span>${hm(t1)}</span></div>`;
+}
+// Dagliga stängningskurser, en per dag (den senaste om en dag förekommer två gånger)
+const closesByDay = (pts) => { const m = new Map(); for (const [t, v] of pts || []) m.set(sthlmDay(t * 1000), v); return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])); };
+
 async function pfData(port) {
   const syms = [...new Set(port.map((x) => x.sym))];
   const [quotes, stocks] = await Promise.all([getQuotes(syms), Promise.all(syms.map((s) => getStock(s)))]);
@@ -2004,7 +2104,11 @@ async function pfData(port) {
   // Dagens förändring: bara aktier som handlats i dag. Har ingen handlats än i dag (helg, före 09.00) visas senaste börsdagen.
   const dagar = hold.map((h) => h.dag).filter(Boolean).sort();
   const refDag = dagar.includes(sthlmDay(Date.now())) ? sthlmDay(Date.now()) : dagar[dagar.length - 1] || null;
-  for (const h of hold) { h.raknas = h.dag === refDag; h.d1Dag = h.raknas ? h.d1 : null; h.idag = h.raknas && h.varde != null && h.d1 != null ? h.varde - h.varde / (1 + h.d1 / 100) : null; }
+  const fxD = await fxDay(syms.map(valOf), refDag);
+  const items = hold.map((h) => { h.raknas = h.dag === refDag; const q = quotes[h.sym];
+    const P0 = h.kurs == null ? null : h.raknas ? (q?.prev ?? (h.d1 != null ? h.kurs / (1 + h.d1 / 100) : null)) : h.kurs;
+    return Object.assign(h, { valuta: h.valuta, P1: h.kurs, P0, traded: h.raknas, buys: h.bs }); });
+  const day = dayMath(items, fxD, refDag);
   const dagIdag = refDag === sthlmDay(Date.now());
   const tot = hold.reduce((a, h) => a + (h.varde || 0), 0);
   // Vinst räknas på de köp där vi vet vad du betalade
@@ -2013,11 +2117,11 @@ async function pfData(port) {
   const kandaInsatt = kanda.length > 0;
   const okanda = buys.length - kanda.length;
   const vinst = kandaInsatt ? kanda.reduce((a, b) => a + b.varde, 0) - insatt : null;
-  const idag = hold.reduce((a, h) => a + (h.idag || 0), 0);
+  const idag = day.change; const idagPct = day.pct;
   const scored = hold.filter((h) => h.poang != null && h.varde);
   const risk = scored.length ? scored.reduce((a, h) => a + h.poang * h.varde, 0) / scored.reduce((a, h) => a + h.varde, 0) : null;
 
-  return { syms, quotes, S, valOf, fxNow, buys, hold, tot, insatt, kandaInsatt, okanda, vinst, idag, risk, refDag, dagIdag };
+  return { syms, quotes, S, valOf, fxNow, buys, hold, tot, insatt, kandaInsatt, okanda, vinst, idag, idagPct, day, fxD, risk, refDag, dagIdag };
 }
 
 // Värdet dag för dag jämfört med insatta pengar, för tidslinjen
@@ -2032,6 +2136,7 @@ async function pfSeries(c) {
     Promise.all(syms.map((s) => api(`/api/chart?s=${encodeURIComponent(s)}&from=${firstDay(s)}`, 30 * 60e3))),
     Promise.all(curs.map((x) => api(`/api/chart?s=${encodeURIComponent((x === 'GBp' || x === 'GBX' ? 'GBP' : x) + 'SEK=X')}&from=${start}`, 30 * 60e3)))
   ]);
+  if ([...hist, ...fxh].some((x) => !x || x.error)) return { error: 'fetch' };
   const H = Object.fromEntries(syms.map((s, i) => [s, hist[i]?.punkter || []]));
   const F = Object.fromEntries(curs.map((x, i) => [x, (fxh[i]?.punkter || []).map(([t, v]) => [t, x === 'GBp' || x === 'GBX' ? v / 100 : v])]));
   const at = (pts, t) => { let v = null; for (const p of pts) { if (p[0] <= t) v = p[1]; else break; } return v ?? pts[0]?.[1] ?? null; };
@@ -2197,7 +2302,7 @@ function mountPortfolj() {
         <p class="small muted" style="margin:0">Ingenting kopplas till din bank. Du skriver in allt själv, och bara du ser det.</p></section>`;
       return;
     }
-    const { syms, quotes, valOf, fxNow, buys, hold, tot, insatt, kandaInsatt, okanda, vinst, idag, risk } = await pfData(port);
+    const { syms, quotes, valOf, fxNow, buys, hold, tot, insatt, kandaInsatt, okanda, vinst, idag, idagPct, risk } = await pfData(port);
     if (!$('#pf-list')) return;
     const lv = risk != null ? LV[lvlOf(Math.round(risk))] : null;
     const first = buys.filter((b) => b.tid).map((b) => new Date(b.tid).getTime()).sort((a, b) => a - b)[0];
@@ -2206,7 +2311,7 @@ function mountPortfolj() {
       <div class="stat"><span class="small muted">Värde nu</span><span class="num big">${sekBig(tot)}</span></div>
       <div class="stat"><span class="small muted">Insatt</span><span class="num">${kandaInsatt ? sekBig(insatt) : '–'}</span><span class="small faint">${first ? 'sedan ' + esc(new Date(first).toLocaleDateString(L, { day: 'numeric', month: 'short', year: 'numeric' })) : ''}${okanda ? ` · ${okanda} köp utan belopp räknas inte` : ''}</span></div>
       <div class="stat"><span class="small muted">Vinst eller förlust</span><span class="num" style="color:var(--${tone(vinst)})">${vinst != null ? `${vinst >= 0 ? '+' : '−'}${sekBig(Math.abs(vinst))}` : '–'}</span><span class="small" style="color:var(--${tone(vinst)})">${vinst != null && insatt ? pct((vinst / insatt) * 100, 1) : ''}</span></div>
-      <a class="stat stat-link" href="/idag" data-link><span class="small muted">I dag ›</span><span class="num" style="color:var(--${tone(idag)})">${idag ? `${idag > 0 ? '+' : '−'}${sekBig(Math.abs(idag))}` : '–'}</span><span class="small faint">${tot && idag ? pct((idag / (tot - idag)) * 100, 1) : ''}</span></a>
+      <a class="stat stat-link" href="/idag" data-link><span class="small muted">I dag ›</span><span class="num" style="color:var(--${tone(idag)})">${idag ? `${idag > 0 ? '+' : '−'}${sekBig(Math.abs(idag))}` : '–'}</span><span class="small faint">${idag && idagPct != null ? pct(idagPct, 1) : ''}</span></a>
       <div class="stat"><span class="small muted">Riskkoll för hela portföljen${tip('Riskkoll')}</span><span class="num">${risk != null ? `${nf(risk, 1)} / 10` : '–'}</span>${lv ? `<span class="pill ${lv.c}" style="align-self:flex-start">${lv.t}</span>` : ''}</div>
     </div>`;
 
@@ -2224,7 +2329,7 @@ function mountPortfolj() {
           <div class="pf-facts">
             <div><span class="small muted">Andel av portföljen</span><b class="num">${h.varde && tot ? nf((h.varde / tot) * 100, 0) + ' %' : '–'}</b></div>
             <div><span class="small muted">Snittkurs vid köp</span><b class="num">${h.snitt ? esc(kr(h.snitt)) + ' ' + esc(cur(h.valuta)) : '–'}</b></div>
-            <div><span class="small muted">I dag</span><b class="num" style="color:var(--${tone(h.d1)})">${h.d1 != null ? pct(h.d1, 1) : '–'}</b></div>
+            <div><span class="small muted">I dag</span><b class="num" style="color:var(--${tone(h.d1Dag)})">${h.d1Dag != null ? pct(h.d1Dag, 1) : '–'}</b></div>
             <div><span class="small muted">Riskkoll${tip('Riskkoll')}</span><b class="num">${h.poang != null ? `${h.poang} / 10 · ${LV[lvlOf(h.poang)].t}` : 'för lite data'}</b></div>
           </div>
           <div class="pf-buys"><span class="label-up">Dina köp</span>${h.bs.slice().sort((a, b) => String(b.tid).localeCompare(String(a.tid))).map((b) => `
@@ -2257,9 +2362,10 @@ function mountPortfolj() {
     const id = ++tlSeq; const box = $('#pf-tl'); if (!box || !cache) return;
     if (!cache.buys.some((b) => b.tid && b.insattSek != null)) { box.innerHTML = '<div class="empty">Tidslinjen kräver köp med datum. Lägg in dina köp med belopp, datum och tid.</div>'; return; }
     box.classList.add('is-loading');
-    const ser = await pfSeries(cache);
+    const ser = await pfSeries(cache).catch(() => ({ error: 'fetch' }));
     if (id !== tlSeq || !$('#pf-tl')) return;
     box.classList.remove('is-loading');
+    if (ser.error === 'fetch') { box.innerHTML = '<div class="empty">Kurserna för tidslinjen kunde inte hämtas just nu. Prova igen om en stund.</div>'; return; }
     if (ser.error) { box.innerHTML = '<div class="empty">Tidslinjen visas när det finns minst två dagars kurser efter ditt första köp.</div>'; return; }
     drawMoneyChart(box, rangeCut(ser.value, range, ser.tNow), rangeCut(ser.invested, range, ser.tNow));
   };

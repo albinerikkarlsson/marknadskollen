@@ -906,3 +906,12 @@ body.nosidebar .sidebar { display: none; }
 .dd-todaybtn { font-size: 14px; padding: 0 14px; }
 .dd-step:hover, .dd-todaybtn:hover { border-color: var(--ink-2); }
 .dd-date input { height: 38px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); padding: 0 14px; font: inherit; font-size: 14px; color: var(--ink); }
+.dd-flow { display: flex; align-items: stretch; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.dd-flow > div { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 2px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 10px 14px; }
+.dd-flow > div > span { font-size: 12px; color: rgba(255,255,255,.6); }
+.dd-flow > div > b { font-size: 20px; font-weight: 600; color: #fff; }
+.dd-arrow { align-self: center; color: rgba(255,255,255,.45); font-size: 18px; }
+.dd-fx { width: 30px; height: 20px; border-radius: 4px; background: var(--chip); color: var(--muted); font-size: 9px; font-weight: 600; display: grid; place-items: center; }
+.dd-total { display: flex; justify-content: space-between; padding: 12px 0 0; margin-top: 4px; border-top: 1px solid var(--line); font-weight: 600; }
+@media (max-width: 600px) { .dd-arrow { display: none; } }
+.dd-warn { margin: 12px 0 0; padding: 8px 12px; border-radius: 10px; background: rgba(255,200,120,.12); color: #FFD9A8; }

@@ -80,6 +80,8 @@ const D = {
   'Ledningen handlar': 'Management trades',
   'Så är dina pengar fördelade': 'How your money is spread',
   'Innehav': 'Holdings',
+  'Kurserna för diagrammet kunde inte hämtas just nu. Prova igen om en stund.': 'The prices for the chart could not be fetched right now. Try again in a while.',
+  'Kurserna för tidslinjen kunde inte hämtas just nu. Prova igen om en stund.': 'The prices for the timeline could not be fetched right now. Try again in a while.',
   'Diagrammet kräver köp med datum.': 'The chart needs purchases with a date.',
   'Diagrammet visas när det finns minst två dagars kurser.': 'The chart appears once there are at least two days of prices.',
   'Räknar på din portfölj …': 'Calculating your portfolio …',

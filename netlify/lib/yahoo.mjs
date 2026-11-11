@@ -73,14 +73,14 @@ const toQuote = (q) => {
   const kurs = raw(q.regularMarketPrice);
   if (!kurs) return null;
   const t = raw(q.regularMarketTime);
-  return { kurs, d1: raw(q.regularMarketChangePercent), tid: t ? new Date(t * 1000).toISOString() : null, namn: q.longName || q.shortName || null, valuta: q.currency || null };
+  return { kurs, d1: raw(q.regularMarketChangePercent), prev: raw(q.regularMarketPreviousClose), tid: t ? new Date(t * 1000).toISOString() : null, namn: q.longName || q.shortName || null, valuta: q.currency || null };
 };
 
 // Senaste kurs för flera tickers. Returnerar { SYM: {kurs, d1, tid, namn, valuta} }.
 export async function yQuotes(syms) {
   const out = {};
   try {
-    const d = await yahoo('/v7/finance/quote', { symbols: syms.join(','), fields: 'regularMarketPrice,regularMarketChangePercent,regularMarketTime,longName,shortName,currency' }, { withCrumb: true });
+    const d = await yahoo('/v7/finance/quote', { symbols: syms.join(','), fields: 'regularMarketPrice,regularMarketChangePercent,regularMarketPreviousClose,regularMarketTime,longName,shortName,currency' }, { withCrumb: true });
     for (const q of d?.quoteResponse?.result || []) { const v = toQuote(q); if (v && q.symbol) out[q.symbol.toUpperCase()] = v; }
   } catch (e) { if (e?.status === 404) return out; }
   // Det som saknas hämtas från kursdiagrammet, som inte kräver crumb
@@ -112,7 +112,7 @@ export async function yChart(sym, range = '1y', interval = '1d') {
   return {
     meta: m,
     points,
-    quote: kurs ? { kurs, d1: d1 == null ? null : Math.round(d1 * 100) / 100, tid: t ? new Date(t * 1000).toISOString() : null, namn: m.longName || m.shortName || null, valuta: m.currency || null } : null
+    quote: kurs ? { kurs, d1: d1 == null ? null : Math.round(d1 * 100) / 100, prev: prev ?? null, tid: t ? new Date(t * 1000).toISOString() : null, namn: m.longName || m.shortName || null, valuta: m.currency || null } : null
   };
 }
 
