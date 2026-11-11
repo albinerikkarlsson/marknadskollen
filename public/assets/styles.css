@@ -922,3 +922,15 @@ body.nosidebar .sidebar { display: none; }
 .guest-bar .btn { flex: none; }
 .ov-expill { font-size: 13px; vertical-align: middle; margin-left: 8px; font-weight: 400; letter-spacing: 0; }
 .ov-head + .guest-bar { margin-bottom: 4px; }
+.nt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.nt { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 16px; background: var(--surface); }
+.nt b { font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
+.nt b.faint { font-size: 17px; font-weight: 500; }
+.nt .faint { line-height: 1.35; }
+.nt-rep { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line, rgba(0,0,0,.08)); }
+.news-topic { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--chip); color: var(--ink-2); }
+.news-topic.t-Vinstvarning { background: var(--down-bg); color: var(--down); }
+.news-topic.t-Rapport { background: #E1EAF7; color: #2F5FA0; }
+.news-topic.t-Utdelning { background: var(--up-bg); color: var(--up); }
+.news-topic.t-Affär { background: var(--warn-bg); color: var(--warn); }
+.news-sort { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line-soft); }

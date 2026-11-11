@@ -7,15 +7,28 @@ import { ySearch } from '../lib/yahoo.mjs';
 // om man inte skriver vilket slag man vill ha, t.ex. "volvo a".
 const TYP = { 'Common Stock': 'Aktie', EQUITY: 'Aktie', 'ETP': 'ETF', 'ETF': 'ETF', 'ADR': 'ADR', 'REIT': 'Fastighetsbolag', 'Open-End Fund': 'Fond', MUTUALFUND: 'Fond', 'Closed-End Fund': 'Fond', 'Preference': 'Preferensaktie', 'Unit': 'Andel' };
 const OTC = new Set(['PNK', 'OTC', 'OBB', 'OQB', 'OQX']);
+// Vanliga svenska sökord som Yahoo inte förstår
+const ALIAS = { 'h&m': 'Hennes & Mauritz', 'h & m': 'Hennes & Mauritz', 'hm': 'Hennes & Mauritz', 'hennes': 'Hennes & Mauritz', 'seb': 'Skandinaviska Enskilda Banken', 'shb': 'Svenska Handelsbanken', 'nordea': 'Nordea Bank' };
+const IDX = (sym, namn, typ = 'Index') => ({ sym, namn, typ, klass: null, borsen: 'IDX', lista: null });
+const FIXED = {
+  'omx': [IDX('^OMX', 'OMX Stockholm 30')], 'omxs30': [IDX('^OMX', 'OMX Stockholm 30')], 'stockholmsbörsen': [IDX('^OMX', 'OMX Stockholm 30')],
+  'guld': [IDX('GC=F', 'Guld', 'Råvara')], 'gold': [IDX('GC=F', 'Guld', 'Råvara')], 'olja': [IDX('CL=F', 'Olja (WTI)', 'Råvara')], 'silver': [IDX('SI=F', 'Silver', 'Råvara')],
+  's&p 500': [IDX('^GSPC', 'S&P 500')], 'sp500': [IDX('^GSPC', 'S&P 500')], 'nasdaq': [IDX('^IXIC', 'Nasdaq Composite')], 'dow jones': [IDX('^DJI', 'Dow Jones')]
+};
+// Små tyska och andra andrahandslistor av samma bolag döljs när huvudlistan finns
+const MINOR = new Set(['F', 'DE', 'MU', 'SG', 'HM', 'IL', 'MI', 'BE', 'DU', 'HA', 'XD', 'XC', 'SW', 'VI', 'BO', 'NS', 'JK', 'MX', 'SA', 'BA', 'HE', 'IR', 'AS', 'PA', 'MC', 'LS', 'WA', 'PR', 'TA', 'KS', 'TW', 'SS', 'SZ', 'HK', 'T', 'KL', 'BK', 'SI', 'AX', 'NZ', 'TO', 'V', 'NE', 'CN', 'JO', 'IS', 'AT', 'BD', 'SR', 'QA', 'CA']);
 
 export default async (req) => {
   try {
     const raw = (new URL(req.url).searchParams.get('q') || '').trim().slice(0, 40);
     const { q, klass } = splitClass(raw);
     if (q.length < 2) return cached({ results: [] }, 3600);
-    let results = await fromYahoo(q).catch((e) => { console.warn('[search] Yahoo:', e?.message); return null; });
-    if (!results) results = await fromFinnhub(q);
-    return cached({ results: order(results, raw, klass).slice(0, 12) }, 86400);
+    const key = q.toLowerCase().replace(/\s+/g, ' ');
+    const look = ALIAS[key] || q;
+    let results = await fromYahoo(look).catch((e) => { console.warn('[search] Yahoo:', e?.message); return null; });
+    if (!results) results = await fromFinnhub(look).catch(() => []);
+    results = [...(FIXED[key] || []), ...results.filter((x) => !MINOR.has(x.borsen) || !results.some((y) => y !== x && !MINOR.has(y.borsen) && norm(y.namn) === norm(x.namn)))];
+    return cached({ results: order(results, ALIAS[key] ? look : raw, klass).slice(0, 12) }, 86400);
   } catch (e) { return fail(e); }
 };
 
@@ -60,7 +73,8 @@ export function order(list, raw, klass) {
   list.forEach((r, i) => { const key = r.borsen + '|' + r.namn.toLowerCase(); if (!firstSeen.has(key)) firstSeen.set(key, i); });
   const want = norm(raw.replace(/\s+(ser\.?\s*)?[abcd](-?aktien?)?$/i, ''));
   // Bolag vars namn är precis det man skrev (t.ex. "AB Volvo" för "volvo") går före liknande namn
-  const rank = (r) => (r.sym === exact || r.sym.split('.')[0] === exact ? -20 : 0) + (norm(r.namn) === want ? -1 : 0) + (r.borsen === 'ST' ? 0 : r.borsen === 'US' ? 1 : r.borsen === 'OTC' ? 3 : 2) * 3;
+  const base = (r) => r.sym.split('.')[0].replace(/-[A-D]$/, '');
+  const rank = (r) => (r.borsen === 'IDX' ? -40 : 0) + (r.borsen === 'ST' && base(r) === exact ? -25 : 0) + (r.sym === exact || r.sym.split('.')[0] === exact ? -20 : 0) + (norm(r.namn) === want ? -1 : 0) + (r.borsen === 'ST' ? 0 : r.borsen === 'US' ? 1 : r.borsen === 'OTC' ? 3 : 2) * 3;
   const cls = (r) => (!r.klass ? 0 : klass ? (r.klass === klass ? 0 : 2) : r.klass === 'B' ? 0 : r.klass === 'A' ? 1 : 2);
   const seen = new Set();
   return list

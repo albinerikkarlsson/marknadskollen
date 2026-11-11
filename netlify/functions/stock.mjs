@@ -67,8 +67,9 @@ async function fromYahoo(sym) {
     ['Utdelning', raw(s?.summaryDetail?.dividendYield) ? `${(raw(s.summaryDetail.dividendYield) * 100).toFixed(1).replace('.', ',')} %` : null]
   ].filter((x) => x[1]);
 
+  const nyckeltal = s && (price.quoteType || 'EQUITY') === 'EQUITY' ? keyFigures(s, cur) : [];
   return {
-    sym, namn, kalla: 'Yahoo Finance',
+    sym, namn, kalla: 'Yahoo Finance', nyckeltal,
     typ: TYP[typ] || null,
     kort: sym.replace('^', '').split('.')[0].split('-')[0].slice(0, 4),
     lista: [bors, sektor].filter(Boolean).join(' · '),
@@ -161,6 +162,37 @@ export function shortExchange(x) {
   if (u.includes('LONDON') || u === 'LSE') return 'London';
   if (u.includes('XETRA') || u.includes('FRANKFURT') || u === 'GER') return 'Frankfurt';
   return x.length > 22 ? x.split(' - ')[0] : x;
+}
+// Nyckeltal för bolagssidan. Värden som saknas skickas som null och visas som "Saknas".
+function keyFigures(s, cur) {
+  const sd = s.summaryDetail || {}; const fd = s.financialData || {}; const ks = s.defaultKeyStatistics || {};
+  const unit = cur === 'SEK' ? 'kr' : cur;
+  // Vinst och försäljning redovisas i bolagets rapportvaluta, som kan skilja sig från kursens valuta
+  const fcur = fd.financialCurrency || cur; const funit = fcur === 'SEK' ? 'kr' : fcur;
+  const n2 = (v) => (v == null || !Number.isFinite(v) ? null : v.toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  const n1 = (v) => (v == null || !Number.isFinite(v) ? null : v.toLocaleString('sv-SE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
+  const pc = (v) => (v == null || !Number.isFinite(v) ? null : `${n1(v * 100)} %`);
+  const pos = (v) => (v != null && v > 0 ? v : null);
+  const pe = pos(raw(sd.trailingPE)); const fpe = pos(raw(sd.forwardPE)); const eps = raw(ks.trailingEps);
+  const pb = pos(raw(ks.priceToBook)); const ps = pos(raw(sd.priceToSalesTrailing12Months));
+  const dy = raw(sd.dividendYield); const dr = raw(sd.dividendRate) ?? raw(sd.trailingAnnualDividendRate);
+  const pm = raw(fd.profitMargins); const om = raw(fd.operatingMargins); const roe = raw(fd.returnOnEquity);
+  const rg = raw(fd.revenueGrowth); const rev = raw(fd.totalRevenue); const de = raw(fd.debtToEquity);
+  return [
+    ['P/E', n1(pe), 'Priset delat med vinsten de senaste 12 månaderna. Saknas när bolaget går med förlust.'],
+    ['Vinst per aktie (EPS)', eps == null ? null : `${n2(eps)} ${funit}`, 'Bolagets vinst de senaste 12 månaderna delat på antalet aktier.'],
+    ['P/E framåt', n1(fpe), 'Priset delat med den vinst analytiker räknar med det kommande året.'],
+    ['P/B', n1(pb), 'Priset jämfört med bolagets bokförda värde (eget kapital).'],
+    ['P/S', n1(ps), 'Priset jämfört med bolagets försäljning de senaste 12 månaderna.'],
+    ['Direktavkastning', dy == null ? null : pc(dy), 'Utdelningen per år i procent av aktiekursen.'],
+    ['Utdelning per aktie', dr != null && dr > 0 ? `${n2(dr)} ${unit}` : (dy === 0 ? `0 ${unit}` : null), 'Senast kända utdelning per aktie och år.'],
+    ['Vinstmarginal', pc(pm), 'Hur stor del av försäljningen som blir vinst efter alla kostnader.'],
+    ['Rörelsemarginal', pc(om), 'Vinst från den vanliga verksamheten, före räntor och skatt, i procent av försäljningen.'],
+    ['Avkastning på eget kapital', pc(roe), 'Vinsten i procent av det kapital ägarna har i bolaget.'],
+    ['Försäljning 12 mån', rev ? money(rev, fcur) : null, 'Bolagets intäkter de senaste 12 månaderna.'],
+    ['Försäljningstillväxt', pc(rg), 'Hur mycket försäljningen ändrats jämfört med samma kvartal året innan.'],
+    ['Skuld / eget kapital', de == null ? null : n2(de / 100), 'Lånen jämfört med ägarnas kapital. Högre betyder mer lån.']
+  ];
 }
 const fmt = (n) => n.toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const TYP = { EQUITY: 'Aktie', ETF: 'ETF', MUTUALFUND: 'Fond', INDEX: 'Index' };

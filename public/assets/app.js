@@ -302,7 +302,17 @@ async function getNews(region) {
   if (r?.items) return { ok: true, hamtad: r.hamtad, items: r.items.map((n) => prepNews(n, region)), ingenAtkomst: !!r.ingenAtkomst };
   return { ok: false, error: r, items: [] };
 }
-const prepNews = (n, region, sym) => ({ ...n, tidTxt: when(n.datum), bolagTxt: (n.bolag || []).join(', '), land: newsLand(n, region, sym) });
+// Vad en nyhet handlar om, utifrån rubrik och ingress. Används för att sortera och filtrera.
+const TOPICS = [
+  ['Vinstvarning', /vinstvarning|profit warning|sänker (sin )?prognos|cuts? (its )?(guidance|forecast|outlook)|lowers (its )?(guidance|forecast|outlook)/i, 5],
+  ['Rapport', /rapport|kvartal|delårs|bokslut|resultat|earnings|quarter|\bq[1-4]\b|results|eps\b|revenue|omsättning|rörelseresultat/i, 4],
+  ['Affär', /förvärv|uppköp|\bbud\b|köper .*(bolag|verksamhet)|avyttr|acquir|merger|takeover|buyout|\bdeal\b|to buy\b|to sell\b/i, 3],
+  ['Utdelning', /utdelning|dividend|återköp|buyback|share repurchase/i, 3],
+  ['Ledning', /\b(ny|nya|new|interim) (vd|ceo|cfo|ordförande|chairman)\b|avgår|lämnar (som|posten)|steps? down|resign|appoint|utnämn|utses|utsedd|names? .{0,30}\b(ceo|cfo|chairman)\b/i, 2],
+  ['Analys', /riktkurs|price target|upgrade|downgrade|uppgrader|nedgrader|analyti?ker|analyst/i, 1]
+];
+const topicOf = (n) => { const t = `${n.rubrik || ''} ${n.text || ''}`; for (const [k, re, w] of TOPICS) if (re.test(t)) return { amne: k, vikt: w }; return { amne: null, vikt: 0 }; };
+const prepNews = (n, region, sym) => ({ ...n, ...topicOf(n), tidTxt: when(n.datum), bolagTxt: (n.bolag || []).join(', '), land: newsLand(n, region, sym) });
 
 function newsTitle(n) {
   const u = safeUrl(n.lank);
@@ -1000,8 +1010,9 @@ function viewNyheter() {
       <span class="eyebrow" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">Börsnyheter från hela världen <span id="news-status"></span></span>
       <h1 class="title">Nyheter</h1>
     </div>
-    <div class="tabs" role="tablist" aria-label="Region">
-      <button role="tab" data-region="world" aria-selected="true">Världen</button>
+    <div class="tabs" role="tablist" aria-label="Nyheter">
+      ${newsMine() ? '<button role="tab" data-region="mina" aria-selected="true">Mina aktier</button>' : ''}
+      <button role="tab" data-region="world" aria-selected="${!newsMine()}">Världen</button>
       <button role="tab" data-region="se" aria-selected="false">Sverige</button>
     </div>
   </div>
@@ -1014,8 +1025,9 @@ function viewNyheter() {
         <span class="small faint" id="news-range"></span>
       </div>
       <div class="card stack">
-        <span class="small muted">Källor</span>
+        <span class="small muted">Ämne</span>
         <div class="chips" id="newsfilter"></div>
+        <p class="small faint" style="margin:0" id="news-help"></p>
       </div>
       <div class="empty">Vi visar rubrik, en kort ingress och länk till källan. Läs alltid hela artikeln innan du gör något med dina pengar.</div>
     </aside>
@@ -1023,32 +1035,48 @@ function viewNyheter() {
   ${footer()}`;
 }
 
+// Fliken "Mina aktier" visas för den som har köp eller en egen bevakningslista
+const newsMine = () => (ACC.user || getPort().length > 0) && mySyms().all.length > 0;
+async function getMyNews() {
+  const { port, all } = mySyms(); const syms = [...port, ...all.filter((x) => !port.includes(x))].slice(0, 12);
+  const res = await Promise.all(syms.map((sym) => api('/api/news?s=' + encodeURIComponent(sym), 10 * 60e3).then((n) => (n?.error ? null : (n?.items || []).map((x) => ({ ...prepNews(x, null, sym), min: sym, agd: port.includes(sym) })))).catch(() => null)));
+  if (res.every((x) => x == null)) return { ok: false, error: { error: 'upstream' }, items: [] };
+  const seen = new Set(); const now = Date.now();
+  const items = res.flat().filter(Boolean).filter((n) => { const k = n.lank || n.rubrik; if (seen.has(k)) return false; seen.add(k); return true; })
+    .filter((n) => now - new Date(n.datum).getTime() < 14 * dayMs)
+    .map((n) => { const h = (now - new Date(n.datum).getTime()) / 3600e3; return { ...n, poang: n.vikt * 6 + (n.agd ? 4 : 2) - h / 6 }; });
+  return { ok: true, hamtad: new Date().toISOString(), items, mina: true };
+}
 function mountNyheter() {
-  let region = 'world'; let filt = 'Alla'; let data = null;
+  let region = newsMine() ? 'mina' : 'world'; let filt = 'Alla'; let sort = 'viktigt'; let data = null;
   const draw = () => {
     if (!data || !$('#newslist')) return;
     if (!data.ok) { $('#newslist').innerHTML = `<div class="empty">${esc(errText(data.error))}</div>`; $('#newsfilter').innerHTML = ''; $('#news-status').innerHTML = ''; return; }
-    const all = data.items;
-    const cats = ['Alla', ...new Set(all.map((n) => n.kalla))].slice(0, 10);
+    const byTime = (a, b) => String(b.datum).localeCompare(String(a.datum));
+    const all = data.items.slice().sort(data.mina && sort === 'viktigt' ? (a, b) => b.poang - a.poang || byTime(a, b) : byTime);
+    const cats = ['Alla', ...TOPICS.map((t) => t[0]).filter((k) => all.some((n) => n.amne === k))];
     if (!cats.includes(filt)) filt = 'Alla';
-    const list = filt === 'Alla' ? all : all.filter((n) => n.kalla === filt);
+    const list = filt === 'Alla' ? all : all.filter((n) => n.amne === filt);
     $('#news-status').innerHTML = all.length ? liveTag(data.hamtad) : '';
     $('#news-count').textContent = String(all.length);
-    $('#news-range').textContent = all.length ? `Senaste ${all[0].tidTxt}, äldsta ${all[all.length - 1].tidTxt}` : '';
-    $('#newsfilter').innerHTML = cats.map((c) => `<button type="button" class="chip-btn" data-filt="${esc(c)}" aria-pressed="${c === filt}">${esc(c)}</button>`).join('');
+    const times = all.map((n) => n.datum).sort();
+    $('#news-range').textContent = all.length ? `Senaste ${when(times[times.length - 1])}, äldsta ${when(times[0])}` : '';
+    $('#newsfilter').innerHTML = cats.map((c) => `<button type="button" class="chip-btn" data-filt="${esc(c)}" aria-pressed="${c === filt}">${esc(c)}</button>`).join('')
+      + (data.mina ? `<span class="news-sort"><button type="button" class="chip-btn" data-sort="viktigt" aria-pressed="${sort === 'viktigt'}">Viktigast först</button><button type="button" class="chip-btn" data-sort="tid" aria-pressed="${sort === 'tid'}">Senaste först</button></span>` : '');
+    $('#news-help').innerHTML = data.mina ? 'Nyheter om aktierna du äger och bevakar. <b>Viktigast först</b> lyfter rapporter, vinstvarningar, affärer, utdelningar och ledningsbyten, och aktier du äger före aktier du bara bevakar. Sorteringen bygger på rubrikens ord och säger inget om hur kursen kommer att gå.' : 'Ämnet sätts utifrån orden i rubriken.';
     $('#newslist').innerHTML = list.map((n) => `
       <article class="card news-item">
         <div class="stack" style="gap:8px;flex:1;min-width:0">
-          <div class="meta"><span class="pill outline src">${flag(n.land)}${esc(n.kalla)}</span><span class="num">${esc(n.tidTxt)}</span>${n.bolagTxt ? `<span>${esc(n.bolagTxt)}</span>` : ''}</div>
+          <div class="meta">${n.amne ? `<span class="pill news-topic t-${esc(n.amne)}">${esc(n.amne)}</span>` : ''}${n.min ? `<a class="pill outline" href="/bolag/${encodeURIComponent(n.min)}" data-link>${esc(ovName(n.min))}${n.agd ? '<span>&nbsp;· du äger</span>' : ''}</a>` : ''}<span class="pill outline src">${flag(n.land)}${esc(n.kalla)}</span><span class="num">${esc(n.tidTxt)}</span>${!n.min && n.bolagTxt ? `<span>${esc(n.bolagTxt)}</span>` : ''}</div>
           <h3>${newsTitle(n)}</h3>
           ${n.text ? `<p class="news-text">${esc(n.text)}</p>` : ''}
           <div class="meta">${sourceLink(n)}</div>
         </div>
-      </article>`).join('') || `<div class="empty">${region === 'se' ? 'Inga nyheter om svenska bolag just nu.' : 'Inga nyheter just nu.'}</div>`;
+      </article>`).join('') || `<div class="empty">${filt !== 'Alla' ? `Inga nyheter om ${esc(filt.toLowerCase())} just nu.` : region === 'mina' ? 'Inga nyheter om dina aktier de senaste två veckorna.' : region === 'se' ? 'Inga nyheter om svenska bolag just nu.' : 'Inga nyheter just nu.'}</div>`;
   };
   const load = async () => {
     const r = region; $('#newslist').innerHTML = loading('Hämtar nyheter …');
-    const d = await getNews(r); if (r !== region) return; data = d; draw();
+    const d = r === 'mina' ? await getMyNews() : await getNews(r); if (r !== region) return; data = d; draw();
   };
   $('.tabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-region]'); if (!b) return;
@@ -1056,7 +1084,7 @@ function mountNyheter() {
     document.querySelectorAll('[data-region]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
     load();
   });
-  $('#newsfilter').addEventListener('click', (e) => { const b = e.target.closest('[data-filt]'); if (b) { filt = b.dataset.filt; draw(); } });
+  $('#newsfilter').addEventListener('click', (e) => { const b = e.target.closest('[data-filt]'); if (b) { filt = b.dataset.filt; draw(); } const so = e.target.closest('[data-sort]'); if (so) { sort = so.dataset.sort; draw(); } });
   load();
 }
 
@@ -1169,6 +1197,14 @@ function bolagHTML(s) {
             <div class="tabs" role="tablist" aria-label="Period">${[['1m', '1 mån'], ['6m', '6 mån'], ['1y', '1 år'], ['5y', '5 år']].map(([k, t]) => `<button role="tab" data-range="${k}" aria-selected="${k === '1y'}">${t}</button>`).join('')}</div></div>
           <div id="chart" class="chart">${loading('Hämtar kurser …')}</div>
         </section>
+
+        ${s.nyckeltal?.length ? `<section class="card co-section" aria-labelledby="nt-h">
+          <span class="label-up">Nyckeltal</span>
+          <div class="section-head"><h2 class="section" id="nt-h">Vinst, värdering och utdelning</h2><span class="small muted">Senaste 12 månaderna</span></div>
+          <div class="nt-grid">${s.nyckeltal.map(([k, v, h]) => `<div class="nt"><span class="small muted">${esc(k)}</span><b class="num ${v == null ? 'faint' : ''}">${v == null ? 'Saknas' : esc(v)}</b><span class="small faint">${esc(h)}</span></div>`).join('')}</div>
+          <div class="nt-rep" id="rapport-body">${loading('Hämtar rapportdatum …')}</div>
+          <span class="small faint">Källa: Yahoo Finance. Nyckeltalen visar läget i dag och säger inget om hur aktien går framöver.</span>
+        </section>` : ''}
 
         <section class="card co-section" aria-labelledby="om-h" id="about">
           <span class="label-up">Om bolaget</span>
@@ -1296,6 +1332,21 @@ async function mountBolag(sym) {
   setMeta({}, EN ? `${s.namn}: risk check ${s.poang != null ? s.poang + ' of 10' : ''}, price chart, insider trading, short selling and news. Free, without buy tips.` : `${s.namn}: riskkoll ${s.poang != null ? s.poang + ' av 10' : ''}, kursdiagram, insynshandel, blankning och nyheter. Gratis och utan köptips.`);
   const crumb = $('.crumbs .here'); if (crumb) crumb.textContent = s.namn;
   el.innerHTML = bolagHTML(s);
+  // Rapporter: nästa rapportdag och var rapporterna finns
+  if ($('#rapport-body')) api('/api/kalender?s=' + encodeURIComponent(s.sym), 6 * 3600e3).catch(() => null).then((k) => {
+    const box = $('#rapport-body'); if (!box) return;
+    const today = isoDay(Date.now()); const d = k && !k.error ? k.rapport : null;
+    const when = d ? new Date(d + 'T12:00:00').toLocaleDateString(L, { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }) : null;
+    const line = !k || k.error ? (EN ? 'The report date could not be fetched right now.' : 'Rapportdatum kunde inte hämtas just nu.')
+      : !d ? (EN ? 'The date of the next report is not known yet.' : 'Datum för nästa rapport är inte känt än.')
+      : d >= today ? `${EN ? 'Next report' : 'Nästa rapport'}: <b>${esc(when)}</b>${k.rapportUppskattad ? ` <span class="faint">(${EN ? 'preliminary date' : 'preliminärt datum'})</span>` : ''}`
+      : `${EN ? 'Latest report' : 'Senaste rapport'}: <b>${esc(when)}</b>`;
+    const web = safeUrl(s.webb);
+    const yf = `https://finance.yahoo.com/quote/${encodeURIComponent(s.sym)}/financials/`;
+    box.innerHTML = `<span class="label-up">${EN ? 'Reports' : 'Rapporter'}</span><p style="margin:0">${line}</p>
+      <div class="chips">${web ? `<a class="btn ghost small" href="${esc(web)}" target="_blank" rel="noopener">${EN ? "Company website" : 'Bolagets webbplats'} ↗</a>` : ''}<a class="btn ghost small" href="${esc(yf)}" target="_blank" rel="noopener">${EN ? 'Income statement and balance sheet (Yahoo Finance)' : 'Resultat- och balansräkning (Yahoo Finance)'} ↗</a></div>
+      ${web ? `<span class="small faint">${EN ? 'The full reports are on the company website, usually under Investors or Investor relations.' : 'Hela rapporterna finns på bolagets webbplats, oftast under Investerare eller Investor relations.'}</span>` : ''}`;
+  });
   const sc = $('.score[data-count]', el); if (sc) countUp(sc, Number(sc.dataset.count), (v) => String(Math.round(v)), 700, 1);
   const big = $('.co-head .price-big', el); if (big && s.kurs != null) { const n = big.firstChild; if (n && n.nodeType === 3) { const span = document.createElement('span'); big.replaceChild(span, n); countUp(span, s.kurs, (v) => kr(v) + ' ', 800); } }
   el.addEventListener('click', async (e) => {
@@ -1628,6 +1679,7 @@ function viewOm() {
       <section class="card co-section"><span class="label-up">Bra att veta</span>
         <p style="margin:0">Finanskollen ger ingen investeringsrådgivning. Allt du läser här är information, inte en rekommendation att köpa eller sälja. Har du frågor om ditt sparande, prata med din bank eller en rådgivare med tillstånd från Finansinspektionen.</p>
         <p style="margin:0">Har någon kontaktat dig om en placering som låter för bra för att vara sann? Kolla <a href="https://www.fi.se/sv/vara-register/varningslistan/" target="_blank" rel="noopener noreferrer">Finansinspektionens varningslista</a> innan du gör något.</p>
+        <p style="margin:0">Finanskollen byggs av Albin Karlsson. Koden skrivs med hjälp av AI. Idéerna, reglerna bakom riskkollen och kontrollen av att siffrorna stämmer mot riktiga kurser gör Albin.</p>
         <p class="small" style="margin:0"><a href="/integritet" data-link>Så hanterar vi dina uppgifter</a> · <a href="/ordlista" data-link>Ordlista</a></p>
       </section>
     </div>
