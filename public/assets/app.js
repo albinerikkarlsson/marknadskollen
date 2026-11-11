@@ -400,7 +400,7 @@ const visitorHero = () => `
     <div class="stack" style="gap:14px;max-width:640px">
       <span class="pill outline" style="align-self:flex-start">Gratis · Ingen reklam · Inga köptips</span>
       <h2 id="vh-h" class="vh-title">Se exakt vad som hände med dina aktier i dag</h2>
-      <div class="chips"><a class="btn" href="/portfolj" data-link>Testa med dina aktier</a><button type="button" class="btn ghost" data-demo-load="/idag">Se ett exempel</button></div>
+      <div class="chips"><a class="btn" href="/portfolj" data-link>Testa med dina aktier</a><button type="button" class="btn ghost" data-demo-load="/">Se ett exempel</button></div>
       <span class="small muted" style="margin-top:-4px">Inget konto behövs för att testa.</span>
       <p class="muted" style="margin:0;font-size:16.5px">Finanskollen visar risken i över 3 000 svenska och amerikanska aktier på enkel svenska. Se vad ledningen själv köper och säljer, hur många som satsar på att kursen ska falla och vad nyheterna säger.</p>
       <p class="small" style="margin:0"><a href="/konto?ny=1" data-link>Skapa gratis konto</a> så sparas portföljen och du kan få larm.</p>
@@ -414,7 +414,7 @@ const visitorHero = () => `
     </ul>
   </section>`;
 
-const minOversikt = () => !!ACC.user && !locked();
+const minOversikt = () => (!!ACC.user && !locked()) || (locked() && getPort().length > 0);
 function viewOversikt() {
   if (minOversikt()) return viewOversiktMin();
   return `
@@ -590,9 +590,10 @@ function viewOversiktMin() {
   return `
   ${topbar([['Översikt', '/']])}
   <div class="ov-head">
-    <div class="ov-title"><h1>Översikt</h1><span class="small muted" id="market-status">Hämtar marknaden …</span></div>
+    <div class="ov-title"><h1>Översikt${locked() && isDemo() ? ' <span class="pill outline ov-expill">Exempel</span>' : ''}</h1><span class="small muted" id="market-status">Hämtar marknaden …</span></div>
     <div class="ov-market" id="ov-market">${OV_MARKET.map((m) => `<span class="ov-chip"><span class="muted">${esc(m.namn)}</span><span class="num" data-q="${m.sym}">…</span></span>`).join('')}</div>
   </div>
+  ${guestBar()}
   <div class="ov-grid">
     <div class="ov-col">
       <section class="ov-card ov-dark" id="ov-port" aria-label="Min portfölj">${loading('Räknar på din portfölj …')}</section>
@@ -667,7 +668,7 @@ async function mountOversiktMin() {
     redrawWatch();
     const { hold, tot, insatt, vinst, idag, risk } = pdata;
     const sorted = hold.slice().sort((a, b) => (b.varde || 0) - (a.varde || 0));
-    pb.innerHTML = `<div class="ov-cardhead"><h2>Min portfölj</h2><a href="/portfolj" data-link>Öppna →</a></div>
+    pb.innerHTML = `<div class="ov-cardhead"><h2>${locked() && isDemo() ? 'Exempelportfölj' : 'Min portfölj'}</h2><a href="/portfolj" data-link>Öppna →</a></div>
       <b class="ov-big num">${sekBig(tot)}</b>
       <div class="ov-gains">
         <a href="/idag" data-link class="ov-gainlink ${idag < 0 ? 'neg' : ''}"><span>${pdata.dagIdag || !pdata.refDag ? 'I dag' : esc(dayShort(pdata.refDag + 'T12:00:00'))} ›</span><b class="num">${idag ? krDiff(idag) : '–'}</b><span class="num">${idag && pdata.idagPct != null ? pctDiff(pdata.idagPct) : ''}</span></a>
@@ -1875,7 +1876,7 @@ function clearDemo() { writeLS(PKEY, getPort().filter((b) => !b.demo)); }
 // Visas på portföljsidorna för den som inte har konto
 const guestBar = () => {
   if (!locked()) return '';
-  if (isDemo()) return `<div class="guest-bar"><div><b>${EN ? 'This is an example portfolio.' : 'Det här är en exempelportfölj.'}</b> <span>${EN ? 'Made-up purchases of 10,000 SEK each, six months ago, with the real prices. Not buy tips.' : 'Påhittade köp för 10 000 kr styck för ett halvår sedan, med de riktiga kurserna. Inga köptips.'}</span></div><button type="button" class="btn small" data-demo-clear>${EN ? 'Clear and add my own' : 'Töm och lägg in mina egna'}</button></div>`;
+  if (isDemo()) return `<div class="guest-bar"><div><b>${EN ? 'This is an example portfolio.' : 'Det här är en exempelportfölj.'}</b> <span>${EN ? 'Made-up purchases of 10,000 SEK each, six months ago, with the real prices. Not buy tips.' : 'Påhittade köp för 10 000 kr styck för ett halvår sedan, med de riktiga kurserna. Inga köptips.'}</span></div><span class="chips" style="flex:none"><button type="button" class="btn small" data-demo-clear>${EN ? 'Clear and add my own' : 'Töm och lägg in mina egna'}</button><a class="btn ghost small" href="/konto?ny=1" data-link>${EN ? 'Create free account' : 'Skapa gratis konto'}</a></span></div>`;
   return `<div class="guest-bar"><div><b>${EN ? "You're trying it without an account." : 'Du testar utan konto.'}</b> <span>${EN ? 'Your stocks are only saved in this browser. With a free account they are saved, show up on all your devices and you can get alerts.' : 'Dina aktier sparas bara i den här webbläsaren. Med ett gratis konto sparas de, syns på alla dina enheter och du kan få larm.'}</span></div><a class="btn small" href="/konto?ny=1" data-link>${EN ? 'Create free account' : 'Skapa gratis konto'}</a></div>`;
 };
 const demoBtn = (label) => (locked() && !getPort().length ? `<button type="button" class="btn ghost small" data-demo-load>${label || (EN ? 'Show an example portfolio' : 'Visa en exempelportfölj')}</button>` : '');
@@ -3615,7 +3616,7 @@ function render() {
   document.body.classList.toggle('locked', locked() && r.active === 'konto');
   document.body.classList.remove('nosidebar');
   setMeta(r);
-  document.title = `${trS(r.title)} · Finanskollen`;
+  document.title = location.pathname === '/' ? (EN ? 'Finanskollen – risk check for Swedish stocks' : 'Finanskollen – riskkoll för svenska aktier') : `${trS(r.title)} · Finanskollen`;
   refreshNav(r.active);
   const main = $('#main');
   const fresh = main.cloneNode(false); // tar bort gamla lyssnare

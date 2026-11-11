@@ -920,3 +920,5 @@ body.nosidebar .sidebar { display: none; }
 .guest-bar b { font-weight: 600; }
 .guest-bar span { color: var(--muted); }
 .guest-bar .btn { flex: none; }
+.ov-expill { font-size: 13px; vertical-align: middle; margin-left: 8px; font-weight: 400; letter-spacing: 0; }
+.ov-head + .guest-bar { margin-bottom: 4px; }

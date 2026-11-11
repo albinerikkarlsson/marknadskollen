@@ -102,6 +102,8 @@ const D = {
   'Gratis · Ingen reklam · Inga köptips': 'Free · No ads · No buy tips',
   'Se exakt vad som hände med dina aktier i dag': 'See exactly what happened to your stocks today',
   'Testa med dina aktier': 'Try it with your stocks',
+  'Exempel': 'Example',
+  'Exempelportfölj': 'Example portfolio',
   'Se ett exempel': 'See an example',
   'Inget konto behövs för att testa.': 'No account needed to try it.',
   'så sparas portföljen och du kan få larm.': 'so your portfolio is saved and you can get alerts.',
