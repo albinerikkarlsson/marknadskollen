@@ -188,7 +188,30 @@ const DEFAULT_WATCH = ['VOLV-B.ST', 'INVE-B.ST', 'AAPL', 'NVDA', 'SPY'];
 const DEFAULT_NAMES = { AAPL: 'Apple', MSFT: 'Microsoft', NVDA: 'Nvidia', TSLA: 'Tesla', SPY: 'SPDR S&P 500 ETF', EWD: 'iShares MSCI Sweden ETF', QQQ: 'Invesco QQQ', 'VOLV-B.ST': 'Volvo B', 'EVO.ST': 'Evolution', 'SAAB-B.ST': 'Saab B', 'INVE-B.ST': 'Investor B', 'ERIC-B.ST': 'Ericsson B', '^OMX': 'OMX Stockholm 30' };
 const readLS = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fb; } catch { return fb; } };
 const KKEY = 'mk-koll'; // val för insyns- och blankningslarm och vad man redan sett
-const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* privat läge */ } if ((k === WKEY || k === LKEY || k === 'mk-portfolj' || k === 'mk-ova' || k === KKEY) && !SYNCING) saveCloud(); };
+// Varje del sparas för sig. Bara det som ändrats i just den här fliken skickas, så en äldre flik eller enhet kan aldrig skriva över något den inte själv ändrat.
+const FIELD = { [WKEY]: 'bevakning', 'mk-larm': 'larm', 'mk-portfolj': 'portfolj', 'mk-ova': 'ova', 'mk-koll': 'koll' };
+const DIRTY = new Set();
+// Senaste version av varje del som den här fliken vet att kontot har. Används för att räkna ut vad man själv ändrat.
+const SNAP = {};
+const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
+function mergeField(f, cloud, local, snap) {
+  if (cloud === undefined || snap === undefined) return local;
+  if (f === 'bevakning' && Array.isArray(cloud) && Array.isArray(local) && Array.isArray(snap)) {
+    const removed = new Set(snap.filter((x) => !local.includes(x))); const added = local.filter((x) => !snap.includes(x));
+    const out = cloud.filter((x) => !removed.has(x)); for (const x of added) if (!out.includes(x)) out.push(x); return out;
+  }
+  if (f === 'portfolj' && Array.isArray(cloud) && Array.isArray(local) && Array.isArray(snap)) {
+    const key = (x) => x.id || JSON.stringify(x); const sm = new Map(snap.map((x) => [key(x), JSON.stringify(x)])); const lm = new Map(local.map((x) => [key(x), x]));
+    const out = cloud.filter((x) => !(sm.has(key(x)) && !lm.has(key(x)))).map((x) => (lm.has(key(x)) && JSON.stringify(lm.get(key(x))) !== sm.get(key(x)) ? lm.get(key(x)) : x));
+    for (const x of local) if (!sm.has(key(x)) && !out.some((y) => key(y) === key(x))) out.push(x); return out;
+  }
+  if (f === 'larm' && cloud && local && snap && typeof cloud === 'object') {
+    const out = { ...cloud }; for (const k of Object.keys(snap)) if (!(k in local)) delete out[k];
+    for (const [k, v] of Object.entries(local)) if (JSON.stringify(v) !== JSON.stringify(snap[k])) out[k] = v; return out;
+  }
+  return local;
+}
+const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* privat läge */ } const f = FIELD[k]; if (f && !SYNCING) { DIRTY.add(f); saveCloud(); } };
 let SYNCING = false;
 const LKEY = 'mk-larm';
 const getLarm = () => { const v = readLS(LKEY, {}); return v && typeof v === 'object' ? v : {}; };
@@ -694,11 +717,20 @@ async function mountOversiktMin() {
   if (!se.length) { fiBox().innerHTML = '<div class="ov-blockhead"><span>Ledningen handlar</span></div><p class="small muted" style="margin:0">Finansinspektionens register gäller svenska bolag.</p>'; }
   else Promise.all(se.map((s) => getFI(s).catch(() => null))).then((fi) => {
     const b = fiBox(); if (!b) return;
-    const tr = fi.filter(Boolean).flatMap((f) => f.affarer.filter((a) => String(a.datum) >= since));
+    const tr = fi.flatMap((f, i) => (f?.affarer || []).filter((a) => String(a.datum) >= since).map((a) => ({ ...a, sym: se[i] })));
     const kop = tr.filter((a) => a.typ === 'Köp').reduce((a, x) => a + (x.varde || 0), 0); const salj = tr.filter((a) => a.typ === 'Sälj').reduce((a, x) => a + (x.varde || 0), 0);
     const sum = kop + salj;
-    b.innerHTML = `<div class="ov-blockhead"><span>Ledningen handlar · senaste 7 dagarna</span></div>${sum ? `<div class="ov-bar"><span class="up" style="width:${(kop / sum) * 100}%"></span><span class="down" style="width:${(salj / sum) * 100}%"></span></div>
-      <div class="ov-barleg num"><span class="up"><span>Köp</span> ${esc(mny(kop, 'SEK'))}</span><span class="down"><span>Sälj</span> ${esc(mny(salj, 'SEK'))}</span></div>` : '<p class="small muted" style="margin:0">Inga insynsaffärer i dina svenska bolag de senaste 7 dagarna.</p>'}`;
+    const list = tr.slice().sort((a, b) => String(b.datum).localeCompare(String(a.datum)) || (b.varde || 0) - (a.varde || 0));
+    const bolagN = new Set(tr.map((a) => a.sym)).size;
+    b.innerHTML = `<div class="ov-blockhead"><span>Ledningen handlar · senaste 7 dagarna</span></div>${sum ? `<button type="button" class="ov-fibtn" aria-expanded="false" aria-controls="ov-filist"><div class="ov-bar"><span class="up" style="width:${(kop / sum) * 100}%"></span><span class="down" style="width:${(salj / sum) * 100}%"></span></div>
+      <div class="ov-barleg num"><span class="up"><span>Köp</span> ${esc(mny(kop, 'SEK'))}</span><span class="down"><span>Sälj</span> ${esc(mny(salj, 'SEK'))}</span></div>
+      <span class="ov-fimore small"><span>${tr.length} ${tr.length === 1 ? (EN ? 'trade' : 'affär') : (EN ? 'trades' : 'affärer')} · ${bolagN} ${bolagN === 1 ? (EN ? 'company' : 'bolag') : (EN ? 'companies' : 'bolag')}</span> <span class="ov-fiarrow">${EN ? 'Show' : 'Visa'} ▾</span></span></button>
+      <div class="ov-filist" id="ov-filist" hidden>${list.map((a) => `<a class="ov-firow" href="/bolag/${encodeURIComponent(a.sym)}" data-link>
+        <span class="ov-fitop"><b>${esc(ovName(a.sym))}</b><span class="pill ${a.typ === 'Köp' ? 'up' : a.typ === 'Sälj' ? 'down' : ''}">${esc(a.typ || '–')}</span></span>
+        <span class="ov-fimid"><span>${esc(a.person || '–')}</span><b class="num">${a.varde != null ? esc(mny(a.varde, a.valuta || 'SEK')) : '–'}</b></span>
+        <span class="small muted">${esc([a.roll, a.narstaende ? (EN ? 'related party' : 'närstående') : '', a.datum ? new Date(a.datum + 'T12:00:00').toLocaleDateString(L, { day: 'numeric', month: 'short' }) : ''].filter(Boolean).join(' · '))}</span></a>`).join('')}
+        <p class="small faint" style="margin:8px 0 0">${EN ? 'Source: Finansinspektionen. Insider trades are not a buy or sell signal.' : 'Källa: Finansinspektionen. Insynsaffärer är ingen köp- eller säljsignal.'}</p></div>` : '<p class="small muted" style="margin:0">Inga insynsaffärer i dina svenska bolag de senaste 7 dagarna.</p>'}`;
+    const btn = b.querySelector('.ov-fibtn'); if (btn) btn.addEventListener('click', () => { const open = btn.getAttribute('aria-expanded') !== 'true'; btn.setAttribute('aria-expanded', String(open)); b.querySelector('#ov-filist').hidden = !open; btn.querySelector('.ov-fiarrow').textContent = open ? (EN ? 'Hide ▴' : 'Dölj ▴') : (EN ? 'Show ▾' : 'Visa ▾'); });
   });
 }
 
@@ -724,52 +756,107 @@ function borsStatus(sym, tid) {
 }
 
 function viewDinDag() {
+  const today = sthlmDay(Date.now()); const dag = new URLSearchParams(location.search).get('dag');
   return `${topbar([['Översikt', '/'], ['Min portfölj', '/portfolj'], ['Din dag', '/idag']])}
-  <div class="section-head"><div><h1 class="title">Din dag</h1><p class="muted" style="margin:6px 0 0" id="dd-sub">Hur portföljen har rört sig i dag och vilka aktier som påverkade mest.</p></div><div class="chips" id="dd-bors"></div></div>
+  <div class="section-head"><div><h1 class="title">Din dag</h1><p class="muted" style="margin:6px 0 0" id="dd-sub">Hur portföljen har rört sig i dag och vilka aktier som påverkade mest.</p></div>
+    <div class="dd-pick"><button type="button" class="dd-step" data-step="-1" aria-label="Föregående börsdag">‹</button>
+      <label class="dd-date"><span class="sr-only">Välj dag</span><input type="date" id="dd-date" max="${today}" value="${esc(dag && dag < today ? dag : today)}"></label>
+      <button type="button" class="dd-step" data-step="1" aria-label="Nästa börsdag">›</button>
+      <button type="button" class="dd-todaybtn" id="dd-today" ${!dag || dag >= today ? 'hidden' : ''}>I dag</button></div></div>
+  <div class="chips" id="dd-bors" style="margin-top:12px"></div>
   <div id="dd-body">${loading('Räknar på din dag …')}</div>
   ${footer()}`;
 }
+// Dagens siffror (som översikten)
+async function ddToday(port) {
+  const d = await pfData(port);
+  for (const h of d.hold) h.status = borsStatus(h.sym, h.tid);
+  return { ...d, dag: d.refDag, live: d.dagIdag, intraday: (h) => `/api/chart?s=${encodeURIComponent(h.sym)}&r=1d`, base: (h, c) => c?.prevClose ?? (h.kurs != null && h.d1 != null ? h.kurs / (1 + h.d1 / 100) : null), per: (h) => (h.varde != null && h.kurs ? h.varde / h.kurs : 0) };
+}
+// En tidigare dag: stängningskursen den dagen mot dagen innan, för de aktier man ägde när dagen var slut
+async function ddPast(port, dag) {
+  const end = new Date(dag + 'T23:59:59').getTime();
+  const owned = {}; for (const b of port) { if (!b.tid || new Date(b.tid).getTime() <= end) owned[b.sym] = (owned[b.sym] || 0) + b.antal; }
+  const syms = Object.keys(owned).filter((s) => owned[s] > 0);
+  const from = new Date(new Date(dag + 'T12:00:00Z').getTime() - 12 * 864e5).toISOString().slice(0, 10);
+  const charts = await Promise.all(syms.map((s) => api(`/api/chart?s=${encodeURIComponent(s)}&from=${from}`, 6 * 3600e3).catch(() => null)));
+  const valuta = Object.fromEntries(syms.map((s, i) => [s, charts[i]?.valuta || 'SEK']));
+  const curs = [...new Set(Object.values(valuta).filter((v) => v !== 'SEK'))];
+  const fxc = await Promise.all(curs.map((c) => api(`/api/chart?s=${encodeURIComponent((c === 'GBp' || c === 'GBX' ? 'GBP' : c) + 'SEK=X')}&from=${from}`, 6 * 3600e3).catch(() => null)));
+  const closeOn = (pts, day) => { let v = null; for (const [t, p] of pts || []) { if (sthlmDay(t * 1000) <= day) v = p; } return v; };
+  const fxOf = (c) => { if (c === 'SEK') return 1; const i = curs.indexOf(c); const v = closeOn(fxc[i]?.punkter, dag); return v == null ? null : c === 'GBp' || c === 'GBX' ? v / 100 : v; };
+  const hold = syms.map((s, i) => {
+    const pts = (charts[i]?.punkter || []).filter(([t]) => sthlmDay(t * 1000) <= dag);
+    const last = pts[pts.length - 1]; const traded = last && sthlmDay(last[0] * 1000) === dag; const prev = traded ? pts[pts.length - 2]?.[1] : null;
+    const fx = fxOf(valuta[s]); const close = last?.[1] ?? null;
+    const varde = close != null && fx != null ? owned[s] * close * fx : null;
+    const idag = traded && prev && fx != null ? owned[s] * (close - prev) * fx : null;
+    return { sym: s, antal: owned[s], kurs: close, prev, fx, varde, idag, d1Dag: traded && prev ? (close / prev - 1) * 100 : null,
+      status: { kod: traded ? 'stangd' : 'stangd', bors: borsOf(s).namn, txt: traded ? (EN ? 'Traded' : 'Handlades') : (EN ? 'No trading that day' : 'Ingen handel den dagen') } };
+  });
+  const tot = hold.reduce((a, h) => a + (h.varde || 0), 0); const idag = hold.reduce((a, h) => a + (h.idag || 0), 0);
+  return { hold, tot, idag, dag, live: false, past: true, intraday: (h) => `/api/chart?s=${encodeURIComponent(h.sym)}&dag=${dag}`, base: (h) => h.prev, per: (h) => h.antal * (h.fx || 0) };
+}
 async function mountDinDag() {
-  const port = getPort(); const box = $('#dd-body');
+  const port = getPort(); const box = $('#dd-body'); const today = sthlmDay(Date.now());
+  const inp = $('#dd-date');
+  const go = (d) => { const url = d && d < today ? `/idag?dag=${d}` : '/idag'; history.replaceState(null, '', url); render(); };
+  inp.addEventListener('change', () => { if (inp.value) go(inp.value > today ? today : inp.value); });
+  $('#dd-today').addEventListener('click', () => go(null));
+  document.querySelectorAll('.dd-step').forEach((b) => b.addEventListener('click', () => {
+    let d = new Date((inp.value || today) + 'T12:00:00Z'); const step = Number(b.dataset.step);
+    do { d = new Date(d.getTime() + step * 864e5); } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+    const iso = d.toISOString().slice(0, 10); if (iso <= today) go(iso);
+  }));
   if (!port.length) { box.innerHTML = `<div class="empty">Du har inga köp i portföljen än. <a href="/portfolj" data-link>Lägg till ett köp</a> så ser du här hur din dag går.</div>`; return; }
-  const d = await pfData(port); if (!$('#dd-body')) return;
-  const { hold, tot, idag, refDag, dagIdag } = d;
-  // Börsernas läge just nu
-  const borser = {}; for (const h of hold) { const st = borsStatus(h.sym, h.tid); h.status = st; borser[st.bors] = borser[st.bors] || st; }
-  $('#dd-bors').innerHTML = Object.values(borser).map((b) => `<span class="dd-bors ${b.kod}"><i></i>${esc(b.bors)} · ${esc(b.txt)}</span>`).join('');
-  if (refDag) $('#dd-sub').textContent = dagIdag ? `${dayShort(refDag + 'T12:00:00')} · ${EN ? 'compared with the previous close' : 'jämfört med gårdagens stängning'}` : (EN ? `No trading yet today. Showing the last trading day, ${dayShort(refDag + 'T12:00:00')}.` : `Ingen handel än i dag. Här är senaste börsdagen, ${dayShort(refDag + 'T12:00:00')}.`);
+  const first = port.map((b) => b.tid).filter(Boolean).sort()[0]; if (first) inp.min = sthlmDay(first);
+  const q = new URLSearchParams(location.search).get('dag');
+  const past = q && /^\d{4}-\d{2}-\d{2}$/.test(q) && q < today;
+  const m = past ? await ddPast(port, q) : await ddToday(port);
+  if (!$('#dd-body')) return;
+  const { hold, tot, idag, dag } = m;
+  const wd = new Date(dag + 'T12:00:00Z').getUTCDay();
+  $('#dd-bors').hidden = !!past;
+  if (past) {
+    $('#dd-sub').textContent = `${dayShort(dag + 'T12:00:00')} · ${EN ? 'closing prices compared with the day before' : 'stängningskurser jämfört med dagen innan'}`;
+    if (!hold.length) { box.innerHTML = `<div class="empty" style="margin-top:16px">${EN ? "You didn't own any stocks in the portfolio that day." : 'Du ägde inga aktier i portföljen den dagen.'}</div>`; return; }
+    if (wd === 0 || wd === 6 || hold.every((h) => h.idag == null)) { box.innerHTML = `<div class="empty" style="margin-top:16px">${EN ? 'The markets were closed that day. Pick another day.' : 'Börserna var stängda den dagen. Välj en annan dag.'}</div>`; return; }
+  } else {
+    const borser = {}; for (const h of hold) borser[h.status.bors] = borser[h.status.bors] || h.status;
+    $('#dd-bors').innerHTML = Object.values(borser).map((b) => `<span class="dd-bors ${b.kod}"><i></i>${esc(b.bors)} · ${esc(b.txt)}</span>`).join('');
+    if (dag) $('#dd-sub').textContent = m.live ? `${dayShort(dag + 'T12:00:00')} · ${EN ? 'compared with the previous close' : 'jämfört med gårdagens stängning'}` : (EN ? `No trading yet today. Showing the last trading day, ${dayShort(dag + 'T12:00:00')}.` : `Ingen handel än i dag. Här är senaste börsdagen, ${dayShort(dag + 'T12:00:00')}.`);
+  }
   const counted = hold.filter((h) => h.idag != null);
-  const up = counted.filter((h) => h.idag > 0).sort((a, b) => b.idag - a.idag), down = counted.filter((h) => h.idag < 0).sort((a, b) => a.idag - b.idag);
+  const up = counted.filter((h) => h.idag > 0).sort((a, b) => b.idag - a.idag), down = counted.filter((h) => h.idag <= 0).sort((a, b) => a.idag - b.idag);
   const maxAbs = Math.max(1, ...counted.map((h) => Math.abs(h.idag)));
   const notYet = hold.filter((h) => h.idag == null);
-  const sentence = [up[0] ? `${EN ? 'Biggest lift' : 'Mest upp'}: <b>${esc(ovName(up[0].sym))}</b> ${krDiff(up[0].idag)}` : '', down[0] ? `${EN ? 'Biggest drag' : 'Mest ner'}: <b>${esc(ovName(down[0].sym))}</b> ${krDiff(down[0].idag)}` : ''].filter(Boolean).join(' · ');
+  const sentence = [up[0] ? `${EN ? 'Biggest lift' : 'Mest upp'}: <b>${esc(ovName(up[0].sym))}</b> ${krDiff(up[0].idag)}` : '', down[0] && down[0].idag < 0 ? `${EN ? 'Biggest drag' : 'Mest ner'}: <b>${esc(ovName(down[0].sym))}</b> ${krDiff(down[0].idag)}` : ''].filter(Boolean).join(' · ');
   const row = (h) => { const w = h.idag != null ? Math.round((Math.abs(h.idag) / maxAbs) * 100) : 0;
     return `<a class="dd-row" href="/bolag/${encodeURIComponent(h.sym)}" data-link>${symFlag(h.sym)}
       <span class="dd-name"><b>${esc(ovName(h.sym))}</b><span class="small muted">${esc(h.status.bors)} · ${esc(h.status.txt)}</span></span>
       <span class="dd-bar"><span class="dd-neg">${h.idag < 0 ? `<i style="width:${w}%"></i>` : ''}</span><span class="dd-pos">${h.idag > 0 ? `<i style="width:${w}%"></i>` : ''}</span></span>
-      <span class="dd-num num"><b style="color:var(--${h.idag == null ? 'muted' : tone(h.idag)})">${h.idag != null ? krDiff(h.idag) : '–'}</b><span class="small muted">${h.d1Dag != null ? pct(h.d1Dag, 1) : (EN ? 'not traded yet' : 'inte handlad än')}</span></span></a>`; };
+      <span class="dd-num num"><b style="color:var(--${h.idag == null ? 'muted' : tone(h.idag)})">${h.idag != null ? krDiff(h.idag) : '–'}</b><span class="small muted">${h.d1Dag != null ? pct(h.d1Dag, 1) : past ? (EN ? 'no trading' : 'ingen handel') : (EN ? 'not traded yet' : 'inte handlad än')}</span></span></a>`; };
+  const base0 = tot - idag;
   box.innerHTML = `
     <section class="ov-card ov-dark dd-hero">
-      <div class="dd-top"><div><span class="small" style="color:rgba(255,255,255,.6)">${dagIdag ? (EN ? 'Today' : 'I dag') : esc(dayShort(refDag + 'T12:00:00'))}</span>
+      <div class="dd-top"><div><span class="small" style="color:rgba(255,255,255,.6)">${m.live ? (EN ? 'Today' : 'I dag') : esc(dayShort(dag + 'T12:00:00'))}</span>
         <b class="ov-big num" style="color:${idag < 0 ? '#FFB4AC' : '#9BE3B8'}">${idag ? krDiff(idag) : '0 kr'}</b>
-        <span class="num" style="color:${idag < 0 ? '#FFB4AC' : '#9BE3B8'}">${idag && tot ? pctDiff((idag / (tot - idag)) * 100) : ''}</span></div>
-        <p class="dd-sent">${sentence || (EN ? 'No movement yet today.' : 'Ingen rörelse än i dag.')}</p></div>
+        <span class="num" style="color:${idag < 0 ? '#FFB4AC' : '#9BE3B8'}">${idag && base0 ? pctDiff((idag / base0) * 100) : ''}${past && tot ? ` · ${EN ? 'value at close' : 'värde vid stängning'} ${sekBig(tot)}` : ''}</span></div>
+        <p class="dd-sent">${sentence || (EN ? 'No movement.' : 'Ingen rörelse.')}</p></div>
       <div id="dd-chart" class="dd-chart"><div class="small" style="color:rgba(255,255,255,.55)">${EN ? 'Loading the day …' : 'Hämtar dagens kurser …'}</div></div>
     </section>
     <div class="dd-grid">
       <section class="ov-card"><div class="ov-cardhead"><h2>Så påverkade dina aktier dagen</h2><span class="small muted">${EN ? 'In kronor' : 'I kronor'}</span></div>
-        ${[...up, ...down].map(row).join('')}${notYet.length ? `<div class="dd-sep small muted">${EN ? 'Not traded yet today' : 'Har inte handlats i dag än'}</div>${notYet.map(row).join('')}` : ''}</section>
+        ${[...up, ...down].map(row).join('')}${notYet.length ? `<div class="dd-sep small muted">${past ? (EN ? 'No trading that day' : 'Ingen handel den dagen') : (EN ? 'Not traded yet today' : 'Har inte handlats i dag än')}</div>${notYet.map(row).join('')}` : ''}</section>
       <section class="ov-card"><div class="ov-cardhead"><h2>Nyheter om dem som rörde sig mest</h2></div><div id="dd-news">${loading('Hämtar nyheter …')}</div></section>
     </div>
-    <p class="small faint" style="margin:14px 0 0">Förändringen räknas i aktiens egen valuta mot föregående stängning och räknas om till kronor med dagens växelkurs. Valutans rörelse under dagen ingår inte. Aktier vars börs inte har öppnat räknas inte, så gårdagens rörelse blandas aldrig in.</p>`;
+    <p class="small faint" style="margin:14px 0 0">${past ? 'Förändringen räknas på stängningskursen den dagen mot dagen innan, för de aktier du ägde när dagen var slut, och räknas om till kronor med växelkursen den dagen.' : 'Förändringen räknas i aktiens egen valuta mot föregående stängning och räknas om till kronor med dagens växelkurs. Valutans rörelse under dagen ingår inte. Aktier vars börs inte har öppnat räknas inte, så gårdagens rörelse blandas aldrig in.'}</p>`;
 
   // Kurvan för dagen, var femte minut
-  const day = refDag;
-  Promise.all(counted.map((h) => api(`/api/chart?s=${encodeURIComponent(h.sym)}&r=1d`, 5 * 60e3).catch(() => null))).then((cs) => {
+  Promise.all(counted.map((h) => api(m.intraday(h), past ? 6 * 3600e3 : 5 * 60e3).catch(() => null))).then((cs) => {
     const el = $('#dd-chart'); if (!el) return;
-    const series = counted.map((h, i) => { const c = cs[i]; const pts = (c?.punkter || []).filter(([t]) => sthlmDay(t * 1000) === day); const base = c?.prevClose ?? (h.kurs != null && h.d1 != null ? h.kurs / (1 + h.d1 / 100) : null);
-      return { per: h.varde != null && h.kurs ? h.varde / h.kurs : 0, base, pts }; }).filter((x) => x.base && x.pts.length);
-    if (!series.length) { el.innerHTML = `<div class="small" style="color:rgba(255,255,255,.55)">${EN ? 'No intraday prices yet.' : 'Inga kurser under dagen än.'}</div>`; return; }
+    const series = counted.map((h, i) => { const c = cs[i]; const pts = (c?.punkter || []).filter(([t]) => sthlmDay(t * 1000) === dag); return { per: m.per(h), base: m.base(h, c), pts }; }).filter((x) => x.base && x.pts.length);
+    if (!series.length) { el.innerHTML = `<div class="small" style="color:rgba(255,255,255,.55)">${past ? (EN ? 'Prices every five minutes are only available for the last 60 days.' : 'Kurser var femte minut finns bara för de senaste 60 dagarna.') : (EN ? 'No intraday prices yet.' : 'Inga kurser under dagen än.')}</div>`; return; }
     const t0 = Math.min(...series.map((x) => x.pts[0][0])), t1 = Math.max(...series.map((x) => x.pts[x.pts.length - 1][0]));
     const pts = []; for (let t = t0; t <= t1; t += 300) { let v = 0; for (const x of series) { let p = null; for (const q of x.pts) { if (q[0] <= t) p = q[1]; else break; } v += p != null ? (p - x.base) * x.per : 0; } pts.push([t, v]); }
     const W = 900, H = 200; const vals = pts.map((p) => p[1]); const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals); const pad = (hi - lo) * 0.12 || 10;
@@ -781,15 +868,15 @@ async function mountDinDag() {
       <line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" stroke="rgba(255,255,255,.25)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>
       <path d="${line} L${W} ${Y(0)} L0 ${Y(0)} Z" fill="${col}" opacity=".12"/>
       <path d="${line}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>
-      <div class="dd-axis small num"><span>${hm(t0)}</span><span>${EN ? 'Dashed line = yesterday\'s close' : 'Streckad linje = gårdagens stängning'}</span><span>${hm(t1)}</span></div>`;
+      <div class="dd-axis small num"><span>${hm(t0)}</span><span>${past ? (EN ? 'Dashed line = previous close' : 'Streckad linje = föregående stängning') : (EN ? 'Dashed line = yesterday\'s close' : 'Streckad linje = gårdagens stängning')}</span><span>${hm(t1)}</span></div>`;
   });
   // Nyheter från dagen om de tre som påverkade mest
   const top = counted.slice().sort((a, b) => Math.abs(b.idag) - Math.abs(a.idag)).slice(0, 3);
   Promise.all(top.map((h) => api('/api/news?s=' + encodeURIComponent(h.sym), 10 * 60e3).then((n) => (n?.items || []).map((x) => prepNews(x, null, h.sym))).catch(() => []))).then((res) => {
     const el = $('#dd-news'); if (!el) return;
-    const since = Date.now() - 36 * 3600e3; const seen = new Set();
-    const items = res.flat().filter((n) => new Date(n.datum).getTime() >= since).filter((n) => { const k = n.lank || n.rubrik; if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => String(b.datum).localeCompare(String(a.datum))).slice(0, 6);
-    el.innerHTML = items.length ? items.map(newsRow).join('') : `<p class="small muted" style="margin:0">${EN ? 'No news in the last day about the stocks that moved most.' : 'Inga nyheter det senaste dygnet om aktierna som rörde sig mest.'}</p>`;
+    const dayStart = new Date(dag + 'T00:00:00').getTime(); const from = past ? dayStart - 6 * 3600e3 : Date.now() - 36 * 3600e3; const to = past ? dayStart + 30 * 3600e3 : Infinity; const seen = new Set();
+    const items = res.flat().filter((n) => { const t = new Date(n.datum).getTime(); return t >= from && t <= to; }).filter((n) => { const k = n.lank || n.rubrik; if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => String(b.datum).localeCompare(String(a.datum))).slice(0, 6);
+    el.innerHTML = items.length ? items.map(newsRow).join('') : `<p class="small muted" style="margin:0">${past ? (EN ? 'No news saved from that day about these stocks. News is kept for a limited time.' : 'Inga nyheter från den dagen om de här aktierna. Nyheter finns bara kvar en begränsad tid.') : (EN ? 'No news in the last day about the stocks that moved most.' : 'Inga nyheter det senaste dygnet om aktierna som rörde sig mest.')}</p>`;
   });
 }
 
@@ -2613,10 +2700,11 @@ async function loadCloud() {
   if (!d) d = ACC.user?.user_metadata || {};
   applyCloud(d);
   // Flytta data från metadata till tabellen en gång, och gör metadata liten igen
-  if (migrate) { await saveNow().catch(() => {}); const t = await token(); if (t) auth('/user', { data: { bevakning: null, larm: null, portfolj: null, ova: null, namn: null } }, 'PUT', t).then((u) => { ACC.user = u; }).catch(() => {}); }
+  if (migrate) { for (const f of Object.values(FIELD)) DIRTY.add(f); await saveNow().catch(() => {}); const t = await token(); if (t) auth('/user', { data: { bevakning: null, larm: null, portfolj: null, ova: null, namn: null } }, 'PUT', t).then((u) => { ACC.user = u; }).catch(() => {}); }
 }
 function applyCloud(d) {
-  const cloud = Array.isArray(d.bevakning) ? d.bevakning.filter((x) => typeof x === 'string') : null;
+  const skip = (f) => DIRTY.has(f); // en ändring här som inte hunnit sparas vinner
+  const cloud = skip('bevakning') ? null : Array.isArray(d.bevakning) ? d.bevakning.filter((x) => typeof x === 'string') : null;
   const first = readLS('mk-sync-user', null) !== ACC.user.id;
   SYNCING = true;
   try {
@@ -2624,18 +2712,20 @@ function applyCloud(d) {
     // Bara aktier man själv har lagt till slås ihop, inte startlistan med exempel
     const own = readLS(WKEY, null);
     if (cloud) writeLS(WKEY, first && Array.isArray(own) ? [...new Set([...cloud, ...own])].slice(0, 60) : cloud);
-    if (d.larm && typeof d.larm === 'object') writeLS(LKEY, first ? { ...d.larm, ...getLarm() } : d.larm);
-    if (d.koll && typeof d.koll === 'object') writeLS(KKEY, d.koll);
-    if (Array.isArray(d.portfolj) && (!first || !getPort().length)) writeLS(PKEY, d.portfolj);
-    if (d.ova && typeof d.ova.kassa === 'number' && (!first || !readLS(OKEY, null))) {
+    if (!skip('larm') && d.larm && typeof d.larm === 'object') writeLS(LKEY, first ? { ...d.larm, ...getLarm() } : d.larm);
+    if (!skip('koll') && d.koll && typeof d.koll === 'object') writeLS(KKEY, d.koll);
+    if (!skip('portfolj') && Array.isArray(d.portfolj) && (!first || !getPort().length)) writeLS(PKEY, d.portfolj);
+    if (!skip('ova') && d.ova && typeof d.ova.kassa === 'number' && (!first || !readLS(OKEY, null))) {
       // Behåll en längre lokal historik om den hör till samma övningsportfölj
       const loc = readLS(OKEY, null);
       const keep = loc && loc.start === d.ova.start && (loc.historik || []).length > (d.ova.historik || []).length && loc.historik[loc.historik.length - 1]?.t === d.ova.historik?.[d.ova.historik.length - 1]?.t;
       writeLS(OKEY, keep ? { ...d.ova, historik: loc.historik } : d.ova);
     }
   } finally { SYNCING = false; }
+  for (const f of Object.values(FIELD)) if (!skip(f) && d[f] !== undefined) SNAP[f] = clone(d[f]);
   writeLS('mk-sync-user', ACC.user.id);
-  if (first || !cloud) saveCloud();
+  if (first || (!cloud && !skip('bevakning'))) { for (const f of Object.values(FIELD)) DIRTY.add(f); saveCloud(); }
+  ACC.loadedAt = Date.now();
 }
 let saveTimer;
 const cloudData = () => {
@@ -2646,22 +2736,39 @@ const cloudData = () => {
   return { bevakning: watch, larm: getLarm(), koll: readLS(KKEY, {}), portfolj: port, ...(ova ? { ova: { ...ova, historik: hist } } : {}), namn: Object.fromEntries(syms.map((x) => [x, nameOf(x)])) };
 };
 async function saveNow() {
-  const data = cloudData();
-  if (ACC.table) {
-    await rest('anvandardata?on_conflict=user_id', { method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal', body: { user_id: ACC.user.id, data, uppdaterad: new Date().toISOString() } });
-  } else {
-    const t = await token(); if (!t) return;
-    ACC.user = await auth('/user', { data }, 'PUT', t);
-  }
+  if (!ACC.user) return;
+  const fields = [...DIRTY]; if (!fields.length) return;
+  const local = cloudData();
+  let base = null;
+  if (ACC.table) { const rows = await rest(`anvandardata?select=data&user_id=eq.${encodeURIComponent(ACC.user.id)}`); base = rows?.[0]?.data || null; }
+  else { const t = await token(); if (!t) return; base = (await auth('/user', null, 'GET', t))?.user_metadata || null; }
+  // Saknas data i kontot sparas allt. Annars bara de delar som ändrats här, resten lämnas som det är.
+  const data = base ? { ...base } : { ...local };
+  if (base) for (const f of fields) { const v = mergeField(f, base[f], local[f], SNAP[f]); if (v !== undefined) data[f] = v; else delete data[f]; }
+  data.namn = { ...(base?.namn || {}), ...local.namn };
+  if (ACC.table) await rest('anvandardata?on_conflict=user_id', { method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal', body: { user_id: ACC.user.id, data, uppdaterad: new Date().toISOString() } });
+  else { const t = await token(); if (!t) return; ACC.user = await auth('/user', { data }, 'PUT', t); }
+  for (const f of fields) DIRTY.delete(f);
+  // Visa det som andra flikar eller enheter sparat under tiden, ihopslaget med det man ändrat här
+  applyCloud(data);
 }
 function saveCloud() {
   if (!ACC.user) return;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { saveNow().catch((e) => console.warn('Kunde inte spara till kontot', e.message)); }, 500);
+  saveTimer = setTimeout(() => { saveTimer = null; saveNow().catch((e) => console.warn('Kunde inte spara till kontot', e.message)); }, 500);
 }
+// Spara direkt om man lämnar sidan, och hämta det senaste från kontot när man kommer tillbaka
+document.addEventListener('visibilitychange', () => {
+  if (!ACC.user) return;
+  if (document.visibilityState === 'hidden') { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; saveNow().catch(() => {}); } return; }
+  if (Date.now() - (ACC.loadedAt || 0) < 30e3 || DIRTY.size) return;
+  const before = JSON.stringify([getWatch(), getPort()]);
+  loadCloud().then(() => { if (JSON.stringify([getWatch(), getPort()]) !== before) render(); }).catch(() => {});
+});
 async function setVeckobrev(on) {
   if (!ACC.table) throw new Error('tabell saknas');
-  await rest('anvandardata?on_conflict=user_id', { method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal', body: { user_id: ACC.user.id, data: cloudData(), veckobrev: on, uppdaterad: new Date().toISOString() } });
+  const rows = await rest(`anvandardata?user_id=eq.${encodeURIComponent(ACC.user.id)}`, { method: 'PATCH', prefer: 'return=representation', body: { veckobrev: on, uppdaterad: new Date().toISOString() } });
+  if (!rows?.length) await rest('anvandardata?on_conflict=user_id', { method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal', body: { user_id: ACC.user.id, data: cloudData(), veckobrev: on, uppdaterad: new Date().toISOString() } });
   ACC.veckobrev = on;
 }
 async function bootAccount() {

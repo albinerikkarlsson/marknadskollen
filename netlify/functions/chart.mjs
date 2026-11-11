@@ -1,6 +1,7 @@
 import { cached, fail, cleanSymbol, ApiError } from '../lib/finnhub.mjs';
 import { yChart } from '../lib/yahoo.mjs';
 
+// GET /api/chart?s=VOLV-B.ST&dag=2026-11-04       →  kurserna var femte minut en tidigare dag (de senaste 60 dagarna)
 // GET /api/chart?s=VOLV-B.ST&r=1d               →  dagens kurser var femte minut, plus föregående stängning
 // GET /api/chart?s=VOLV-B.ST&r=1m|6m|1y|5y      →  stängningskurser för kursdiagrammet
 // GET /api/chart?s=VOLV-B.ST&from=2025-03-14     →  dagliga stängningskurser från ett datum (för portföljens tidslinje)
@@ -34,6 +35,16 @@ export default async (req) => {
       return cached({ sym, valuta: meta?.currency || null, kurs: Math.round((live?.kurs ?? hit[1]) * 10000) / 10000, kursTid: new Date((live?.tid ?? hit[0]) * 1000).toISOString(), upplosning: live ? 'live' : recent && pts.length > 30 ? 'timme' : 'dag' }, now - t > DAY ? 7 * 86400 : 300);
     }
 
+    // En tidigare dag, var femte minut. Yahoo har femminuterskurser i ungefär 60 dagar.
+    if (p.get('dag')) {
+      const d = p.get('dag'); if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new ApiError(400, 'ogiltigt datum');
+      const t0 = Math.floor(new Date(d + 'T00:00:00Z').getTime() / 1000) - 3 * 3600;
+      if (!Number.isFinite(t0) || t0 > now) throw new ApiError(400, 'ogiltigt datum');
+      if (now - t0 > 58 * DAY) throw new ApiError(404, 'kurser per fem minuter finns bara för de senaste 60 dagarna');
+      const c = await yChart(sym, { period1: t0, period2: Math.min(now, t0 + 30 * 3600) }, '5m');
+      const punkter = c.points.map(([t, v]) => [t, Math.round(v * 10000) / 10000]);
+      return cached({ sym, dag: d, valuta: c.meta?.currency || null, punkter, hamtad: new Date().toISOString() }, d < new Date().toISOString().slice(0, 10) ? 86400 : 300);
+    }
     let c; let r = null; let ttl = 3600;
     if (p.get('from')) {
       const from = Math.floor(new Date(p.get('from') + 'T00:00:00Z').getTime() / 1000);

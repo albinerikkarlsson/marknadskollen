@@ -888,3 +888,21 @@ body.nosidebar .sidebar { display: none; }
 .ov-gains > a { color: #9BE3B8; }
 .ov-gains > a.neg { color: #FFB4AC; }
 .ov-gains > a:hover { outline: 1px solid currentColor; outline-offset: -1px; }
+
+/* Insynsaffärer i Dagens koll */
+.ov-fibtn { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; border-radius: 10px; }
+.ov-fibtn:hover .ov-fiarrow { text-decoration: underline; }
+.ov-fimore { display: flex; justify-content: space-between; margin-top: 8px; color: var(--muted); }
+.ov-fiarrow { color: var(--ink); font-weight: 500; }
+.ov-filist { margin-top: 8px; display: flex; flex-direction: column; }
+.ov-firow { display: flex; flex-direction: column; gap: 3px; padding: 10px 0; border-top: 1px solid var(--line-soft); color: var(--ink); text-decoration: none; }
+.ov-firow:hover b { text-decoration: underline; }
+.ov-fitop, .ov-fimid { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ov-fitop b { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-fimid span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-firow .pill { font-size: 11px; padding: 2px 9px; }
+.dd-pick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.dd-step, .dd-todaybtn { min-width: 38px; height: 38px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); font: inherit; font-size: 18px; color: var(--ink); cursor: pointer; }
+.dd-todaybtn { font-size: 14px; padding: 0 14px; }
+.dd-step:hover, .dd-todaybtn:hover { border-color: var(--ink-2); }
+.dd-date input { height: 38px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); padding: 0 14px; font: inherit; font-size: 14px; color: var(--ink); }

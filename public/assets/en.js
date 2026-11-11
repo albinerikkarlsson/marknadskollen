@@ -1,6 +1,11 @@
 // Engelsk översättning av Finanskollen. Nyckeln är den svenska texten, med {n} där siffror,
 // valutakoder och månadsnamn står. Laddas bara när någon valt engelska.
 const D = {
+  'Förändringen räknas på stängningskursen den dagen mot dagen innan, för de aktier du ägde när dagen var slut, och räknas om till kronor med växelkursen den dagen.': "The change is based on that day's closing price against the day before, for the stocks you owned at the end of the day, converted to kronor at that day's exchange rate.",
+  'Välj dag': "Choose day",
+  'Föregående börsdag': "Previous trading day",
+  'Nästa börsdag': "Next trading day",
+  'Insynsaffärer är ingen köp- eller säljsignal.': "Insider trades are not a buy or sell signal.",
   'Din dag': "Your day",
   'Hur portföljen har rört sig i dag och vilka aktier som påverkade mest.': "How your portfolio moved today and which stocks mattered most.",
   'Räknar på din dag …': "Calculating your day …",
