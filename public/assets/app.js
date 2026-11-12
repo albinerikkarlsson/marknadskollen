@@ -2885,7 +2885,7 @@ async function pfIndexSeries(buys, ser) {
 function pfTwr(ser) {
   const V = ser.value, I = ser.invested; const r = [];
   const daily = V.length > 1 && V[1][0] - V[0][0] <= 86400 * 1.5;
-  for (let i = 1; i < V.length; i++) { const flow = I[i][1] - I[i - 1][1]; if (V[i - 1][1] > 0) r.push({ t: V[i][0], day: sthlmDay(V[i][0] * 1000), r: (V[i][1] - flow) / V[i - 1][1] - 1 }); }
+  for (let i = 1; i < V.length; i++) { const flow = I[i][1] - I[i - 1][1]; if (V[i - 1][1] > 0) r.push({ t: V[i][0], day: new Date(V[i][0] * 1000).toISOString().slice(0, 10), r: (V[i][1] - flow) / V[i - 1][1] - 1 }); }
   // Lördag och söndag har ingen handel: deras avkastning är noll och räknas bort, måndagen får rörelsen sedan fredagen
   return daily ? r.filter((x) => { const d = new Date(x.t * 1000).getUTCDay(); return d !== 0 && d !== 6; }) : r;
 }
@@ -2899,7 +2899,8 @@ function pfStats(ser, omx, day) {
   if (!ser || ser.error) return out;
   const r = pfTwr(ser); if (!r.length) return out;
   out.ok = true; out.n = r.length; out.daily = ser.value[1][0] - ser.value[0][0] <= 86400 * 1.5;
-  const firstDay = sthlmDay(ser.value[0][0] * 1000); out.firstDay = firstDay;
+  // Tidslinjens punkter ligger på slutet av dygnet i UTC, så datumet tas i UTC
+  const firstDay = new Date(ser.value[0][0] * 1000).toISOString().slice(0, 10); out.firstDay = firstDay;
   const lastDay = r[r.length - 1].day;
   const omxMap = new Map(omx || []); const omxDays = (omx || []).map((x) => x[0]);
   const omxAt = (d) => { let v = null; for (const [k, c] of omx || []) { if (k <= d) v = c; else break; } return v; };
@@ -3016,7 +3017,7 @@ function pfRiskHTML(pd, st, cov, plan) {
     <section class="b-card c4"><h3 class="b-lbl">${EN ? 'Exposure' : 'Exponering'}</h3>${expo(EN ? 'Sector' : 'Bransch', br)}${expo(EN ? 'Country' : 'Land', la)}${expo(EN ? 'Currency' : 'Valuta', va)}</section>
     <section class="b-card c4"><h3 class="b-lbl">${EN ? 'How your stocks move together' : 'Samvariation mellan dina aktier'}${tip('Korrelation')}</h3><span class="small faint">${EN ? 'Stocks that move alike often fall at the same time' : 'Rör sig aktierna likadant faller de ofta samtidigt'}</span>
       ${cov ? `<div class="p-cm" style="--n:${n6}"><span></span>${cov.syms.slice(0, n6).map((s) => `<span class="p-cmh">${esc(short(s))}</span>`).join('')}${cov.syms.slice(0, n6).map((s, i) => `<span class="p-cmh l">${esc(short(s))}</span>${cov.corr[i].slice(0, n6).map((x, j) => `<span class="p-cmc" style="background:${cbg(i === j ? 1 : x)}" title="${esc(ovName(s))} ${EN ? 'and' : 'och'} ${esc(ovName(cov.syms[j]))}: ${nf(x, 2)}">${i === j ? '' : nf(x, 1)}</span>`).join('')}`).join('')}</div>
-      <p class="small" style="margin:0;color:var(--ink-2)">${tight.length ? `${[...new Set(tight.slice(0, 3).flatMap((p) => [p[0], p[1]]))].map(ovName).join(', ').replace(/, ([^,]*)$/, EN ? ' and $1' : ' och $1')} ${EN ? 'often move together' : 'följs ofta åt'} (${nf(tight[Math.min(2, tight.length - 1)][2], 2)}–${nf(tight[0][2], 2)}). ${EN ? 'They work more like one large position than separate ones.' : 'De fungerar mer som en stor post än som separata innehav.'}` : (EN ? 'Your largest stocks do not move very alike, which spreads the risk.' : 'Dina största aktier rör sig inte särskilt likadant, det sprider risken.')}</p>
+      <p class="small" style="margin:0;color:var(--ink-2)">${tight.length ? `${[...new Set(tight.slice(0, 3).flatMap((p) => [p[0], p[1]]))].map(ovName).join(', ').replace(/, ([^,]*)$/, EN ? ' and $1' : ' och $1')} ${EN ? 'often move together' : 'följs ofta åt'} (${tight.length > 1 ? `${nf(tight[Math.min(2, tight.length - 1)][2], 2)}–` : ''}${nf(tight[0][2], 2)}). ${EN ? 'They work more like one large position than separate ones.' : 'De fungerar mer som en stor post än som separata innehav.'}` : (EN ? 'Your largest stocks do not move very alike, which spreads the risk.' : 'Dina största aktier rör sig inte särskilt likadant, det sprider risken.')}</p>
       <span class="b-src">${EN ? '1 = always move the same way · 0 = no link · based on' : '1 = rör sig alltid lika · 0 = ingen koppling · räknat på'} ${cov.days} ${EN ? 'trading days' : 'börsdagar'}</span>` : `<p class="b-note">${EN ? 'Needs at least two holdings with a year of prices.' : 'Kräver minst två innehav med ett års kurser.'}</p>`}</section>
   </div>
   ${bH('04', EN ? 'If things go badly' : 'Om det går dåligt', EN ? 'Earlier falls and what a market fall could mean' : 'Tidigare fall och vad ett börsfall kan betyda', 'pr4')}
@@ -3630,7 +3631,7 @@ function mountPortfolj() {
     await accCfg();
     if (!ACC.ai) { wk.innerHTML = `<p class="b-note">${EN ? 'The AI summary is not available right now.' : 'AI-sammanfattningen är inte tillgänglig just nu.'}</p>`; return; }
     const top = hs.slice(0, 8);
-    const d = await api(`/api/summary?syms=${encodeURIComponent(top.map((h) => h.sym).join(','))}&namn=${encodeURIComponent(top.map((h) => ovName(h.sym)).join(','))}${EN ? '&lang=en' : ''}`, 60 * 60e3).catch(() => null);
+    const d = await api(`/api/summary?syms=${encodeURIComponent(top.map((h) => h.sym).join(','))}&namn=${encodeURIComponent(top.map((h) => ovName(h.sym).replace(/,/g, ' ')).join(','))}&full=${encodeURIComponent(top.map((h) => nameOf(h.sym).replace(/,/g, ' ')).join(','))}${EN ? '&lang=en' : ''}`, 60 * 60e3).catch(() => null);
     if (!$('#pf-week')) return;
     wk.innerHTML = d?.punkter?.length ? `<ul class="ai-text">${d.punkter.map((p) => `<li>${esc(p)}</li>`).join('')}</ul><span class="b-src">${EN ? `Summarised by AI from ${d.antalNyheter} headlines from the last week. May contain errors. No advice.` : `Sammanfattat av AI från ${d.antalNyheter} rubriker från senaste veckan. Kan innehålla fel. Inget råd.`}</span>`
       : `<p class="b-note">${d?.saknas === 'no_news' ? (EN ? 'No news about your stocks in the last week.' : 'Inga nyheter om dina aktier den senaste veckan.') : (EN ? 'The summary could not be made right now.' : 'Sammanfattningen kunde inte göras just nu.')}</p>`;
@@ -3642,16 +3643,16 @@ function mountPortfolj() {
     const own = new Set(pd.syms); const today = isoDay(Date.now());
     // Utdelningar per månad: årets väntade utdelning per aktie fördelad på de månader bolaget delade ut de senaste 12 månaderna
     const months = Array.from({ length: 12 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + i); return { k: d.toISOString().slice(0, 7), m: d.getMonth(), y: d.getFullYear(), v: 0, n: [] }; });
-    const mIdx = Object.fromEntries(months.map((m, i) => [m.k, i])); const yearAgo = isoDay(Date.now() - 365 * 864e5);
+    const yearAgo = isoDay(Date.now() - 365 * 864e5);
     let utan = 0;
     for (const r of plan.rows) {
       if (!r.perAr) continue;
       const hist = (r.k.historik || []).filter((x) => x.dag > yearAgo);
       const sum = hist.reduce((a, x) => a + x.belopp, 0);
-      const ev = hist.length ? hist.map((x) => { const d = new Date(x.dag + 'T12:00:00'); d.setFullYear(d.getFullYear() + 1); let k = d.toISOString().slice(0, 7); if (k < months[0].k) k = months[0].k; return [k, x.belopp / sum]; })
-        : r.k.exUtdelning ? [[(r.k.exUtdelning >= today ? r.k.exUtdelning : (() => { const d = new Date(r.k.exUtdelning + 'T12:00:00'); while (isoDay(d) < today) d.setFullYear(d.getFullYear() + 1); return isoDay(d); })()).slice(0, 7), 1]] : [];
+      // Varje kalendermånad finns en gång i de kommande 12 månaderna, så månaden räcker för att placera utdelningen
+      const ev = hist.length ? hist.map((x) => [Number(x.dag.slice(5, 7)) - 1, x.belopp / sum]) : r.k.exUtdelning ? [[Number(r.k.exUtdelning.slice(5, 7)) - 1, 1]] : [];
       if (!ev.length) { utan += r.perAr; continue; }
-      for (const [k, f] of ev) { const i = mIdx[k]; if (i == null) continue; months[i].v += r.perAr * f; if (!months[i].n.includes(r.k.sym)) months[i].n.push(r.k.sym); }
+      for (const [mm, f] of ev) { const i = months.findIndex((x) => x.m === mm); if (i < 0) continue; months[i].v += r.perAr * f; if (!months[i].n.includes(r.k.sym)) months[i].n.push(r.k.sym); }
     }
     const mmax = Math.max(1, ...months.map((m) => m.v));
     $('#pf-utdtot').textContent = `${sekBig(plan.total)} ${EN ? 'per year' : 'per år'}`;
