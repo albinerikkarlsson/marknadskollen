@@ -10,6 +10,7 @@ const MODELS = ['claude-haiku-5-5', 'claude-haiku-4-5', 'claude-sonnet-4-5', 'cl
 export default async (req) => {
   try {
     const p = new URL(req.url).searchParams;
+    if (p.get('syms')) return await weekSummary(p);
     const sym = cleanSymbol(p.get('s'));
     if (!sym) throw new ApiError(400, 'ogiltig ticker');
     const namn = (p.get('namn') || sym).slice(0, 80);
@@ -25,6 +26,16 @@ export default async (req) => {
     const lista = items.map((n, i) => `${i + 1}. ${n.datum ? n.datum.slice(0, 10) : ''} | ${n.kalla} | ${n.rubrik}${n.text ? ' – ' + n.text : ''}`).join('\n');
     const prompt = `Här är de senaste nyhetsrubrikerna om ${namn} (${sym}):\n\n${lista}\n\n${en ? 'Sammanfatta på enkel ENGELSKA (svara på engelska)' : 'Sammanfatta på enkel svenska'} vad nyheterna säger om bolaget, i 2 till 4 korta punkter. Regler:\n- Bara det som står i rubrikerna, inga egna antaganden.\n- Hoppa över rubriker som inte handlar om ${namn}.\n- Neutral ton. Inga råd om att köpa eller sälja och inga kursprognoser.\n- Använd aldrig ordet "säkert".\nSvara endast med JSON: {"punkter": ["...", "..."]}`;
 
+    const body = await askAI(key, prompt);
+    const text = (body?.content || []).filter((c) => c.type === 'text').map((c) => c.text || '').join('').trim();
+    const punkter = parsePoints(text);
+    if (!punkter.length) console.warn('[summary] kunde inte läsa AI-svaret:', JSON.stringify(body).slice(0, 400));
+    if (!punkter.length) return cached({ saknas: 'no_ai_answer' }, 600);
+    return cached({ punkter, antalNyheter: items.length, modell: 'Claude', hamtad: new Date().toISOString() }, 6 * 3600);
+  } catch (e) { return fail(e); }
+};
+
+async function askAI(key, prompt) {
     const base = (Netlify.env.get('ANTHROPIC_BASE_URL') || 'https://api.anthropic.com').replace(/\/+$/, '');
     let body = null; let lastErr = null;
     for (const model of MODELS) {
@@ -40,14 +51,29 @@ export default async (req) => {
       // Fel modell eller modell som saknas: prova nästa. Annat fel: avbryt.
       if (!(res.status === 400 || res.status === 404 || res.status === 403) || !/model|not.?found|not.?supported|not.?allowed/i.test(JSON.stringify(b || ''))) break;
     }
-    if (!body) throw lastErr || new ApiError(502, 'AI svarade inte');
-    const text = (body?.content || []).filter((c) => c.type === 'text').map((c) => c.text || '').join('').trim();
-    const punkter = parsePoints(text);
-    if (!punkter.length) console.warn('[summary] kunde inte läsa AI-svaret:', JSON.stringify(body).slice(0, 400));
-    if (!punkter.length) return cached({ saknas: 'no_ai_answer' }, 600);
-    return cached({ punkter, antalNyheter: items.length, modell: 'Claude', hamtad: new Date().toISOString() }, 6 * 3600);
-  } catch (e) { return fail(e); }
-};
+  if (!body) throw lastErr || new ApiError(502, 'AI svarade inte');
+  return body;
+}
+
+// GET /api/summary?syms=VOLV-B.ST,AAPL&namn=Volvo B,Apple  →  veckan i dina aktier, 3 till 4 punkter
+async function weekSummary(p) {
+  const syms = p.get('syms').split(',').map(cleanSymbol).filter(Boolean).slice(0, 8);
+  const namn = (p.get('namn') || '').split(',').map((x) => x.slice(0, 40));
+  const en = p.get('lang') === 'en';
+  if (!syms.length) throw new ApiError(400, 'ogiltig ticker');
+  const key = Netlify.env.get('ANTHROPIC_API_KEY');
+  if (!key) return cached({ saknas: 'no_ai_key' }, 300);
+  const since = Date.now() - 7 * 864e5;
+  const res = await Promise.all(syms.map((s) => newsHandler(new Request(`https://internal/api/news?s=${encodeURIComponent(s)}`)).then((r) => (r.ok ? r.json() : { items: [] })).catch(() => ({ items: [] }))));
+  const rows = res.flatMap((n, i) => (n.items || []).filter((x) => x.datum && new Date(x.datum).getTime() >= since).slice(0, 5).map((x) => `${namn[i] || syms[i]} | ${x.datum.slice(0, 10)} | ${x.kalla} | ${x.rubrik}${x.text ? ' – ' + String(x.text).slice(0, 160) : ''}`));
+  if (!rows.length) return cached({ saknas: 'no_news' }, 3600);
+  const prompt = `Här är rubrikerna från den senaste veckan om aktierna i en privatpersons portfölj:\n\n${rows.map((r, i) => `${i + 1}. ${r}`).join('\n')}\n\n${en ? 'Svara på enkel ENGELSKA.' : 'Svara på enkel svenska.'} Sammanfatta veckan i 3 till 4 korta punkter, en mening var, och börja varje punkt med bolagets namn. Regler:\n- Bara det som står i rubrikerna, inga egna antaganden.\n- Neutral ton. Inga råd om att köpa eller sälja och inga kursprognoser.\n- Använd aldrig ordet "säkert".\nSvara endast med JSON: {"punkter": ["...", "..."]}`;
+  const body = await askAI(key, prompt);
+  const text = (body?.content || []).filter((c) => c.type === 'text').map((c) => c.text || '').join('').trim();
+  const punkter = parsePoints(text);
+  if (!punkter.length) return cached({ saknas: 'no_ai_answer' }, 600);
+  return cached({ punkter, antalNyheter: rows.length, hamtad: new Date().toISOString() }, 6 * 3600);
+}
 
 // Svaret ska vara JSON, men om modellen skriver en vanlig punktlista tar vi den i stället
 export function parsePoints(text) {

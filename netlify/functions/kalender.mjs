@@ -14,6 +14,9 @@ export default async (req) => {
     const day = (v) => { const n = raw(v); return n ? new Date(n * 1000).toISOString().slice(0, 10) : null; };
     const ed = (ce.earnings?.earningsDate || []).map(day).filter(Boolean).sort();
     const perAktie = raw(sd.dividendRate) ?? raw(sd.trailingAnnualDividendRate);
+    // Utdelningar de senaste två åren, för att se vilka månader bolaget brukar dela ut
+    const hist = await yahoo(`/v8/finance/chart/${encodeURIComponent(sym)}`, { range: '2y', interval: '1mo', events: 'div' }).catch(() => null);
+    const divs = Object.values(hist?.chart?.result?.[0]?.events?.dividends || {}).map((x) => ({ dag: x?.date ? new Date(x.date * 1000).toISOString().slice(0, 10) : null, belopp: Number(x?.amount) })).filter((x) => x.dag && x.belopp > 0).sort((a, b) => a.dag.localeCompare(b.dag));
     return cached({
       sym,
       namn: pr.longName || pr.shortName || sym,
@@ -23,6 +26,7 @@ export default async (req) => {
       exUtdelning: day(ce.exDividendDate ?? sd.exDividendDate),
       utbetalning: day(ce.dividendDate),
       utdelningPerAktie: perAktie && perAktie > 0 ? perAktie : null,
+      historik: divs,
       direktavkastning: raw(sd.dividendYield) != null ? raw(sd.dividendYield) * 100 : null,
       kalla: 'Yahoo Finance',
       hamtad: new Date().toISOString()
