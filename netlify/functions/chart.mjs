@@ -6,7 +6,8 @@ import { yChart } from '../lib/yahoo.mjs';
 // GET /api/chart?s=VOLV-B.ST&r=1m|6m|1y|5y      →  stängningskurser för kursdiagrammet
 // GET /api/chart?s=VOLV-B.ST&from=2025-03-14     →  dagliga stängningskurser från ett datum (för portföljens tidslinje)
 // GET /api/chart?s=VOLV-B.ST&t=1741943400        →  kursen vid en viss tidpunkt (sekunder), för ett köp i portföljen
-const RANGES = { '1d': ['1d', '5m', 300], '1m': ['1mo', '1d', 900], '6m': ['6mo', '1d', 1800], '1y': ['1y', '1d', 3600], '5y': ['5y', '1wk', 6 * 3600] };
+// 5yd: fem år med dagliga stängningskurser, för bolagssidans riskmått och glidande medelvärden
+const RANGES = { '1d': ['1d', '5m', 300], '1m': ['1mo', '1d', 900], '6m': ['6mo', '1d', 1800], '1y': ['1y', '1d', 3600], '5y': ['5y', '1wk', 6 * 3600], '5yd': ['5y', '1d', 3600], 'max': ['max', '1mo', 12 * 3600] };
 const DAY = 86400;
 
 export default async (req) => {
