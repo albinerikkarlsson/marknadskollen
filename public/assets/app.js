@@ -596,25 +596,40 @@ const newsRow = (n) => { const u = safeUrl(n.lank); return `
     ${u ? `<a class="ov-src" href="${esc(u)}" target="_blank" rel="noopener noreferrer" aria-label="${esc((EN ? 'Read at ' : 'Läs hos ') + (n.kalla || ''))}">${esc(n.kalla || (EN ? 'Source' : 'Källa'))} ${svg('ext', 11)}</a>` : ''}
   </div>`; };
 
+/* ================= Översikt: din portfölj som en cockpit =================
+   Överst en mening om dagen och tre nyckeltal, sedan en stor kurva och vad som drev dagen,
+   och under det det som är bra att hålla koll på, viktigaste nyheterna och risken.
+   Allt räknas från riktiga kurser. Saknas något skrivs det ut. */
+const N_TICK = [{ sym: '^OMX', namn: 'OMXS30' }, { sym: '^GSPC', namn: 'S&P 500' }, { sym: '^IXIC', namn: 'Nasdaq' }, { sym: '^GDAXI', namn: 'DAX' }, { sym: 'GC=F', namn: 'Guld' }, { sym: 'USDSEK=X', namn: 'USD/SEK' }];
+const N_PER = [['1d', '1D'], ['1m', '1M'], ['6m', '6M'], ['1y', '1Å'], ['all', 'Allt']];
+const nGreet = () => { const h = Number(new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', hour12: false, timeZone: 'Europe/Stockholm' })); const n = firstName();
+  const g = EN ? (h < 10 ? 'Good morning' : h < 18 ? 'Hello' : 'Good evening') : (h < 10 ? 'God morgon' : h < 18 ? 'Hej' : 'God kväll');
+  return n ? `${g}, ${n}` : (EN ? 'Overview' : 'Översikt'); };
+const nTopic = (n) => ({ Vinstvarning: 'var(--down)', Rapport: 'var(--info)', Affär: 'var(--up)', Utdelning: 'var(--up)', Ledning: 'var(--warn)', Analys: 'var(--b-ma200)' }[n.amne] || 'var(--line)');
+
 function viewOversiktMin() {
   return `
   ${topbar([['Översikt', '/']])}
-  <div class="ov-head">
-    <div class="ov-title"><h1>Översikt${locked() && isDemo() ? ' <span class="pill outline ov-expill">Exempel</span>' : ''}</h1><span class="small muted" id="market-status">Hämtar marknaden …</span></div>
-    <div class="ov-market" id="ov-market">${OV_MARKET.map((m) => `<span class="ov-chip"><span class="muted">${esc(m.namn)}</span><span class="num" data-q="${m.sym}">…</span></span>`).join('')}</div>
+  <div class="n-head">
+    <div class="n-hl"><h1>${esc(nGreet())}${locked() && isDemo() ? ' <span class="pill outline ov-expill">Exempel</span>' : ''}</h1><span class="small muted" id="market-status">${EN ? 'Fetching the market …' : 'Hämtar marknaden …'}</span></div>
+    <div class="n-bors" id="n-bors">${['VOLV-B.ST', 'AAPL'].map((s) => { const b = borsStatus(s); return `<span class="n-pill ${b.kod}"><i></i>${esc(b.bors)} · ${esc(b.txt)}</span>`; }).join('')}</div>
   </div>
+  <div class="n-ticker" id="ov-market" aria-label="${EN ? 'Markets' : 'Marknaden'}"><div class="n-track">${[0, 1].map((k) => N_TICK.map((m) => `<span class="n-tk" ${k ? 'aria-hidden="true"' : ''}><span class="muted">${esc(m.namn)}</span><b class="num" data-q="${m.sym}">…</b><span class="num small" data-qd="${m.sym}"></span><svg viewBox="0 0 56 18" class="n-spark" aria-hidden="true"><path data-qs="${m.sym}" d="" fill="none" stroke-width="1.4"></path></svg></span>`).join('')).join('')}</div></div>
   ${guestBar()}
-  <div class="ov-grid">
-    <div class="ov-col">
-      <section class="ov-card ov-dark" id="ov-port" aria-label="Min portfölj">${loading('Räknar på din portfölj …')}</section>
-      <section class="ov-card" id="ov-watch" aria-labelledby="ovw-h"><div class="ov-cardhead"><h2 id="ovw-h">Min bevakning</h2><a href="/bevakning" data-link>Alla →</a></div><div id="ov-watch-list">${loading('Hämtar kurser …')}</div></section>
-    </div>
-    <section class="ov-card" id="ov-koll" aria-labelledby="ovk-h"><div class="ov-cardhead"><h2 id="ovk-h">Dagens koll</h2><a href="/kalender" data-link>Kalender →</a></div><div id="ov-koll-body">${loading('Hämtar …')}</div></section>
-    <section class="ov-card" id="ov-news" aria-labelledby="ovn-h"><div class="ov-cardhead"><h2 id="ovn-h">Nyheter</h2>
-      <div class="ov-seg" role="tablist" aria-label="Nyheter"><button role="tab" type="button" data-ovnews="mina" aria-selected="true">Mina aktier</button><button role="tab" type="button" data-ovnews="alla" aria-selected="false">Alla</button></div></div>
-      <div id="ov-news-body">${loading('Hämtar nyheter …')}</div>
-      <a class="small ov-more" href="/nyheter" data-link>Alla nyheter →</a>
-    </section>
+  <div class="n-kpis">
+    <section class="n-story" id="n-story"><span class="muted">${EN ? 'Calculating your portfolio …' : 'Räknar på din portfölj …'}</span></section>
+    <section class="b-card n-kpi"><span class="n-k">${EN ? 'Value now' : 'Värde nu'}</span><b class="num" id="k-tot">–</b><span class="small faint" id="k-tot-s"></span></section>
+    <section class="b-card n-kpi"><span class="n-k" id="k-day-l">${EN ? 'Today' : 'I dag'}</span><b class="num" id="k-day">–</b><span class="small num" id="k-day-s"></span></section>
+    <section class="b-card n-kpi"><span class="n-k">${EN ? 'Since purchase' : 'Sedan köp'}</span><b class="num" id="k-since">–</b><span class="small num" id="k-since-s"></span></section>
+  </div>
+  <div class="b-grid n-grid">
+    <section class="b-card c8 n-curve"><div class="b-ch"><div class="b-chl"><h2 class="b-lbl">${EN ? 'The portfolio' : 'Portföljen'}</h2><span class="small" id="n-chg"></span></div>
+      <div class="b-segc" role="tablist" aria-label="Period">${N_PER.map(([k, l]) => `<button type="button" role="tab" data-nper="${k}" aria-selected="${k === '1d'}">${l}</button>`).join('')}</div></div>
+      <div id="n-chart" class="n-chart">${loading('Hämtar kurser …')}</div><div class="b-xt num" id="n-axis"></div></section>
+    <section class="b-card c4"><div class="b-ch"><h2 class="b-lbl">Vad drev dagen</h2><span class="small faint" id="n-drv-s"></span></div><div id="n-drv">${loading()}</div></section>
+    <section class="b-card c4"><div class="b-ch"><h2 class="b-lbl">Att hålla koll på</h2><a class="b-more" href="/kalender" data-link>Kalender →</a></div><div id="n-todo">${loading()}</div></section>
+    <section class="b-card c4"><div class="b-ch"><h2 class="b-lbl">Viktigast för dig</h2><a class="b-more" href="/nyheter" data-link>Alla nyheter →</a></div><div id="n-news">${loading('Hämtar nyheter …')}</div></section>
+    <section class="b-card c4"><div class="b-ch"><h2 class="b-lbl">Riskläge${tip('Riskkoll')}</h2><a class="b-more" href="/portfolj" data-link>Detaljer →</a></div><div id="n-risk">${loading()}</div></section>
   </div>
   ${footer()}`;
 }
@@ -622,131 +637,227 @@ function viewOversiktMin() {
 async function mountOversiktMin() {
   const port = getPort(); const watch = getWatch().slice(0, 8);
   const { all } = mySyms();
-  const quotes = await getQuotes([...new Set([...OV_MARKET.map((m) => m.sym), ...watch, ...all.slice(0, 30)])]);
+  const quotes = await getQuotes([...new Set([...N_TICK.map((m) => m.sym), ...watch, ...all.slice(0, 30)])]);
   if (!$('#ov-market')) return;
-  for (const m of OV_MARKET) { const q = quotes[m.sym]; const el = $(`[data-q="${m.sym}"]`); if (el) el.outerHTML = q?.kurs != null ? `<span class="num">${kr(q.kurs)}${m.sym === 'GC=F' && q.valuta ? ' ' + esc(cur(q.valuta)) : ''}</span><span class="num small" style="color:var(--${tone(q.d1)})">${pct(q.d1)}</span>` : '<span class="faint">saknas</span>'; }
-  $('#market-status').textContent = quotes.__hamtad ? `${new Date().toLocaleDateString(L, { weekday: 'short', day: 'numeric', month: 'short' })} · ${EN ? 'updated' : 'uppdaterad'} ${clock(quotes.__hamtad)}` : errText(quotes.__error);
-
-  /* ---- Min bevakning ---- */
-  let redrawWatch = () => {};
-  const wl = $('#ov-watch-list');
-  if (!watch.length) wl.innerHTML = '<p class="small muted" style="margin:0">Du bevakar inga aktier än. Sök på ett bolag och tryck på <b>Bevaka</b>.</p>';
-  else {
-    let wCharts = {};
-    const draw = (charts = wCharts) => { wCharts = charts; if (!$('#ov-watch-list')) return; wl.innerHTML = watch.map((s) => { const q = quotes[s]; const d = q?.d1;
-      return `<a class="ov-wrow" href="/bolag/${encodeURIComponent(s)}" data-link>${symFlag(s)}<span class="ov-name">${esc(ovName(s))}</span>
-        <svg viewBox="0 0 56 18" class="ov-spark" aria-hidden="true"><path d="${charts[s] || ''}" fill="none" stroke="var(--${d != null && d < 0 ? 'down' : 'up'})" stroke-width="1.4" stroke-linejoin="round"></path></svg>
-        <span class="num muted">${q?.kurs != null ? esc(kr(q.kurs)) : '–'}</span><span class="pill ${tone(d)} num">${d != null ? pct(d, 1) : '–'}</span></a>`; }).join(''); };
-    draw();
-    Promise.all(watch.map((s) => api(`/api/chart?s=${encodeURIComponent(s)}&r=1m`, 30 * 60e3).catch(() => null))).then((cs) => draw(Object.fromEntries(watch.map((s, i) => [s, sparkPath(cs[i]?.punkter || [])]))));
-    redrawWatch = () => draw();
+  /* ---- Marknaden ---- */
+  for (const m of N_TICK) {
+    const q = quotes[m.sym];
+    document.querySelectorAll(`[data-q="${CSS.escape(m.sym)}"]`).forEach((el) => { el.textContent = q?.kurs != null ? kr(q.kurs) + (m.sym === 'GC=F' && q.valuta ? ' ' + cur(q.valuta) : '') : (EN ? 'missing' : 'saknas'); if (q?.kurs == null) el.classList.add('faint'); });
+    document.querySelectorAll(`[data-qd="${CSS.escape(m.sym)}"]`).forEach((el) => { el.textContent = q?.d1 != null ? pct(q.d1) : ''; el.style.color = `var(--${tone(q?.d1) || 'muted'})`; });
   }
+  Promise.all(N_TICK.map((m) => api(`/api/chart?s=${encodeURIComponent(m.sym)}&r=1m`, 30 * 60e3).catch(() => null))).then((cs) => N_TICK.forEach((m, i) => {
+    const d = sparkPath(cs[i]?.punkter || []); const q = quotes[m.sym];
+    document.querySelectorAll(`[data-qs="${CSS.escape(m.sym)}"]`).forEach((p) => { p.setAttribute('d', d); p.setAttribute('stroke', `var(--${q?.d1 != null && q.d1 < 0 ? 'down' : 'up'})`); });
+  }));
+  $('#market-status').textContent = quotes.__hamtad ? `${new Date().toLocaleDateString(L, { weekday: 'long', day: 'numeric', month: 'long' })} · ${EN ? 'updated' : 'uppdaterad'} ${clock(quotes.__hamtad)}` : errText(quotes.__error);
 
-  /* ---- Nyheter ---- */
-  let tab = 'mina'; let seq = 0;
-  const nb = $('#ov-news-body');
-  const drawNews = async () => {
-    const id = ++seq; nb.innerHTML = loading('Hämtar nyheter …');
-    let items = [];
-    if (tab === 'mina' && all.length) {
-      const syms = [...new Set([...port.map((x) => x.sym), ...watch])].slice(0, 6);
-      const res = await Promise.all(syms.map((s) => api('/api/news?s=' + encodeURIComponent(s), 10 * 60e3).then((n) => (n?.items || []).map((x) => prepNews(x, null, s))).catch(() => [])));
-      const seen = new Set(); items = res.flat().filter((n) => { const k = n.lank || n.rubrik; if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
-    } else {
-      const se = await getNews('se'); items = se.items.length ? se.items : (await getNews('world')).items;
-    }
-    if (id !== seq || !$('#ov-news-body')) return;
-    if (!items.length) { nb.innerHTML = `<p class="small muted" style="margin:0">${tab === 'mina' ? 'Inga nyheter om dina aktier just nu.' : 'Inga nyheter just nu.'}</p>`; return; }
-    const [top, ...rest] = items; const u = safeUrl(top.lank);
-    nb.innerHTML = `<article class="ov-top">
-        <span class="ov-topmeta">${flag(top.land)}<span class="small muted num">${esc(top.tidTxt)}${top.bolagTxt ? ' · ' + esc(top.bolagTxt) : ''}</span></span>
-        <b>${newsTitle(top)}</b>
-        ${u ? `<a class="ov-src" href="${esc(u)}" target="_blank" rel="noopener noreferrer" style="align-self:flex-start">${esc(top.kalla || 'Källa')} ${svg('ext', 11)}</a>` : ''}
-      </article>${rest.slice(0, 7).map(newsRow).join('')}`;
-  };
-  $('#ov-news').addEventListener('click', (e) => { const b = e.target.closest('[data-ovnews]'); if (!b || b.dataset.ovnews === tab) return; tab = b.dataset.ovnews; $('#ov-news').querySelectorAll('[data-ovnews]').forEach((x) => x.setAttribute('aria-selected', String(x === b))); drawNews(); });
-  drawNews();
+  // Nyheter, kalender och insyn hämtas parallellt med portföljen
+  const newsP = all.length ? getMyNews().catch(() => ({ ok: false, items: [] })) : Promise.resolve({ ok: true, items: [] });
+  nTodo(all, port);
+  nNews(newsP, all);
 
-  /* ---- Min portfölj ---- */
-  const pb = $('#ov-port'); let pdata = null;
+  /* ---- Portföljen ---- */
+  const story = $('#n-story');
   if (!port.length) {
-    pb.innerHTML = `<div class="ov-cardhead"><h2>Min portfölj</h2></div><p style="margin:0;color:rgba(255,255,255,0.75)">Lägg in dina köp så ser du värde, vinst i kronor och procent, risk och utdelning här.</p>
-      <div class="chips"><a class="ov-btn" href="/portfolj" data-link>Lägg till ett köp</a><a class="ov-btn ghost" href="/portfolj#pf-import" data-link>Importera från Avanza eller Nordnet</a></div>`;
-  } else {
-    pdata = await pfData(port);
-    if (!$('#ov-port')) return;
-    redrawWatch();
-    const { hold, tot, insatt, vinst, idag, risk } = pdata;
-    const sorted = hold.slice().sort((a, b) => (b.varde || 0) - (a.varde || 0));
-    pb.innerHTML = `<div class="ov-cardhead"><h2>${locked() && isDemo() ? 'Exempelportfölj' : 'Min portfölj'}</h2><a href="/portfolj" data-link>Öppna →</a></div>
-      <b class="ov-big num">${sekBig(tot)}</b>
-      <div class="ov-gains">
-        <a href="/idag" data-link class="ov-gainlink ${idag < 0 ? 'neg' : ''}"><span>${pdata.dagIdag || !pdata.refDag ? 'I dag' : esc(dayShort(pdata.refDag + 'T12:00:00'))} ›</span><b class="num">${idag ? krDiff(idag) : '–'}</b><span class="num">${idag && pdata.idagPct != null ? pctDiff(pdata.idagPct) : ''}</span></a>
-        <div class="${vinst != null && vinst < 0 ? 'neg' : ''}"><span>Sedan köp</span><b class="num">${vinst != null ? krDiff(vinst) : '–'}</b><span class="num">${vinst != null && insatt ? pctDiff((vinst / insatt) * 100) : ''}</span></div>
-      </div>
-      <div class="ov-chartbox"><div class="ov-charthead"><span id="ov-chg">${EN ? 'Value over time' : 'Värde över tid'}</span><div class="ov-seg dark" role="tablist" aria-label="Period">${[['1m', '1 mån'], ['6m', '6 mån'], ['1y', '1 år'], ['all', 'Allt']].map(([k, t]) => `<button role="tab" type="button" data-ovrange="${k}" aria-selected="${k === '6m'}">${t}</button>`).join('')}</div></div><div id="ov-chart"><div class="ov-chart-empty"></div></div></div>
-      <div class="ov-facts"><span><span>Riskkoll</span><b class="num">${risk != null ? nf(risk, 1) + ' / 10' : '–'}</b></span><span><span>Utdelning per år</span><b class="num" id="ov-utd">…</b></span></div>
-      <div class="ov-hold">${sorted.slice(0, 6).map((h) => `<a href="/bolag/${encodeURIComponent(h.sym)}" data-link>${symFlag(h.sym)}<span class="ov-name">${esc(ovName(h.sym))}</span><span class="num ov-dim">${h.varde != null ? sek(h.varde) : '–'}</span><span class="ov-gain num ${h.vinst != null && h.vinst < 0 ? 'neg' : ''}"><span>${h.vinst != null ? krDiff(h.vinst) : '–'}</span><span>${h.vinst != null && h.insatt ? pctDiff((h.vinst / h.insatt) * 100) : ''}</span></span></a>`).join('')}</div>`;
-    // Diagrammet
-    let range = '6m'; let ser = null;
-    const drawChart = () => { const c = $('#ov-chart'); if (!c || !ser) return;
-      if (ser.error) { c.innerHTML = `<p class="small" style="margin:0;color:rgba(255,255,255,0.6)">${ser.error === 'nobuys' ? 'Diagrammet kräver köp med datum.' : ser.error === 'fetch' ? 'Kurserna för diagrammet kunde inte hämtas just nu. Prova igen om en stund.' : 'Diagrammet visas när det finns minst två dagars kurser.'}</p>`; return; }
-      const V = rangeCut(ser.value, range, ser.tNow); const I = rangeCut(ser.invested, range, ser.tNow);
-      const ch = V[V.length - 1][1] - V[0][1];
-      $('#ov-chg').innerHTML = `${EN ? 'Value over time' : 'Värde över tid'} · <span style="color:${ch < 0 ? '#FFB4AC' : '#9BE3B8'}">${krDiff(ch)} (${pctDiff(V[0][1] ? (ch / V[0][1]) * 100 : 0)})</span>`;
-      c.innerHTML = miniMoney(V, I); };
-    pfSeries(pdata).then((x) => { ser = x; drawChart(); }).catch(() => { ser = { error: 'fetch' }; drawChart(); });
-    pb.addEventListener('click', (e) => { const b = e.target.closest('[data-ovrange]'); if (!b) return; range = b.dataset.ovrange; pb.querySelectorAll('[data-ovrange]').forEach((x) => x.setAttribute('aria-selected', String(x === b))); drawChart(); });
-    getKalender(port.map((x) => x.sym)).then(dividendPlan).then((plan) => { const u = $('#ov-utd'); if (u) u.textContent = plan.rows.length ? sekBig(plan.total) : '–'; }).catch(() => { const u = $('#ov-utd'); if (u) u.textContent = '–'; });
+    story.innerHTML = `<span>${EN ? 'Add your purchases and see here how your stocks move every day.' : 'Lägg in dina köp så ser du här hur dina aktier rör sig varje dag.'}</span><span class="chips"><a class="btn small" href="/portfolj" data-link>${EN ? 'Add a purchase' : 'Lägg till ett köp'}</a>${locked() ? demoBtn() : ''}</span>`;
+    $('#n-chart').innerHTML = `<p class="b-note">${EN ? 'The chart shows the value of your portfolio when you have added purchases.' : 'Kurvan visar värdet på din portfölj när du har lagt in köp.'}</p>`;
+    $('#n-drv').innerHTML = `<p class="b-note">${EN ? 'Shows which of your stocks moved the most today.' : 'Här ser du vilka av dina aktier som rörde sig mest i dag.'}</p>`;
+    $('#n-risk').innerHTML = `<p class="b-note">${EN ? 'Shows the risk in your whole portfolio when you have added purchases.' : 'Här ser du risken i hela portföljen när du har lagt in köp.'}</p>`;
+    return;
+  }
+  let pd;
+  try { pd = await pfData(port); } catch { pd = null; }
+  if (!$('#n-story')) return;
+  if (!pd) { story.innerHTML = `<span>${EN ? 'The prices could not be fetched right now. Try again in a while.' : 'Kurserna kunde inte hämtas just nu. Prova igen om en stund.'}</span>`; return; }
+  const m = { items: pd.hold, fx: pd.fxD, dag: pd.refDag, live: pd.dagIdag, ...pd.day };
+  const items = pd.hold; const missing = items.filter((h) => h.missing);
+  const allMissing = items.length && missing.length === items.length;
+  // Nyckeltal
+  $('#k-tot').textContent = pd.tot ? sekBig(pd.tot) : '–';
+  $('#k-tot-s').textContent = missing.length ? (EN ? `${missing.length} without price` : `${missing.length} utan kurs`) : `${items.length} ${EN ? (items.length === 1 ? 'holding' : 'holdings') : 'innehav'}`;
+  $('#k-day-l').textContent = pd.dagIdag || !pd.refDag ? (EN ? 'Today' : 'I dag') : dayShort(pd.refDag + 'T12:00:00');
+  const chg = pd.day.change;
+  if (allMissing || !pd.refDag) { $('#k-day').textContent = '–'; $('#k-day-s').textContent = EN ? 'Prices missing' : 'Kurser saknas'; }
+  else { $('#k-day').textContent = Math.round(chg) ? krDiff(chg) : '0 kr'; $('#k-day').className = 'num ' + tone(chg); $('#k-day-s').textContent = pd.day.pct != null ? pctDiff(pd.day.pct) : ''; $('#k-day-s').className = 'small num ' + tone(chg); }
+  if (pd.vinst != null) { $('#k-since').textContent = krDiff(pd.vinst); $('#k-since').className = 'num ' + tone(pd.vinst); $('#k-since-s').textContent = pd.insatt ? pctDiff((pd.vinst / pd.insatt) * 100) + (pd.okanda ? ` · ${pd.okanda} ${EN ? 'without price paid' : 'utan köppris'}` : '') : ''; $('#k-since-s').className = 'small num ' + tone(pd.vinst); }
+  else $('#k-since-s').textContent = EN ? 'Add the price you paid' : 'Lägg in vad du betalade';
+
+  // Raderna: aktierna och valutan, hela kronor som summerar exakt till dagens resultat (som på Din dag)
+  const stocks = items.filter((h) => h.idag != null && !h.missing);
+  const fxRows = Object.entries(pd.day.fxEff || {}).map(([c, v]) => ({ fx: c, idag: v, pct: pd.fxD[c] ? (pd.fxD[c].F1 / pd.fxD[c].F0 - 1) * 100 : null }));
+  const rows = [...stocks, ...fxRows].sort((a, b) => b.idag - a.idag);
+  { const target = Math.round(chg); const fl = rows.map((x) => Math.floor(x.idag)); let left = target - fl.reduce((a, v) => a + v, 0);
+    const order = rows.map((x, i) => [x.idag - Math.floor(x.idag), i]).sort((a, b) => b[0] - a[0]);
+    rows.forEach((x, i) => { x.kr = fl[i]; }); for (const [, i] of order) { if (left <= 0) break; rows[i].kr += 1; left -= 1; } }
+  const up = stocks.filter((h) => h.idag > 0).sort((a, b) => b.idag - a.idag); const down = stocks.filter((h) => h.idag < 0).sort((a, b) => a.idag - b.idag);
+  const omx = quotes['^OMX'];
+  const why = [up[0] ? `${EN ? 'Biggest lift' : 'Mest upp'}: ${ovName(up[0].sym)} ${krDiff(up[0].kr)}` : '', down[0] ? `${EN ? 'Biggest drag' : 'Mest ner'}: ${ovName(down[0].sym)} ${krDiff(down[0].kr)}` : '', omx?.d1 != null && omx.idag ? `OMXS30 ${pct(omx.d1)}` : ''].filter(Boolean).join(' · ');
+  // Meningen överst
+  const dayTxt = pd.dagIdag ? (EN ? 'Today your stocks have moved' : 'I dag har dina aktier gått') : (EN ? `On the last trading day (${dayShort(pd.refDag + 'T12:00:00')}) your stocks moved` : `Senaste börsdagen (${dayShort(pd.refDag + 'T12:00:00')}) gick dina aktier`);
+  story.innerHTML = allMissing || !pd.refDag ? `<span>${EN ? 'The prices could not be fetched right now, so your day cannot be calculated.' : 'Kurserna kunde inte hämtas just nu, så din dag kan inte räknas ut.'}</span>`
+    : `<span class="n-say">${esc(dayTxt)} <b class="${tone(chg)}">${Math.round(chg) ? krDiff(chg) : '0 kr'}</b>${pd.day.pct != null ? ` <span class="${tone(chg)} n-sayp">(${pctDiff(pd.day.pct)})</span>` : ''}</span>${why ? `<span class="small muted">${esc(why)}</span>` : ''}${missing.length ? `<span class="small warn">${EN ? `${missing.length} of your stocks could not be fetched and are not included.` : `${missing.length} av dina aktier kunde inte hämtas och räknas inte med.`}</span>` : ''}`;
+
+  /* ---- Vad drev dagen ---- */
+  const maxAbs = Math.max(1, ...rows.map((h) => Math.abs(h.idag)));
+  const notYet = items.filter((h) => h.idag == null && !h.missing);
+  let selSym = null;
+  const drawDrv = () => {
+    const el = $('#n-drv'); if (!el) return;
+    if (allMissing) { el.innerHTML = `<p class="b-note">${EN ? 'Prices are missing right now.' : 'Kurserna saknas just nu.'}</p>`; return; }
+    $('#n-drv-s').textContent = EN ? 'in kronor' : 'i kronor';
+    const row = (h) => { const w = (Math.abs(h.idag) / maxAbs) * 50; const t = tone(h.idag);
+      if (h.fx) return `<div class="n-drow"><span class="n-av">${esc(h.fx)}</span><span class="n-dn"><span>${EN ? `Currency ${esc(h.fx)}/SEK` : `Valutan ${esc(h.fx)}/SEK`} <span class="${t}">${h.pct != null ? pct(h.pct, 1) : ''}</span></span><span class="n-bar"><i class="z"></i><i class="${t}" style="left:${h.idag >= 0 ? 50 : 50 - w}%;width:${w}%"></i></span></span><b class="num ${t}">${krDiff(h.kr)}</b></div>`;
+      return `<button type="button" class="n-drow ${selSym === h.sym ? 'on' : ''}" data-nsel="${esc(h.sym)}"><span class="n-av">${esc(short(h.sym))}${symFlag(h.sym, 'on-avatar')}</span><span class="n-dn"><span>${esc(ovName(h.sym))} <span class="${t}">${h.d1Dag != null ? pct(h.d1Dag, 1) : ''}</span></span><span class="n-bar"><i class="z"></i><i class="${t}" style="left:${h.idag >= 0 ? 50 : 50 - w}%;width:${w}%"></i></span></span><b class="num ${t}">${krDiff(h.kr)}</b></button>`; };
+    const sel = selSym ? items.find((h) => h.sym === selSym) : null;
+    el.innerHTML = (rows.length ? rows.slice(0, 7).map(row).join('') : `<p class="b-note">${EN ? 'None of your stocks have traded yet.' : 'Ingen av dina aktier har handlats än.'}</p>`)
+      + (rows.length > 7 ? `<a class="b-more" href="/idag" data-link>${EN ? `All ${rows.length} on Your day →` : `Alla ${rows.length} på Din dag →`}</a>` : '')
+      + (notYet.length ? `<p class="b-src">${EN ? 'Not traded yet' : 'Inte handlade än'}: ${esc(notYet.map((h) => ovName(h.sym)).join(', '))}</p>` : '')
+      + (sel ? `<div class="n-sel"><span><span class="n-k">${EN ? 'Value' : 'Värde'}</span><b class="num">${sel.varde != null ? sekBig(sel.varde) : '–'}</b></span><span><span class="n-k">${EN ? 'Since purchase' : 'Sedan köp'}</span><b class="num ${tone(sel.vinst)}">${sel.vinst != null && sel.insatt ? pctDiff((sel.vinst / sel.insatt) * 100) : '–'}</b></span><span><span class="n-k">${EN ? 'Risk check' : 'Riskkoll'}</span><b class="num">${sel.poang != null ? sel.poang + ' / 10' : '–'}</b></span><a class="b-more" href="/bolag/${encodeURIComponent(sel.sym)}" data-link>${EN ? 'Company page' : 'Bolagssidan'} →</a></div>` : '')
+      + (!sel && stocks.length ? `<p class="b-src">${EN ? 'Tap a stock to see more.' : 'Tryck på en aktie för att se mer.'}</p>` : '');
+  };
+  drawDrv();
+  $('#n-drv').addEventListener('click', (e) => { const b = e.target.closest('[data-nsel]'); if (!b) return; selSym = selSym === b.dataset.nsel ? null : b.dataset.nsel; drawDrv(); });
+
+  /* ---- Kurvan ---- */
+  let per = '1d'; let ser = null; let curve = null; let news = [];
+  const chartEl = () => $('#n-chart');
+  const msg = (t) => { const el = chartEl(); if (el) el.innerHTML = `<p class="b-note">${esc(t)}</p>`; $('#n-axis').innerHTML = ''; $('#n-chg').textContent = ''; };
+  const draw = () => {
+    const el = chartEl(); if (!el) return;
+    if (per === '1d') {
+      if (!curve) { el.innerHTML = loading(EN ? 'Loading the day …' : 'Hämtar dagens kurser …'); return; }
+      if (curve.error) { const T = { old: ['', ''], fetch: ['The prices for the curve could not be fetched right now. The numbers above are still correct.', 'Kurserna för kurvan kunde inte hämtas just nu. Siffrorna ovan stämmer ändå.'], none: ['None of your stocks have traded yet, so there is no curve to show.', 'Ingen av dina aktier har handlats än, så det finns ingen kurva att visa.'], live: ['The curve appears when there are prices from today for all your stocks.', 'Kurvan visas när det finns kurser från i dag för alla dina aktier.'], partial: ['Prices every five minutes are missing for some of your stocks, so the curve cannot be shown. The numbers above are still correct.', 'Kurser var femte minut saknas för några av dina aktier, så kurvan kan inte visas. Siffrorna ovan stämmer ändå.'] }[curve.error] || ['The curve cannot be shown right now.', 'Kurvan kan inte visas just nu.']; msg(EN ? T[0] : T[1]); return; }
+      const pts = curve.pts; const t0 = pts[0][0]; const t1 = pts[pts.length - 1][0];
+      const dots = []; for (const nn of news.slice().sort((a, b) => b.poang - a.poang)) { const t = new Date(nn.datum).getTime() / 1000; if (t < t0 || t > t1) continue; if (dots.some((d) => Math.abs(new Date(d.datum).getTime() / 1000 - t) < (t1 - t0) * 0.03)) continue; dots.push(nn); if (dots.length === 6) break; }
+      nDraw(el, pts, { base: 0, money: false, dots });
+      const last = pts[pts.length - 1][1];
+      $('#n-chg').innerHTML = `<span class="${tone(last)}">${krDiff(last)}</span> <span class="faint">${pd.dagIdag ? (EN ? 'today' : 'i dag') : esc(dayShort(pd.refDag + 'T12:00:00'))}</span>`;
+      const hm = (t) => new Date(t * 1000).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
+      $('#n-axis').innerHTML = `<span>${hm(t0)}</span><span>${dots.length ? (EN ? 'Dots = news about your stocks' : 'Prickarna är nyheter om dina aktier') : (EN ? 'Dashed line = start of the day' : 'Streckad linje = början av dagen')}</span><span>${hm(t1)}</span>`;
+      return;
+    }
+    if (!ser) { el.innerHTML = loading(EN ? 'Loading the history …' : 'Hämtar historiken …'); return; }
+    if (ser.error) { msg(ser.error === 'nobuys' ? (EN ? 'The chart needs purchases with a date.' : 'Kurvan kräver köp med datum.') : ser.error === 'fetch' ? (EN ? 'The prices for the chart could not be fetched right now. Try again in a while.' : 'Kurserna för kurvan kunde inte hämtas just nu. Prova igen om en stund.') : (EN ? 'The chart appears when there are at least two days of prices.' : 'Kurvan visas när det finns minst två dagars kurser.')); return; }
+    const V = rangeCut(ser.value, per, ser.tNow); const I = rangeCut(ser.invested, per, ser.tNow);
+    if (V.length < 2) { msg(EN ? 'Too few days in the period.' : 'För få dagar i perioden.'); return; }
+    nDraw(el, V, { invested: I, money: true });
+    // Förändringen i perioden räknas som värdeökning minus pengar som satts in under perioden
+    const dv = V[V.length - 1][1] - V[0][1]; const di = I[I.length - 1][1] - I[0][1]; const g = dv - di;
+    $('#n-chg').innerHTML = `<span class="${tone(g)}">${krDiff(g)}</span> <span class="faint">${EN ? 'in the period' : 'under perioden'}${di > 0.5 ? (EN ? `, not counting ${sekBig(di)} added` : `, utan ${sekBig(di)} som satts in`) : ''}</span>`;
+    const d = (t) => new Date(t * 1000).toLocaleDateString(L, { day: 'numeric', month: 'short', year: per === '1m' ? undefined : 'numeric', timeZone: 'Europe/Stockholm' });
+    $('#n-axis').innerHTML = `<span>${esc(d(V[0][0]))}</span><span>${EN ? 'Dashed line = money you put in' : 'Streckad linje = pengar du satt in'}</span><span>${esc(d(V[V.length - 1][0]))}</span>`;
+  };
+  $('.n-curve').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-nper]'); if (!b) return;
+    per = b.dataset.nper; $('.n-curve').querySelectorAll('[data-nper]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+    if (per !== '1d' && !ser) pfSeries(pd).then((x) => { ser = x; draw(); }).catch(() => { ser = { error: 'fetch' }; draw(); });
+    draw();
+  });
+  if (allMissing) msg(EN ? 'The prices could not be fetched right now.' : 'Kurserna kunde inte hämtas just nu.');
+  else {
+    draw();
+    newsP.then((d) => { news = (d.items || []).filter((n) => n.agd); if (curve && !curve.error && per === '1d') draw(); });
+    dayCurve(m).then((c) => { curve = c; if (per === '1d') draw(); }).catch(() => { curve = { error: 'fetch' }; if (per === '1d') draw(); });
   }
 
-  /* ---- Dagens koll ---- */
-  const kb = $('#ov-koll-body');
-  if (!all.length) { kb.innerHTML = '<p class="small muted" style="margin:0">Bevaka några aktier eller lägg in dina köp, så visar vi vad som händer i dem här.</p>'; return; }
-  const moves = all.map((s) => ({ s, q: quotes[s] })).filter((x) => x.q?.d1 != null && x.q.idag).sort((a, b) => b.q.d1 - a.q.d1);
-  const best = moves[0]; const worst = moves.length > 1 ? moves[moves.length - 1] : null;
-  const tile = (x, label) => { if (!x) return ''; const d = x.q.d1; const per = x.q.kurs - x.q.kurs / (1 + d / 100);
-    return `<a class="ov-tile ${d < 0 ? 'neg' : ''}" href="/bolag/${encodeURIComponent(x.s)}" data-link><span class="small">${label}</span><b>${esc(ovName(x.s))}</b><span class="ov-tilepct num">${pct(d, 1)}</span><span class="small num">${pmSign(per)}${kr(Math.abs(per))} ${esc(cur(x.q.valuta))} ${EN ? 'per share' : 'per aktie'}</span></a>`; };
-  // Fem handelsdagar från i dag
-  const days = []; for (let d = new Date(); days.length < 5; d = new Date(d.getTime() + dayMs)) { if (d.getDay() !== 0 && d.getDay() !== 6) days.push(isoDay(d)); }
-  kb.innerHTML = `
-    <div class="ov-tiles">${tile(best, 'Bäst i dag')}${worst && worst.q.d1 < best.q.d1 ? tile(worst, 'Sämst i dag') : ''}</div>
-    <div class="ov-block"><div class="ov-blockhead"><span>Veckan för dina aktier</span><span class="ov-legend"><span class="rep">● <span>Rapport</span></span><span class="utd">● <span>Utdelning</span></span></span></div>
-      <div class="ov-week" id="ov-week">${days.map((d, i) => `<div class="ov-day ${i === 0 ? 'today' : ''}"><span>${i === 0 ? 'I dag' : esc(new Date(d + 'T12:00:00').toLocaleDateString(L, { weekday: 'short' }))}</span><b class="num">${Number(d.slice(8))}</b><span class="ov-ev" data-day="${d}"></span></div>`).join('')}</div></div>
-    <div class="ov-block" id="ov-fi"><div class="ov-blockhead"><span>Ledningen handlar · senaste 7 dagarna</span></div><div class="small muted">${EN ? 'Loading …' : 'Hämtar …'}</div></div>
-    ${pdata && pdata.hold.some((h) => h.varde) ? `<div class="ov-block"><div class="ov-blockhead"><span>Så är dina pengar fördelade</span><div class="ov-seg" role="tablist" aria-label="Fördelning">${[['bransch', 'Bransch'], ['land', 'Land'], ['innehav', 'Innehav']].map(([k, t]) => `<button role="tab" type="button" data-ovpie="${k}" aria-selected="${k === 'bransch'}">${t}</button>`).join('')}</div></div><div class="ov-pie" id="ov-pie"></div></div>` : ''}`;
-  // Fördelning
-  const drawPie = (k) => { const el = $('#ov-pie'); if (!el || !pdata) return; const m = {};
-    for (const h of pdata.hold) if (h.varde) { const key = k === 'innehav' ? ovName(h.sym) : h[k]; m[key] = (m[key] || 0) + h.varde; }
-    const d = donut(Object.entries(m).sort((a, b) => b[1] - a[1])); el.innerHTML = `${d.svg}<div class="ov-legs">${d.legend}</div>`; };
-  drawPie('bransch');
-  kb.addEventListener('click', (e) => { const b = e.target.closest('[data-ovpie]'); if (!b) return; kb.querySelectorAll('[data-ovpie]').forEach((x) => x.setAttribute('aria-selected', String(x === b))); drawPie(b.dataset.ovpie); });
-  // Rapporter och utdelningar i veckan
-  getKalender(all).then((kal) => {
-    for (const e of events(kal, 0, 10)) { const el = $(`.ov-ev[data-day="${e.dag}"]`); if (!el) continue;
-      el.insertAdjacentHTML('beforeend', `<a class="${e.typ === 'rapport' ? 'rep' : 'utd'}" href="/bolag/${encodeURIComponent(e.k.sym)}" data-link title="${esc(nameOf(e.k.sym) + ': ' + evtLabel(e))}">${esc(ovName(e.k.sym).split(/[ ,]/)[0])}</a>`); }
-  }).catch(() => { $('#ov-week')?.insertAdjacentHTML('afterend', `<p class="small muted" style="margin:6px 0 0">${EN ? 'Reports and dividends could not be fetched right now.' : 'Rapporter och utdelningar kunde inte hämtas just nu.'}</p>`); });
-  // Insynsaffärer i dina svenska bolag
-  const se = all.filter(isSwedish).slice(0, 8); const since = isoDay(Date.now() - 7 * dayMs);
-  const fiBox = () => $('#ov-fi');
-  if (!se.length) { fiBox().innerHTML = '<div class="ov-blockhead"><span>Ledningen handlar</span></div><p class="small muted" style="margin:0">Finansinspektionens register gäller svenska bolag.</p>'; }
-  else Promise.all(se.map((s) => getFI(s).catch(() => null))).then((fi) => {
-    const b = fiBox(); if (!b) return;
-    const tr = fi.flatMap((f, i) => (f?.affarer || []).filter((a) => String(a.datum) >= since).map((a) => ({ ...a, sym: se[i] })));
-    const kop = tr.filter((a) => a.typ === 'Köp').reduce((a, x) => a + (x.varde || 0), 0); const salj = tr.filter((a) => a.typ === 'Sälj').reduce((a, x) => a + (x.varde || 0), 0);
-    const sum = kop + salj;
-    const list = tr.slice().sort((a, b) => String(b.datum).localeCompare(String(a.datum)) || (b.varde || 0) - (a.varde || 0));
-    const bolagN = new Set(tr.map((a) => a.sym)).size;
-    b.innerHTML = `<div class="ov-blockhead"><span>Ledningen handlar · senaste 7 dagarna</span></div>${sum ? `<button type="button" class="ov-fibtn" aria-expanded="false" aria-controls="ov-filist"><div class="ov-bar"><span class="up" style="width:${(kop / sum) * 100}%"></span><span class="down" style="width:${(salj / sum) * 100}%"></span></div>
-      <div class="ov-barleg num"><span class="up"><span>Köp</span> ${esc(mny(kop, 'SEK'))}</span><span class="down"><span>Sälj</span> ${esc(mny(salj, 'SEK'))}</span></div>
-      <span class="ov-fimore small"><span>${tr.length} ${tr.length === 1 ? (EN ? 'trade' : 'affär') : (EN ? 'trades' : 'affärer')} · ${bolagN} ${bolagN === 1 ? (EN ? 'company' : 'bolag') : (EN ? 'companies' : 'bolag')}</span> <span class="ov-fiarrow">${EN ? 'Show' : 'Visa'} ▾</span></span></button>
-      <div class="ov-filist" id="ov-filist" hidden>${list.map((a) => `<a class="ov-firow" href="/bolag/${encodeURIComponent(a.sym)}" data-link>
-        <span class="ov-fitop"><b>${esc(ovName(a.sym))}</b><span class="pill ${a.typ === 'Köp' ? 'up' : a.typ === 'Sälj' ? 'down' : ''}">${esc(a.typ || '–')}</span></span>
-        <span class="ov-fimid"><span>${esc(a.person || '–')}</span><b class="num">${a.varde != null ? esc(mny(a.varde, a.valuta || 'SEK')) : '–'}</b></span>
-        <span class="small muted">${esc([a.roll, a.narstaende ? (EN ? 'related party' : 'närstående') : '', a.datum ? new Date(a.datum + 'T12:00:00').toLocaleDateString(L, { day: 'numeric', month: 'short' }) : ''].filter(Boolean).join(' · '))}</span></a>`).join('')}
-        <p class="small faint" style="margin:8px 0 0">${EN ? 'Source: Finansinspektionen. Insider trades are not a buy or sell signal.' : 'Källa: Finansinspektionen. Insynsaffärer är ingen köp- eller säljsignal.'}</p></div>` : '<p class="small muted" style="margin:0">Inga insynsaffärer i dina svenska bolag de senaste 7 dagarna.</p>'}`;
-    const btn = b.querySelector('.ov-fibtn'); if (btn) btn.addEventListener('click', () => { const open = btn.getAttribute('aria-expanded') !== 'true'; btn.setAttribute('aria-expanded', String(open)); b.querySelector('#ov-filist').hidden = !open; btn.querySelector('.ov-fiarrow').textContent = open ? (EN ? 'Hide ▴' : 'Dölj ▴') : (EN ? 'Show ▾' : 'Visa ▾'); });
-  });
+  /* ---- Riskläge ---- */
+  nRisk(pd);
+}
+
+// Kurvan: en linje med yta, streckad nivå (början av dagen eller insatta pengar), nyhetsprickar och värde när man håller över
+function nDraw(el, pts, { base = null, invested = null, money = false, dots = [] }) {
+  const W = 1000, H = 260;
+  const t0 = pts[0][0], t1 = pts[pts.length - 1][0];
+  const vals = [...pts.map((p) => p[1]), ...(invested || []).map((p) => p[1]), ...(base != null ? [base] : [])];
+  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.1 || Math.abs(hi) * 0.02 || 10; lo -= pad; hi += pad;
+  const X = (t) => ((t - t0) / ((t1 - t0) || 1)) * W; const Y = (v) => (1 - (v - lo) / (hi - lo)) * H;
+  const path = (a) => a.map(([t, v], i) => `${i ? 'L' : 'M'}${X(t).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ');
+  const last = pts[pts.length - 1][1]; const ref = base != null ? base : invested?.length ? invested[invested.length - 1][1] : pts[0][1];
+  const col = last >= ref ? 'var(--up)' : 'var(--down)';
+  const valAt = (t) => { let v = pts[0][1]; for (const p of pts) { if (p[0] <= t) v = p[1]; else break; } return v; };
+  el.innerHTML = `<div class="b-chart n-plot" style="--h:${H}px">
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${EN ? 'Portfolio chart' : 'Portföljens kurva'}">
+      <defs><linearGradient id="ng" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity="0.26"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
+      ${base != null ? `<line x1="0" x2="${W}" y1="${Y(base).toFixed(1)}" y2="${Y(base).toFixed(1)}" stroke="var(--muted)" stroke-dasharray="5 5" vector-effect="non-scaling-stroke"/>` : ''}
+      ${invested?.length > 1 ? `<path d="${path(invested)}" fill="none" stroke="var(--muted)" stroke-dasharray="5 5" stroke-width="1" vector-effect="non-scaling-stroke"/>` : ''}
+      <path d="${path(pts)} L${W} ${H} L0 ${H} Z" fill="url(#ng)"/>
+      <path class="n-line" d="${path(pts)}" fill="none" stroke="${col}" stroke-width="2.2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    </svg>
+    ${dots.map((n, i) => { const t = new Date(n.datum).getTime() / 1000; return `<button type="button" class="n-dot" data-ndot="${i}" style="left:${(X(t) / W * 100).toFixed(2)}%;top:${(Y(valAt(t)) / H * 100).toFixed(2)}%;--c:${nTopic(n)}" aria-label="${esc(n.rubrik || '')}"></button>`; }).join('')}
+    <div class="n-pop" hidden></div>
+    <span class="chart-cross" hidden></span><span class="chart-dot" hidden style="background:${col}"></span><div class="chart-tip" hidden></div>
+  </div>`;
+  const plot = el.querySelector('.n-plot'); const tipEl = plot.querySelector('.chart-tip'); const cross = plot.querySelector('.chart-cross'); const dot = plot.querySelector('.chart-dot'); const pop = plot.querySelector('.n-pop');
+  const showPop = (i) => { const n = dots[i]; if (!n) return; const u = safeUrl(n.lank); const b = plot.querySelector(`[data-ndot="${i}"]`);
+    pop.innerHTML = `<span class="small muted num">${esc(clock(n.datum))} · ${esc(ovName(n.min || ''))}${n.amne ? ' · ' + esc(n.amne) : ''}</span><b>${esc(n.rubrik || '')}</b>${u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(n.kalla || (EN ? 'Read' : 'Läs'))} ↗</a>` : ''}`;
+    pop.hidden = false; const x = b.offsetLeft; pop.style.left = Math.min(plot.clientWidth - 280, Math.max(0, x - 140)) + 'px'; };
+  plot.addEventListener('click', (e) => { const b = e.target.closest('[data-ndot]'); if (b) { showPop(Number(b.dataset.ndot)); return; } if (!e.target.closest('.n-pop')) pop.hidden = true; });
+  let fr = 0; let lx = 0;
+  const move = () => { fr = 0; const r = plot.getBoundingClientRect(); const fx = Math.min(1, Math.max(0, (lx - r.left) / r.width)); const t = t0 + fx * (t1 - t0);
+    let k = 0; for (let i = 0; i < pts.length; i++) if (Math.abs(pts[i][0] - t) < Math.abs(pts[k][0] - t)) k = i;
+    const px = (X(pts[k][0]) / W) * r.width; const py = (Y(pts[k][1]) / H) * r.height;
+    cross.hidden = false; cross.style.transform = `translateX(${px}px)`; dot.hidden = false; dot.style.transform = `translate(${px}px, ${py}px)`;
+    const when = money ? new Date(pts[k][0] * 1000).toLocaleDateString(L, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Stockholm' }) : new Date(pts[k][0] * 1000).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
+    const inv = invested ? (() => { let v = null; for (const p of invested) { if (p[0] <= pts[k][0]) v = p[1]; else break; } return v; })() : null;
+    tipEl.hidden = false; tipEl.innerHTML = `<span class="small muted">${esc(when)}</span><b class="num">${money ? sekBig(pts[k][1]) : krDiff(pts[k][1])}</b>${inv != null ? `<span class="small muted num">${EN ? 'Put in' : 'Insatt'} ${sekBig(inv)}</span>` : ''}`;
+    const tw = tipEl.offsetWidth; tipEl.style.transform = `translateX(${Math.min(r.width - tw, Math.max(0, px - tw / 2))}px)`; };
+  plot.addEventListener('pointermove', (e) => { if (e.target.closest('.n-dot,.n-pop')) return; lx = e.clientX; if (!fr) fr = requestAnimationFrame(move); });
+  plot.addEventListener('pointerleave', () => { tipEl.hidden = true; cross.hidden = true; dot.hidden = true; });
+}
+
+// Att hålla koll på: rapporter och utdelningsdagar de närmaste tre veckorna, och ledningens affärer i dina svenska bolag
+async function nTodo(all, port) {
+  const el = $('#n-todo'); if (!el) return;
+  if (!all.length) { el.innerHTML = `<p class="b-note">${EN ? 'Watch some stocks or add your purchases, and their reports and dividends will show up here.' : 'Bevaka några aktier eller lägg in dina köp, så visas deras rapporter och utdelningar här.'}</p>`; return; }
+  const owned = new Set(port.map((x) => x.sym)); const since = isoDay(Date.now() - 7 * dayMs);
+  const se = all.filter(isSwedish).slice(0, 8);
+  const [kal, fi] = await Promise.all([getKalender(all).catch(() => null), Promise.all(se.map((s) => getFI(s).catch(() => null)))]);
+  if (!$('#n-todo')) return;
+  const evAll = kal ? events(kal, 0, 21) : []; const ev = [...evAll.filter((e) => owned.has(e.k.sym)), ...evAll.filter((e) => !owned.has(e.k.sym))].slice(0, 4).sort((a, b) => a.dag.localeCompare(b.dag));
+  const trades = fi.flatMap((f, i) => (f?.affarer || []).filter((a) => String(a.datum) >= since && (a.typ === 'Köp' || a.typ === 'Sälj')).map((a) => ({ ...a, sym: se[i] })))
+    .sort((a, b) => (b.varde || 0) - (a.varde || 0)).slice(0, Math.max(1, 5 - ev.length));
+  const rowEv = (e) => { const d = new Date(e.dag + 'T12:00:00'); const nm = ovName(e.k.sym);
+    const t = e.typ === 'rapport' ? (EN ? `${nm} reports` : `${nm} lämnar rapport`) : e.typ === 'ex' ? (EN ? `${nm} ex-dividend date` : `${nm} x-dag`) : (EN ? `${nm} pays dividend` : `${nm} betalar utdelning`);
+    const sub = [whenTxt(e.dag), owned.has(e.k.sym) ? (EN ? 'you own it' : 'du äger') : (EN ? 'watched' : 'bevakad'), e.typ !== 'rapport' && e.k.utdelningPerAktie ? `${bn(e.k.utdelningPerAktie, 2)} ${cur(e.k.valuta)} ${EN ? 'per share' : 'per aktie'}` : '', e.typ === 'rapport' && e.k.rapportUppskattad ? (EN ? 'preliminary' : 'preliminärt') : ''].filter(Boolean).join(' · ');
+    return `<a class="n-todo" href="/bolag/${encodeURIComponent(e.k.sym)}${e.typ === 'rapport' ? '?flik=rapporter' : '?flik=kalender'}" data-link><span class="n-date"><span>${esc(bMon(d.getMonth()))}</span><b class="num">${d.getDate()}</b></span><span class="n-tt"><b>${esc(t)}</b><span>${esc(sub)}</span></span><span class="pill ${e.typ === 'rapport' ? 'info' : 'up'}">${e.typ === 'rapport' ? 'Rapport' : 'Utdelning'}</span></a>`; };
+  const rowTr = (a) => { const d = new Date(a.datum + 'T12:00:00');
+    return `<a class="n-todo" href="/bolag/${encodeURIComponent(a.sym)}?flik=insyn" data-link><span class="n-date"><span>${esc(bMon(d.getMonth()))}</span><b class="num">${d.getDate()}</b></span><span class="n-tt"><b>${esc(EN ? `${a.typ === 'Köp' ? 'Insider bought' : 'Insider sold'} in ${ovName(a.sym)}` : `Ledningen ${a.typ === 'Köp' ? 'köpte' : 'sålde'} i ${ovName(a.sym)}`)}</b><span>${esc([a.person, a.roll, a.varde != null ? mny(a.varde, a.valuta || 'SEK') : ''].filter(Boolean).join(' · '))}</span></span>${tradePill(a.typ)}</a>`; };
+  const html = ev.map(rowEv).join('') + trades.map(rowTr).join('');
+  el.innerHTML = html || `<p class="b-note">${!kal ? (EN ? 'The calendar could not be fetched right now.' : 'Kalendern kunde inte hämtas just nu.') : (EN ? 'No reports, dividends or insider trades in your stocks the next three weeks.' : 'Inga rapporter, utdelningar eller insynsaffärer i dina aktier de närmaste tre veckorna.')}</p>`;
+  if (html && !kal) el.insertAdjacentHTML('beforeend', `<p class="b-src">${EN ? 'Reports and dividends could not be fetched right now.' : 'Rapporter och utdelningar kunde inte hämtas just nu.'}</p>`);
+}
+
+// Viktigast för dig: nyheter om dina aktier, sorterade efter vikt
+async function nNews(newsP, all) {
+  const el = $('#n-news'); if (!el) return;
+  let items = [];
+  if (all.length) { const d = await newsP; if (!$('#n-news')) return; if (d.ok === false && !d.items.length) { el.innerHTML = `<p class="b-note">${EN ? 'The news could not be fetched right now.' : 'Nyheterna kunde inte hämtas just nu.'}</p>`; return; } items = d.items.slice().sort((a, b) => b.poang - a.poang); }
+  else { const se = await getNews('se'); if (!$('#n-news')) return; items = se.items.length ? se.items : (await getNews('world')).items; }
+  if (!items.length) { el.innerHTML = `<p class="b-note">${EN ? 'No news about your stocks in the last two weeks.' : 'Inga nyheter om dina aktier de senaste två veckorna.'}</p>`; return; }
+  el.innerHTML = items.slice(0, 5).map((n) => `<div class="n-nrow"><span class="n-nc" style="background:${nTopic(n)}"></span><span class="n-nt"><span class="n-ntitle">${newsTitle(n)}</span><span class="small muted num">${esc(n.tidTxt)}${n.amne ? ' · ' + esc(n.amne) : ''}${n.min ? ' · ' + esc(ovName(n.min)) : n.bolagTxt ? ' · ' + esc(n.bolagTxt) : ''}</span></span></div>`).join('');
+}
+
+// Riskläge: snittet av riskkollen vägt efter värde, hur pengarna är fördelade och det som är värt att tänka på
+function nRisk(pd) {
+  const el = $('#n-risk'); if (!el) return;
+  const { hold, tot, risk } = pd;
+  const hv = hold.filter((h) => h.varde).sort((a, b) => b.varde - a.varde);
+  if (!hv.length || !tot) { el.innerHTML = `<p class="b-note">${EN ? 'Prices are missing, so the risk cannot be calculated right now.' : 'Kurserna saknas, så risken kan inte räknas just nu.'}</p>`; return; }
+  const lv = risk != null ? lvlOf(Math.round(risk)) : null;
+  const frac = risk != null ? Math.min(1, Math.max(0, risk / 10)) : 0; const C = 2 * Math.PI * 46;
+  const flags = [];
+  const top = hv[0]; const n = hv.length;
+  if (n > 1 && top.varde / tot > 0.25) flags.push(['warn', `${ovName(top.sym)} är ${nf((top.varde / tot) * 100, 0)} % av portföljen. Faller den aktien märks det mycket på helheten.`]);
+  const br = {}; for (const h of hv) br[h.bransch] = (br[h.bransch] || 0) + h.varde; const b0 = Object.entries(br).sort((a, b) => b[1] - a[1])[0];
+  if (n > 1 && b0 && b0[1] / tot > 0.5) flags.push(['warn', `${nf((b0[1] / tot) * 100, 0)} % ligger i ${b0[0].toLowerCase()}. Går det dåligt för branschen påverkas en stor del av dina pengar samtidigt.`]);
+  const hog = hv.filter((h) => h.poang != null && h.poang >= 7).reduce((a, h) => a + h.varde, 0);
+  if (hog / tot > 0.3) flags.push(['warn', `${nf((hog / tot) * 100, 0)} % av pengarna ligger i aktier med hög riskkoll (7 eller mer).`]);
+  if (!flags.length) flags.push(['ok', 'Bra spridning: inget enskilt bolag eller bransch dominerar portföljen.']);
+  el.innerHTML = `<div class="n-rk"><svg viewBox="0 0 110 110" class="n-ring" role="img" aria-label="${EN ? 'Risk check' : 'Riskkoll'} ${risk != null ? nf(risk, 1) : '–'} ${EN ? 'of 10' : 'av 10'}"><circle cx="55" cy="55" r="46" fill="none" stroke="var(--line-soft)" stroke-width="9"/><circle class="n-ringv" cx="55" cy="55" r="46" fill="none" stroke="var(--${lv ? LV[lv].c : 'line'})" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(frac * C).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 55 55)"/><text x="55" y="59" text-anchor="middle" font-size="24" font-weight="500" fill="var(--ink)">${risk != null ? nf(risk, 1) : '–'}</text><text x="55" y="75" text-anchor="middle" font-size="9" fill="var(--muted)">${EN ? 'of 10' : 'av 10'}</text></svg>
+    <div class="n-conc">${lv ? `<span class="pill ${LV[lv].c}" style="align-self:flex-start">${LV[lv].t} risk</span>` : `<span class="faint small">${EN ? 'Too little data' : 'För lite data'}</span>`}
+    ${hv.slice(0, 4).map((h) => `<div><span>${esc(ovName(h.sym))}</span><span class="n-cb"><i style="width:${((h.varde / tot) * 100).toFixed(0)}%;background:var(--${h.poang != null ? LV[lvlOf(h.poang)].c : 'muted'})"></i></span><b class="num">${nf((h.varde / tot) * 100, 0)} %</b></div>`).join('')}</div></div>
+    ${flags.slice(0, 2).map(([k, t]) => `<div class="n-flag"><i class="${k === 'ok' ? 'up' : 'warn'}"></i><span>${esc(t)}</span></div>`).join('')}
+    <p class="b-src">${EN ? 'Average of the risk check for your stocks, weighted by value. Bars show share of the portfolio, colour shows each stock\'s risk.' : 'Snittet av riskkollen för dina aktier, vägt efter värde. Staplarna visar andel av portföljen, färgen aktiens risk.'}</p>`;
 }
 
 /* ================= Din dag: vad hände med portföljen i dag ================= */
@@ -1854,7 +1965,7 @@ function bRapporter(panel, ctx) {
     h += has && rep.kvartal?.length ? `<div class="b-grid">${bCard('c12', `<div class="b-ch"><div class="b-chl">${bLabel('Utveckling per kvartal')}</div><div class="b-segc" role="tablist" aria-label="Mått">${['oms', 'rorelse', 'marg', 'eps', 'fcf'].map((m) => `<button type="button" role="tab" data-qm="${m}" aria-selected="${st.qm === m}">${esc(B_MET[m].n)}</button>`).join('')}</div></div><div id="p-q"></div>`)}</div>` : `<div class="b-grid">${bCard('c12', '<p class="b-note">Kvartalssiffror saknas i datakällan.</p>')}</div>`;
     // Nyckeltal
     h += bH('03', 'Nyckeltal', 'Senaste 12 månaderna', 'p3');
-    h += `<div class="b-grid">${bCard('c12', s.nyckeltal?.length ? `<div class="b-ntgrid">${s.nyckeltal.map(([k, v, t]) => `<div><span class="b-mini-k">${esc(k)}${ORD[k] ? tip(k) : `<button type="button" class="tip" data-tip="${esc(k)}" data-tiptext="${esc(t)}" aria-label="Vad betyder ${esc(k)}?" aria-expanded="false">?</button>`}</span><b class="num">${bMiss(v)}</b></div>`).join('')}</div><p class="b-src">Källa: Yahoo Finance. Nyckeltalen visar läget i dag och säger inget om hur aktien går framöver.</p>` : '<p class="b-note">Datakällan har inga nyckeltal för det här värdepappret.</p>')}</div>`;
+    h += `<div class="b-grid">${bCard('c12', s.nyckeltal?.length ? `<div class="b-ntgrid">${s.nyckeltal.map(([k, v, t]) => `<div><span class="b-mini-k">${esc(k)}${ORD[k] ? tip(k) : tipMark(k, t)}</span><b class="num">${bMiss(v)}</b></div>`).join('')}</div><p class="b-src">Källa: Yahoo Finance. Nyckeltalen visar läget i dag och säger inget om hur aktien går framöver.</p>` : '<p class="b-note">Datakällan har inga nyckeltal för det här värdepappret.</p>')}</div>`;
     // Per år
     h += bH('04', 'Per år', has && rep.ar?.length ? `Helår ${esc(bYear(rep.ar[0]))}–${esc(bYear(rep.ar[rep.ar.length - 1]))}${rep.ttm ? ' och senaste 12 månaderna' : ''}` : '', 'p4');
     h += has && rep.ar?.length ? `<div class="b-grid b-g4">${['oms', 'rorelse', 'marg', 'netmarg', 'eps', 'fcf', 'utd', 'sol'].map((m) => { const ser = bAnnualSeries(rep, m); const lastV = [...ser].reverse().find((x) => x.v != null); return bCard('', `<div class="b-ch">${bLabel(B_MET[m].n, B_MET[m].k)}<b class="num small">${bMiss(lastV?.txt)}</b></div>${bBars(ser, { h: 96 })}`); }).join('')}</div><p class="b-src">Staplarnas tal: ${['Försäljning', 'rörelseresultat', 'kassaflöde och utdelning'].join(', ')} i miljarder ${esc(cur(c))}. Rapportsiffrorna kommer från bolagens redovisning via ${esc(rep.kalla)} och kan skilja något från nyckeltalen ovan, som räknas på ett annat sätt (till exempel andra kvartal eller antal aktier).</p>` : `<div class="b-grid">${bCard('c12', '<p class="b-note">Helårssiffror saknas i datakällan.</p>')}</div>`;
@@ -2173,40 +2284,56 @@ const ORD = {
   'Land': 'Var bolaget har sitt huvudkontor.',
   'Anställda': 'Antal heltidsanställda enligt senaste uppgift.'
 };
-const tip = (k) => (ORD[k] ? `<button type="button" class="tip" data-tip="${esc(k)}" aria-label="Vad betyder ${esc(k)}?" aria-expanded="false">?</button>` : '');
+// Förklaringar sitter på själva texten: håll musen över eller tryck på ordet. En osynlig markör talar om vilket ord det gäller.
+const tipMark = (k, txt) => `<span class="tip" data-tip="${esc(k)}"${txt ? ` data-tiptext="${esc(txt)}"` : ''} tabindex="0" role="button" aria-label="Vad betyder ${esc(k)}?" aria-expanded="false"></span>`;
+const tip = (k) => (ORD[k] ? tipMark(k) : '');
 // En gemensam förklaringsruta för hela sidan
 (() => {
-  let box = null; let owner = null;
-  const close = () => { if (box) { box.remove(); box = null; } if (owner) { owner.setAttribute('aria-expanded', 'false'); owner = null; } };
-  document.addEventListener('click', (e) => {
-    const b = e.target.closest?.('.tip');
-    if (!b) { if (box && !e.target.closest('.tip-box')) close(); return; }
-    e.preventDefault(); e.stopPropagation();
-    if (owner === b) { close(); return; }
-    close(); owner = b; b.setAttribute('aria-expanded', 'true');
+  let box = null; let owner = null; let byHover = false; let hov = null;
+  const hostOf = (el) => { try { return el?.closest?.(':has(> .tip)') || null; } catch { return null; } };
+  const markOf = (host) => host?.querySelector(':scope > .tip');
+  const close = () => { if (box) { box.remove(); box = null; } if (owner) { markOf(owner)?.setAttribute('aria-expanded', 'false'); owner.classList.remove('tip-on'); owner = null; } byHover = false; };
+  const open = (host, hover) => {
+    const m = markOf(host); if (!m) return;
+    close(); owner = host; byHover = hover; m.setAttribute('aria-expanded', 'true'); host.classList.add('tip-on');
     box = document.createElement('div'); box.className = 'tip-box'; box.setAttribute('role', 'tooltip');
-    box.innerHTML = `<b>${esc(b.dataset.tip)}</b><span>${esc(ORD[b.dataset.tip] || b.dataset.tiptext || '')}</span><a href="/ordlista" data-link>Fler förklaringar</a>`;
+    box.innerHTML = `<b>${esc(m.dataset.tip)}</b><span>${esc(ORD[m.dataset.tip] || m.dataset.tiptext || '')}</span><a href="/ordlista" data-link>Fler förklaringar</a>`;
     document.body.append(box);
-    const r = b.getBoundingClientRect(); const w = Math.min(320, innerWidth - 24);
+    const r = host.getBoundingClientRect(); const w = Math.min(320, innerWidth - 24);
     box.style.width = w + 'px';
-    box.style.left = Math.max(12, Math.min(innerWidth - w - 12, r.left + r.width / 2 - w / 2)) + 'px';
+    box.style.left = Math.max(12, Math.min(innerWidth - w - 12, r.left + Math.min(r.width, 160) / 2 - w / 2)) + 'px';
     const below = r.bottom + 8 + box.offsetHeight < innerHeight;
     box.style.top = (below ? r.bottom + 8 + scrollY : r.top - 8 - box.offsetHeight + scrollY) + 'px';
+  };
+  document.addEventListener('click', (e) => {
+    if (e.target.closest?.('.tip-box')) return;
+    const host = hostOf(e.target);
+    // Knappar och länkar inuti texten gör sitt vanliga jobb, till exempel sortering
+    const inter = e.target.closest?.('a,button,input,select,label,[data-btab],[data-bgo]');
+    if (!host || (inter && host.contains(inter) && inter !== host)) { if (box) close(); return; }
+    e.preventDefault(); e.stopPropagation();
+    if (owner === host && !byHover) { close(); return; }
+    open(host, false);
   }, true);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-  // Med mus räcker det att hålla över frågetecknet
-  let hov = null;
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { close(); return; }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList?.contains('tip')) { e.preventDefault(); const h = e.target.parentElement; if (owner === h) close(); else open(h, false); }
+  });
+  // Med mus räcker det att hålla över texten
   document.addEventListener('pointerover', (e) => {
     if (e.pointerType !== 'mouse') return;
-    const b = e.target.closest?.('.tip'); if (!b || owner === b) return;
-    clearTimeout(hov); hov = setTimeout(() => { if (owner !== b) b.dispatchEvent(new MouseEvent('click', { bubbles: true })); b.dataset.hover = '1'; }, 120);
+    const host = hostOf(e.target); if (!host || owner === host) return;
+    clearTimeout(hov); hov = setTimeout(() => { if (owner !== host && host.matches(':hover')) open(host, true); }, 180);
   });
   document.addEventListener('pointerout', (e) => {
     if (e.pointerType !== 'mouse') return;
-    const b = e.target.closest?.('.tip'); if (!b) return; clearTimeout(hov);
-    if (b.dataset.hover && owner === b && !(e.relatedTarget && (e.relatedTarget.closest?.('.tip-box') || b.contains(e.relatedTarget)))) { delete b.dataset.hover; close(); }
+    const host = hostOf(e.target); clearTimeout(hov); if (!host || owner !== host || !byHover) return;
+    const to = e.relatedTarget; if (to && (host.contains(to) || to.closest?.('.tip-box'))) return;
+    close();
   });
+  document.addEventListener('pointerleave', (e) => { if (byHover && e.target === box) close(); }, true);
   window.addEventListener('popstate', close);
+  window.addEventListener('scroll', () => { if (byHover) close(); }, { passive: true });
   document.addEventListener('mk-navigate', close);
 })();
 
