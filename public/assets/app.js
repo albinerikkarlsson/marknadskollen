@@ -2883,7 +2883,7 @@ function pfRiskHTML(pd, rs, corr, plan) {
   // Klartext i kronor
   const cardsP = [
     [EN ? 'A normal bad month' : 'En vanlig dålig månad', badMonth != null ? krDiff(badMonth) : null, EN ? 'about one month in ten falls this much, estimated from the swings' : 'ungefär var tionde månad faller portföljen så här mycket, räknat från svängningarna', 'down'],
-    [EN ? 'If the market falls 20 %' : 'Om börsen faller 20 %', krDiff(pfStress(hv, S, -20).sum), `${EN ? 'the portfolio falls about' : 'portföljen faller ca'} ${nf(20 * betaW, 0)} %, ${EN ? 'based on each stock\'s beta' : 'räknat med varje akties beta'}${noBeta.length ? (EN ? ` (missing for ${noBeta.length}, counted as the market)` : ` (saknas för ${noBeta.length}, räknas som börsen)`) : ''}`, 'down'],
+    [EN ? 'If the market falls 20 %' : 'Om börsen faller 20 %', krDiff(pfStress(hv, S, -20).sum), `${EN ? 'the portfolio falls about' : 'portföljen faller ca'} ${nf(Math.abs(pfStress(hv, S, -20).sum) / tot * 100, 1)} %, ${EN ? 'based on each stock\'s beta' : 'räknat med varje akties beta'}${noBeta.length ? (EN ? ` (missing for ${noBeta.length}, counted as the market)` : ` (saknas för ${noBeta.length}, räknas som börsen)`) : ''}`, 'down'],
     [EN ? 'If the dollar falls 10 %' : 'Om dollarn faller 10 %', usd ? krDiff(-0.1 * usd) : '0 kr', usd ? `${nf(share(usd), 0)} % ${EN ? 'of the money is in USD' : 'av pengarna ligger i USD'}` : (EN ? 'none of your holdings are in USD' : 'inga av dina innehav är i USD'), usd ? 'warn' : 'up'],
     [EN ? 'Biggest concentration' : 'Största koncentrationen', br[0] ? br[0][0] : null, br[0] ? `${nf(share(br[0][1]), 0)} % ${EN ? 'of the money' : 'av pengarna'}` : '', share(br[0]?.[1] || 0) > 50 ? 'down' : 'warn']
   ];
@@ -3268,7 +3268,7 @@ function mountPortfolj() {
     loaded.dagen = false; loaded.news = false;
     if (!port.length) {
       $('#pf-tot').textContent = '0 kr'; $('#pf-day').textContent = ''; $('#pf-sub').textContent = EN ? 'No purchases yet' : 'Inga köp än';
-      $('#pf-sum').innerHTML = statsHTML([['Värde nu', null], ['Insatt', null], ['Sedan köp', null], ['I dag', null]]);
+      $('#pf-sum').innerHTML = statsHTML([['Värde nu', '0 kr'], ['Insatt', '0 kr'], ['Sedan köp', '–'], ['I dag', '–']]);
       const empty = `<div class="empty">Du har inga köp inlagda än. Gå till <button type="button" class="linkbtn" data-pfgo="kop" data-pffocus="pf-q">Köp och sälj</button> och sök fram aktien du köpte, eller importera en fil från Avanza eller Nordnet.${locked() ? `<div class="chips" style="justify-content:center;margin-top:12px">${demoBtn(EN ? 'Or show an example portfolio' : 'Eller visa en exempelportfölj')}</div>` : ''}</div>`;
       for (const id of ['#pf-tl', '#pf-alloc', '#pf-ovtable', '#pf-list', '#pf-risk', '#pf-news', '#pf-kal', '#pf-utd', '#pf-kalh', '#pf-txn']) { const el = $(id); if (el) el.innerHTML = id === '#pf-ovtable' || id === '#pf-list' ? empty : '<p class="b-note">Visas när du har lagt in ditt första köp.</p>'; }
       $('#pf-side').innerHTML = ''; $('#pf-nchips').innerHTML = ''; $('#pf-txn-s').textContent = '';
