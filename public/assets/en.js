@@ -1143,7 +1143,7 @@ const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 // Bolagssidan med flikar (november 2026)
 Object.assign(D, {
   'Riskkoll {n} av {n}': 'Risk check {n} of {n}', 'Att hålla koll på': 'Worth keeping an eye on', 'Detaljer →': 'Details →', 'Riskläge': 'Risk level', 'Viktigast för dig': 'Most important for you', 'Vad drev dagen': 'What drove the day', 'Kalender →': 'Calendar →', 'Alla nyheter →': 'All news →', 'Datakällan har inga rapportsiffror för bolaget.': 'The data source has no report figures for the company.', 'Det finns inget kursdiagram för det här värdepappret.': 'There is no price chart for this security.', '{n}Å': '{n}Y', 'Ditt innehav': 'Your holding', 'Kursdiagram': 'Price chart', 'Fall från högsta kursen': 'Fall from the highest price', 'Riskprofil': 'Risk profile',
-  'Översikt': 'Overview', 'Kurs och diagram': 'Price and chart', 'Dagen': 'The day', 'Riskanalys': 'Risk analysis', 'Rapporter och nyckeltal': 'Reports and key figures', 'Insyn och blankning': 'Insider trades and short selling', 'Om bolaget': 'About the company',
+  'Översikt': 'Overview', 'Kurs och diagram': 'Price and chart', 'Riskanalys': 'Risk analysis', 'Rapporter och nyckeltal': 'Reports and key figures', 'Insyn och blankning': 'Insider trades and short selling', 'Om bolaget': 'About the company',
   'Delar av bolagssidan': 'Sections of the company page', 'Delar av rapporter': 'Sections of reports', 'Delar av riskanalysen': 'Sections of the risk analysis',
   'Bolag': 'Companies', 'Aktiekurs': 'Share price', 'Dagens förändring saknas': "Today's change is missing", 'Saknas': 'Missing', 'För lite data': 'Too little data',
   'Större diagram och egna datum →': 'Larger chart and custom dates →', 'Hela riskanalysen →': 'Full risk analysis →', 'Alla rapporter och nyckeltal →': 'All reports and key figures →', 'Alla affärer →': 'All trades →', 'Alla nyckeltal →': 'All key figures →',
@@ -1230,6 +1230,15 @@ Object.assign(D, {
   'Nettoresultatet delat med utbetald utdelning. Under 1 betyder att bolaget delade ut mer än det tjänade.': 'Net profit divided by dividends paid. Under 1 means the company paid out more than it earned.', 'Grundfakta': 'Basic facts', 'Börs': 'Exchange', 'Land': 'Country', 'Anställda': 'Employees', 'Direktavkastning': 'Dividend yield'
 });
 
+Object.assign(D, {
+  'Mot OMXS30': 'Vs OMXS30', 'Delar av portföljen': 'Parts of the portfolio', 'Risk och analys': 'Risk and analysis', 'Kalender och utdelning': 'Calendar and dividends', 'Köp och sälj': 'Buy and sell',
+  'Räknar på risken …': 'Calculating the risk …', 'Sortering': 'Sorting', 'Viktigast': 'Most important', 'Senaste': 'Latest',
+  '01 I klartext': '01 In plain words', '02 Riskens delar': '02 Parts of the risk', '03 Var risken sitter': '03 Where the risk sits', '04 Om det går dåligt': '04 If things go badly',
+  'Spridning': 'Diversification', 'Svängningar': 'Swings', 'Enskilda bolag': 'Single companies', 'Värde nu': 'Value now', 'Sedan köp': 'Since purchase', 'Utdelning per år': 'Dividend per year',
+  'Räknar på din dag …': 'Calculating your day …', 'Fördelning': 'Allocation', 'Börsfall': 'Market fall', 'Lägg till köp': 'Add purchase', 'Importera': 'Import',
+  'Skillnaden mellan vad din portfölj är värd i dag och vad samma pengar hade varit värda i Stockholmsbörsens 30 största bolag (OMXS30), om du hade satt in dem samma dagar. Indexet räknas utan utdelningar.': 'The difference between what your portfolio is worth today and what the same money would have been worth in the 30 largest companies on the Stockholm exchange (OMXS30), if you had put it in on the same days. The index is counted without dividends.',
+  'Du har inga köp i portföljen än.': "You don't have any purchases in the portfolio yet.", 'så ser du här hur din dag går.': 'and you will see how your day is going here.', 'Lägg till ett köp': 'Add a purchase'
+});
 export const RX = (t) => [
   [/^Vad har hänt när (.+) föll$/, 'What happened when $1 fell'],
   [/^Största fallen för (.+)$/, 'Biggest falls for $1'],
