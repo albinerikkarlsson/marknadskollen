@@ -176,14 +176,16 @@ function keyFigures(s, cur) {
   const pc = (v) => (v == null || !Number.isFinite(v) ? null : `${n1(v * 100)} %`);
   const pos = (v) => (v != null && v > 0 ? v : null);
   const pe = pos(raw(sd.trailingPE)); const fpe = pos(raw(sd.forwardPE)); const eps = raw(ks.trailingEps);
-  const pb = pos(raw(ks.priceToBook)); const ps = pos(raw(sd.priceToSalesTrailing12Months));
+  const pb = pos(raw(ks.priceToBook));
+  // Yahoo räknar P/S med kursen och försäljningen i var sin valuta när bolaget redovisar i en annan valuta än aktien handlas i. Då visar vi den inte.
+  const ps = fcur === cur ? pos(raw(sd.priceToSalesTrailing12Months)) : null;
   const dy = raw(sd.dividendYield); const dr = raw(sd.dividendRate) ?? raw(sd.trailingAnnualDividendRate);
   const pm = raw(fd.profitMargins); const om = raw(fd.operatingMargins); const roe = raw(fd.returnOnEquity);
   const rg = raw(fd.revenueGrowth); const rev = raw(fd.totalRevenue); const de = raw(fd.debtToEquity);
   const ins = raw(ks.heldPercentInsiders);
   return [
     ['P/E', n1(pe), 'Priset delat med vinsten de senaste 12 månaderna. Saknas när bolaget går med förlust.'],
-    ['Vinst per aktie (EPS)', eps == null ? null : `${n2(eps)} ${funit}`, 'Bolagets vinst de senaste 12 månaderna delat på antalet aktier.'],
+    ['Vinst per aktie (EPS)', eps == null ? null : `${n2(eps)} ${unit}`, 'Bolagets vinst de senaste 12 månaderna delat på antalet aktier.'],
     ['P/E framåt', n1(fpe), 'Priset delat med den vinst analytiker räknar med det kommande året.'],
     ['P/B', n1(pb), 'Priset jämfört med bolagets bokförda värde (eget kapital).'],
     ['P/S', n1(ps), 'Priset jämfört med bolagets försäljning de senaste 12 månaderna.'],

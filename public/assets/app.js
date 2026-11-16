@@ -1609,6 +1609,7 @@ function bHead(s, tabs, active) {
       </div>
       <div class="b-acts">
         <button class="btn small ${watched ? 'ghost' : ''}" type="button" data-watch="${esc(s.sym)}" data-namn="${esc(s.namn)}" aria-pressed="${watched}">${watched ? 'Bevakas ✓' : 'Bevaka'}</button>
+        <span class="kp-host"><button type="button" class="btn small ghost" data-kollbtn="${esc(s.sym)}" data-namn="${esc(s.namn)}" aria-label="${EN ? 'Notifications' : 'Notiser'}" title="${EN ? 'Notifications' : 'Notiser'}">${svg('bell', 14)}</button></span>
         <a class="btn small ghost" href="/jamfor?a=${encodeURIComponent(s.sym)}" data-link>${svg('compare', 14)} Jämför</a>
         <button type="button" class="btn small ghost" data-share>${svg('share', 14)} Dela</button>
       </div>
@@ -1685,12 +1686,7 @@ async function mountBolag(sym) {
   el.addEventListener('click', async (e) => {
     const t = e.target.closest('[data-btab]'); if (t) { show(t.dataset.btab); return; }
     const g = e.target.closest('[data-bgo]'); if (g) { e.preventDefault(); ctx.go(g.dataset.bgo); return; }
-    if (e.target.closest('[data-share]')) {
-      const url = location.origin + '/bolag/' + encodeURIComponent(s.sym); const title = `${s.namn} · Finanskollen`;
-      try { if (navigator.share) { await navigator.share({ title, url }); return; } await navigator.clipboard.writeText(url); toast('Länken är kopierad', 'Klistra in den där du vill dela den.'); }
-      catch (err) { if (err?.name !== 'AbortError') toast('Kunde inte dela', url); }
-      return;
-    }
+    if (e.target.closest('[data-share]')) { shareStock(s); return; }
     const w = e.target.closest('[data-watch]'); if (!w) return;
     if (askLogin()) return;
     const on = toggleWatch(w.dataset.watch, w.dataset.namn);
@@ -2741,6 +2737,74 @@ async function deleteAccount() {
   if (!res.ok) throw new Error('Radering misslyckades (' + res.status + ')');
   for (const k of ['mk-session', 'mk-sync-user', WKEY, LKEY, 'mk-larm-skickat', 'mk-onboarded', NKEY, 'mk-portfolj', 'mk-ova', KKEY, 'mk-kalender']) { try { localStorage.removeItem(k); } catch { /* privat läge */ } }
   ACC.session = null; ACC.user = null; writeLS('mk-user', null);
+}
+/* ================= Delbild per bolag ================= */
+// Bilden ritas i webbläsaren, 1200 × 630 som X och LinkedIn visar. Inget skickas till någon server.
+async function shareImage(s) {
+  try { await document.fonts?.load?.('500 40px Onest'); } catch { /* reservtypsnitt */ }
+  const W = 1200; const H = 630; const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  const F = (w, px) => `${w} ${px}px Onest, system-ui, sans-serif`;
+  const col = { bg: '#0E1013', card: '#171A1F', line: '#2A2E35', ink: '#F2F3F5', ink2: '#C4C7CC', mute: '#8A8F98', up: '#4CC38A', warn: '#E7B547', down: '#F07167' };
+  const lc = (l) => [null, col.up, col.warn, col.down][l] || col.mute;
+  g.fillStyle = col.bg; g.fillRect(0, 0, W, H);
+  const grd = g.createRadialGradient(W * 0.85, -80, 40, W * 0.85, -80, 700); grd.addColorStop(0, 'rgba(91,140,255,0.18)'); grd.addColorStop(1, 'rgba(91,140,255,0)'); g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  g.fillStyle = col.ink; g.font = F(500, 26); g.fillText('Finanskollen', 64, 76);
+  g.fillStyle = col.mute; g.font = F(400, 20); g.fillText(EN ? 'Risk check' : 'Riskkoll', 64, 106);
+  // Namn och ticker
+  const name = ovName(s.sym) || s.namn; g.fillStyle = col.ink; let fs = 60; g.font = F(500, fs); while (g.measureText(name).width > 640 && fs > 34) { fs -= 2; g.font = F(500, fs); }
+  g.fillText(name, 64, 220); g.fillStyle = col.mute; g.font = F(400, 24); g.fillText(`${s.sym}${s.typ && s.typ !== 'Aktie' ? ' · ' + s.typ : ''}`, 64, 262);
+  // Mätare
+  const p = s.poang; const lvl = p != null ? lvlOf(p) : null; const cx = 960; const cy = 300; const r = 150;
+  for (let i = 0; i < 10; i++) { const a0 = Math.PI + i * Math.PI / 10 + 0.03; const a1 = Math.PI + (i + 1) * Math.PI / 10 - 0.03; g.beginPath(); g.arc(cx, cy, r, a0, a1); g.lineWidth = 26; g.lineCap = 'butt'; g.strokeStyle = p != null && i < p ? (i < 3 ? col.up : i < 6 ? col.warn : col.down) : col.line; g.stroke(); }
+  g.textAlign = 'center'; g.fillStyle = col.ink; g.font = F(500, 96); g.fillText(p != null ? String(p) : '–', cx, cy - 10);
+  g.fillStyle = col.mute; g.font = F(400, 22); g.fillText(EN ? 'of 10' : 'av 10', cx, cy + 24);
+  if (lvl) { const t = EN ? ['', 'Low', 'Medium', 'High'][lvl] : LV[lvl].t; g.font = F(500, 24); const tw = g.measureText(t).width + 36; g.fillStyle = lc(lvl) + '2E'; g.beginPath(); g.roundRect(cx - tw / 2, cy + 50, tw, 40, 20); g.fill(); g.fillStyle = lc(lvl); g.fillText(t, cx, cy + 78); }
+  g.textAlign = 'left';
+  // Tre delar: de med högst nivå först
+  const parts = (s.faktorer || []).map(([n, l, v]) => ({ n, l, v: String(v).split(' · ')[0] })).sort((a, b) => b.l - a.l).slice(0, 3);
+  let y = 340;
+  for (const x of parts) {
+    g.fillStyle = col.card; g.beginPath(); g.roundRect(64, y - 34, 640, 56, 12); g.fill();
+    g.fillStyle = lc(x.l); g.beginPath(); g.arc(92, y - 6, 7, 0, Math.PI * 2); g.fill();
+    g.fillStyle = col.ink; g.font = F(500, 22); g.fillText(trS(x.n), 114, y);
+    g.fillStyle = col.ink2; g.font = F(400, 20); const vv = trS(x.v); g.textAlign = 'right'; g.fillText(vv.length > 34 ? vv.slice(0, 33) + '…' : vv, 684, y); g.textAlign = 'left';
+    y += 68;
+  }
+  if (!parts.length) { g.fillStyle = col.mute; g.font = F(400, 22); g.fillText(EN ? 'Too little data for a risk check' : 'För lite data för en riskkoll', 64, 360); }
+  g.strokeStyle = col.line; g.lineWidth = 1; g.beginPath(); g.moveTo(64, 560); g.lineTo(W - 64, 560); g.stroke();
+  g.fillStyle = col.ink2; g.font = F(400, 20); g.fillText(`finanskollen.live/bolag/${s.sym}`, 64, 596);
+  g.textAlign = 'right'; g.fillStyle = col.mute; g.fillText(`${EN ? 'Fixed rules · Not investment advice' : 'Fasta regler · Inget köpråd'} · ${dayKey(new Date())}`, W - 64, 596); g.textAlign = 'left';
+  return new Promise((res) => c.toBlob((b) => res(b), 'image/png'));
+}
+async function shareStock(s) {
+  const url = location.origin + '/bolag/' + encodeURIComponent(s.sym); const title = `${s.namn} · Finanskollen`;
+  const text = s.poang != null ? (EN ? `Risk check for ${ovName(s.sym)}: ${s.poang} of 10.` : `Riskkollen för ${ovName(s.sym)}: ${s.poang} av 10.`) : title;
+  let blob = null; try { blob = await shareImage(s); } catch { /* bilden är ett tillägg, länken fungerar ändå */ }
+  const file = blob ? new File([blob], `finanskollen-${s.sym}.png`, { type: 'image/png' }) : null;
+  // I mobilen: dela bild och länk direkt med telefonens delningsmeny
+  if (file && navigator.canShare?.({ files: [file] }) && matchMedia('(pointer: coarse)').matches) { try { await navigator.share({ files: [file], title, text: `${text} ${url}` }); return; } catch (err) { if (err?.name === 'AbortError') return; } }
+  const img = blob ? URL.createObjectURL(blob) : null;
+  const d = document.createElement('div'); d.className = 'modal-back';
+  const q = encodeURIComponent;
+  d.innerHTML = `<div class="modal card share-m" role="dialog" aria-modal="true" aria-labelledby="sh-h">
+    <h2 class="section" id="sh-h" style="font-size:20px">${EN ? 'Share' : 'Dela'} ${esc(ovName(s.sym))}</h2>
+    ${img ? `<img src="${img}" alt="${esc(text)}" class="share-img">` : ''}
+    <div class="chips share-acts">
+      ${img ? `<a class="btn small" href="${img}" download="finanskollen-${esc(s.sym)}.png">${EN ? 'Download image' : 'Ladda ner bilden'}</a>` : ''}
+      <button type="button" class="btn small ghost" data-copy>${EN ? 'Copy link' : 'Kopiera länken'}</button>
+      <a class="btn small ghost" href="https://x.com/intent/post?text=${q(text)}&url=${q(url)}" target="_blank" rel="noopener noreferrer">X</a>
+      <a class="btn small ghost" href="https://www.linkedin.com/sharing/share-offsite/?url=${q(url)}" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+    </div>
+    <p class="small faint" style="margin:0">${EN ? 'Download the image and attach it to your post. The link shows the full analysis.' : 'Ladda ner bilden och lägg den i ditt inlägg. Länken visar hela analysen.'}</p>
+    <div class="chips" style="justify-content:flex-end"><button class="btn ghost small" type="button" data-no>${EN ? 'Close' : 'Stäng'}</button></div></div>`;
+  document.body.append(d);
+  const close = () => { d.remove(); if (img) setTimeout(() => URL.revokeObjectURL(img), 1000); };
+  d.addEventListener('click', async (e) => {
+    if (e.target === d || e.target.closest('[data-no]')) { close(); return; }
+    if (e.target.closest('[data-copy]')) { try { await navigator.clipboard.writeText(url); toast(EN ? 'The link is copied' : 'Länken är kopierad', ''); } catch { toast(EN ? 'Could not copy' : 'Kunde inte kopiera', url); } }
+  });
+  d.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  d.querySelector('[data-copy]')?.focus();
 }
 function confirmDelete(onYes) {
   const d = document.createElement('div'); d.className = 'modal-back';
@@ -4512,32 +4576,78 @@ async function drawKoll(quotes) {
   b.innerHTML = `<h3 class="koll-h">${svg('info', 16)} Ledning och blankning</h3>${trades.map((a) => `<a class="koll-row" href="/bolag/${encodeURIComponent(a.sym)}" data-link>${tradePill(a.typ)}<span class="grow"><b>${esc(nameOf(a.sym))}</b><span class="small muted">${esc(tradeTxt(a))} · ${esc(dag(a.datum))}</span></span></a>`).join('')}${shorts.map((f) => `<a class="koll-row" href="/bolag/${encodeURIComponent(f.sym)}" data-link><span class="pill ${f.blank.summa >= 5 ? 'down' : f.blank.summa >= 2 ? 'warn' : ''}">${nf(f.blank.summa, 2)} %</span><span class="grow"><b>${esc(nameOf(f.sym))}</b><span class="small muted">av aktierna är blankade</span></span></a>`).join('')}${!trades.length && !shorts.length ? '<p class="small muted" style="margin:0">Inga insynsaffärer de senaste två veckorna och ingen större blankning i dina svenska bolag.</p>' : ''}`;
 }
 
-// Larm när ledningen handlar eller blankningen ökar. Körs när sidan är öppen.
+// Notiser för aktier man bevakar eller äger: insynsaffärer, blankning, ändrad riskkoll och rapportdag.
+// Kollas i webbläsaren när sidan är öppen (strax efter start och sedan var 30:e minut), så det kostar inga extra serveranrop på schema.
+const KOLL_T = [['insyn', 'insynLarm', 'Ledningen köper eller säljer', 'The management buys or sells'], ['blank', 'blankLarm', 'Blankningen ökar', 'Short selling increases'], ['risk', 'riskLarm', 'Riskkollen ändras', 'The risk check changes'], ['rapport', 'rapportLarm', 'Rapportdag, dagen före och samma dag', 'Report day, the day before and the same day']];
+const KOLL_MIN = [0, 50000, 250000, 1000000];
+const kollOn = (k, sym, t) => { const g = KOLL_T.find((x) => x[0] === t); return k[g[1]] !== false && k.per?.[sym]?.[t] !== false; };
 let kollRunning = false;
 async function checkKoll() {
   if (kollRunning || locked() || ACC.cfg === undefined || !ACC.user) return; kollRunning = true;
   try {
-    const k = getKoll(); const insynOn = k.insynLarm !== false; const blankOn = k.blankLarm !== false;
-    if (!insynOn && !blankOn) return;
-    const se = mySyms().all.filter(isSwedish).slice(0, 10); if (!se.length) return;
-    const fi = (await Promise.all(se.map((s) => getFI(s).catch(() => null)))).filter(Boolean);
-    const seen = new Set(k.sett || []); const firstRun = !k.sett; const blank = { ...(k.blank || {}) };
-    const since = isoDay(Date.now() - 7 * dayMs); const nyaSett = [];
+    const k = getKoll(); if (KOLL_T.every(([, g]) => k[g] === false)) return;
+    const all = mySyms().all.slice(0, 20); if (!all.length) return;
+    const se = all.filter(isSwedish).slice(0, 10);
+    const [fi, st, kal] = await Promise.all([
+      Promise.all(se.map((x) => getFI(x).catch(() => null))).then((r) => r.filter(Boolean)),
+      Promise.all(all.map((x) => getStock(x).catch(() => null))),
+      KOLL_T.some(([t, g]) => t === 'rapport' && k[g] !== false) ? getKalender(all).catch(() => []) : []
+    ]);
+    const seen = new Set(k.sett || []); const firstRun = !k.sett; const blank = { ...(k.blank || {}) }; const risk = { ...(k.risk || {}) };
+    const min = Number(k.insynMin ?? 50000); const since = isoDay(Date.now() - 7 * dayMs); const nyaSett = [];
+    const go = (sym) => '/bolag/' + encodeURIComponent(sym);
     for (const f of fi) {
       for (const a of f.affarer) {
         if (String(a.datum) < since) continue;
         const id = [f.sym, a.datum, a.person, a.typ, a.volym].join('|'); nyaSett.push(id);
-        if (!firstRun && insynOn && !seen.has(id)) showNotice(`Insynsaffär i ${nameOf(f.sym)}`, `${tradeTxt(a)}.`, '/bolag/' + encodeURIComponent(f.sym));
+        // Beloppsgränsen gäller affärer i kronor. Affärer i annan valuta eller utan belopp visas alltid.
+        const big = !min || a.varde == null || (a.valuta || 'SEK') !== 'SEK' || a.varde >= min;
+        if (!firstRun && big && kollOn(k, f.sym, 'insyn') && !seen.has(id)) showNotice(`Insynsaffär i ${ovName(f.sym)}`, `${tradeTxt(a)}.`, go(f.sym));
       }
       const now = f.blank?.summa ?? 0; const prev = blank[f.sym];
-      if (blankOn && prev != null && now - prev >= 0.5) showNotice(`Blankningen ökar i ${nameOf(f.sym)}`, `Nu är ${nf(now, 2)} % av aktierna blankade, upp från ${nf(prev, 2)} %.`, '/bolag/' + encodeURIComponent(f.sym));
+      if (kollOn(k, f.sym, 'blank') && prev != null && now - prev >= 0.5) showNotice(`Blankningen ökar i ${ovName(f.sym)}`, `Nu är ${nf(now, 2)} % av aktierna blankade, upp från ${nf(prev, 2)} %.`, go(f.sym));
       blank[f.sym] = now;
     }
-    writeLS(KKEY, { ...getKoll(), sett: [...new Set([...nyaSett, ...seen])].slice(0, 300), blank });
+    all.forEach((sym, i) => {
+      const p = st[i]?.poang; if (p == null) return; const prev = risk[sym];
+      if (kollOn(k, sym, 'risk') && prev != null && prev !== p) showNotice(`Riskkollen ändrades för ${ovName(sym)}`, `Från ${prev} till ${p} av 10. Se vilken del som ändrades.`, go(sym) + '?flik=risk');
+      risk[sym] = p;
+    });
+    const today = isoDay(Date.now()); const tomorrow = isoDay(Date.now() + dayMs);
+    for (const c of kal) {
+      if (!c.rapport || (c.rapport !== today && c.rapport !== tomorrow) || !kollOn(k, c.sym, 'rapport')) continue;
+      const id = ['rapport', c.sym, c.rapport, c.rapport === today ? 'd' : 'f'].join('|'); nyaSett.push(id);
+      if (!seen.has(id)) showNotice(`${ovName(c.sym)} lämnar rapport ${c.rapport === today ? 'i dag' : 'i morgon'}`, `${c.rapportUppskattad ? 'Datumet är preliminärt. ' : ''}Kursen brukar röra sig mer än vanligt runt rapporter.`, go(c.sym) + '?flik=kalender');
+    }
+    writeLS(KKEY, { ...getKoll(), sett: [...new Set([...nyaSett, ...seen])].slice(0, 400), blank, risk });
   } finally { kollRunning = false; }
 }
-const kollSettings = () => { const k = getKoll(); return `<div class="koll-set"><label><input type="checkbox" data-kollset="insynLarm" ${k.insynLarm !== false ? 'checked' : ''}> Larma när ledningen köper eller säljer i dina svenska aktier</label><label><input type="checkbox" data-kollset="blankLarm" ${k.blankLarm !== false ? 'checked' : ''}> Larma när blankningen ökar med minst 0,5 procentenheter</label></div>`; };
+const kollSettings = () => { const k = getKoll(); const min = Number(k.insynMin ?? 50000);
+  return `<div class="koll-set"><span class="small muted">${EN ? 'Notify me about the stocks I watch or own when:' : 'Säg till om aktierna jag bevakar eller äger när:'}</span>
+    ${KOLL_T.map(([t, g, sv, en]) => `<label><input type="checkbox" data-kollset="${g}" ${k[g] !== false ? 'checked' : ''}> ${EN ? en : sv}${t === 'insyn' ? ` <select class="select small" data-kollmin aria-label="${EN ? 'Smallest amount' : 'Minsta belopp'}">${KOLL_MIN.map((v) => `<option value="${v}" ${v === min ? 'selected' : ''}>${v ? `${EN ? 'from' : 'från'} ${esc(mny(v, 'SEK'))}` : (EN ? 'any amount' : 'alla belopp')}</option>`).join('')}</select>` : ''}</label>`).join('')}
+    <span class="small faint">${EN ? 'You can also choose per company with the bell on the company page.' : 'Du kan också välja per bolag med klockan på bolagssidan.'}</span></div>`; };
 document.addEventListener('change', (e) => { const c = e.target.closest?.('[data-kollset]'); if (!c) return; writeLS(KKEY, { ...getKoll(), [c.dataset.kollset]: c.checked }); toast(c.checked ? 'Larmet är på' : 'Larmet är av', ''); });
+document.addEventListener('change', (e) => { const c = e.target.closest?.('[data-kollmin]'); if (!c) return; writeLS(KKEY, { ...getKoll(), insynMin: Number(c.value) }); toast(EN ? 'Saved' : 'Sparat', ''); });
+// Klockan på bolagssidan: välj vilka notiser du vill ha för just det bolaget
+document.addEventListener('change', (e) => { const c = e.target.closest?.('[data-kollper]'); if (!c) return; const k = getKoll(); const per = { ...(k.per || {}) }; per[c.dataset.sym] = { ...(per[c.dataset.sym] || {}), [c.dataset.kollper]: c.checked }; writeLS(KKEY, { ...k, per }); });
+function kollPerHTML(sym, namn) {
+  const k = getKoll(); const mine = mySyms().all.includes(sym);
+  return `<div class="kp" role="dialog" aria-label="${EN ? 'Notifications' : 'Notiser'}"><b>${EN ? 'Notifications for' : 'Notiser för'} ${esc(ovName(sym))}</b>
+    ${!mine ? `<span class="small muted">${EN ? 'Notifications apply to stocks you watch or own.' : 'Notiser gäller aktier du bevakar eller äger.'}</span><button type="button" class="btn small" data-kpwatch="${esc(sym)}" data-namn="${esc(namn)}">${EN ? 'Watch and get notifications' : 'Bevaka och få notiser'}</button>` : ''}
+    ${KOLL_T.filter(([t]) => isSwedish(sym) || (t !== 'insyn' && t !== 'blank')).map(([t, g, sv, en]) => { const off = k[g] === false; return `<label class="${off ? 'faint' : ''}"><input type="checkbox" data-kollper="${t}" data-sym="${esc(sym)}" ${k.per?.[sym]?.[t] !== false ? 'checked' : ''} ${off || !mine ? 'disabled' : ''}> ${EN ? en : sv}${off ? ` <span class="small">(${EN ? 'off for all' : 'av för alla'})</span>` : ''}</label>`; }).join('')}
+    ${notifyState() === 'default' ? `<button type="button" class="btn ghost small" data-notify-kp>${EN ? 'Also show as browser notification' : 'Visa även som notis i webbläsaren'}</button>` : notifyState() === 'granted' ? `<span class="small faint">${EN ? 'Shown here and as a browser notification while the site is open.' : 'Visas här och som notis i webbläsaren när sidan är öppen.'}</span>` : `<span class="small faint">${EN ? 'Shown here on the site while it is open.' : 'Visas här på sidan när den är öppen.'}</span>`}
+    <a class="small" href="/bevakning" data-link>${EN ? 'Settings for all stocks →' : 'Inställningar för alla aktier →'}</a></div>`;
+}
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest?.('[data-kollbtn]'); const pop = document.querySelector('.kp');
+  if (pop && !e.target.closest('.kp') && !b) { pop.remove(); return; }
+  if (e.target.closest?.('[data-notify-kp]')) { await askNotify(); pop?.remove(); return; }
+  const w = e.target.closest?.('[data-kpwatch]'); if (w) { if (!getWatch().includes(w.dataset.kpwatch)) toggleWatch(w.dataset.kpwatch, w.dataset.namn); const wb = document.querySelector(`[data-watch="${CSS.escape(w.dataset.kpwatch)}"]`); if (wb) { wb.textContent = 'Bevakas ✓'; wb.setAttribute('aria-pressed', 'true'); wb.classList.add('ghost'); } const host = pop?.parentElement; pop?.remove(); if (host) host.insertAdjacentHTML('beforeend', kollPerHTML(w.dataset.kpwatch, w.dataset.namn)); return; }
+  if (!b) return;
+  if (askLogin('få notiser')) return;
+  if (pop) { pop.remove(); return; }
+  b.parentElement.insertAdjacentHTML('beforeend', kollPerHTML(b.dataset.kollbtn, b.dataset.namn));
+});
 
 /* ---- Kalendersidan ---- */
 // Väntad utdelning per år för portföljen, i kronor
