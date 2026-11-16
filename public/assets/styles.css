@@ -1530,3 +1530,5 @@ a.p-wf:hover { background: var(--surface); }
 .r-krc b { font-size: 17px; }
 .r-krc .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 720px) { .r-krc .small { white-space: normal; } }
+.r-finr > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 561px) and (max-width: 1500px) { .r-part { grid-template-columns: 108px 96px minmax(0, 1fr) 56px; gap: 8px; } }

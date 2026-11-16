@@ -1592,6 +1592,10 @@ function bHead(s, tabs, active) {
 }
 
 async function mountBolag(sym) {
+  // Kurser, rapporter och kalender börjar hämtas samtidigt som bolagsdatan i stället för efteråt, så att flikarna fylls snabbare
+  if (!/[\^=]/.test(sym)) { const q = encodeURIComponent(sym); const sw = isSwedish(sym);
+    api(`/api/chart?s=${q}&r=5yd`, 30 * 60e3); api(`/api/chart?s=${encodeURIComponent(sw ? '^OMX' : '^GSPC')}&r=5yd`, 30 * 60e3);
+    api(`/api/rapporter?s=${q}`, 6 * 3600e3); api(`/api/kalender?s=${q}`, 6 * 3600e3); }
   const s = await getStock(sym);
   const el = $('#bolag'); if (!el) return;
   if (s.error) {
@@ -1903,7 +1907,7 @@ function bPos(raw, c) {
 const bMeter = (pos) => `<span class="r-meter" aria-hidden="true"><i style="left:${(pos * 100).toFixed(1)}%"></i></span>`;
 // Nivåer för finansiell styrka: [gräns Låg/Medel, gräns Medel/Hög], hi = högre är bättre
 const B_FIN = {
-  de: { n: 'Skuld / eget kapital', k: 'Skuld / eget kapital', lim: [0.5, 1.5], f: (v) => bn(v, 2), rule: 'Under 0,5 Låg, 0,5–1,5 Medel, över 1,5 Hög.' },
+  de: { n: 'Skuld / EK', k: 'Skuld / eget kapital', lim: [0.5, 1.5], f: (v) => bn(v, 2), rule: 'Under 0,5 Låg, 0,5–1,5 Medel, över 1,5 Hög.' },
   sol: { n: 'Soliditet', k: 'Soliditet', lim: [40, 20], hi: true, f: (v) => bPct(v), rule: 'Över 40 % Låg, 20–40 % Medel, under 20 % Hög.' },
   nd: { n: 'Nettoskuld / EBITDA', k: 'Nettoskuld / EBITDA', lim: [1.5, 3], f: (v) => (v < 0 ? (EN ? 'Net cash' : 'Nettokassa') : bn(v, 1) + ' ggr'), rule: 'Under 1,5 ggr eller nettokassa Låg, 1,5–3 Medel, över 3 Hög.' },
   cov: { n: 'Räntetäckning', k: 'Räntetäckning', lim: [5, 2], hi: true, f: (v) => bn(v, 1) + ' ggr', rule: 'Över 5 ggr Låg, 2–5 Medel, under 2 Hög.' },
@@ -1927,7 +1931,7 @@ function bRisk(panel, ctx) {
   // Läget på skalan för varje del. Saknas råvärdet ställs markören mitt i nivån.
   const rows = f.map(([n, l, v, t, raw]) => { const c = B_SCALE[n]; const ok = c && raw != null && Number.isFinite(raw);
     const pos = ok ? bPos(raw, c) : (l - 0.5) / 3; const same = ok && (pos < 1 / 3 - 1e-9 ? 1 : pos <= 2 / 3 + 1e-9 ? 2 : 3) === l;
-    const vs = !ok ? String(v).split(' · ')[0] : n === 'Skulder' && raw >= 0 ? `${EN ? 'Debt/equity' : 'Skuld/EK'} ${bn(raw, 2)}` : n === 'Handel' ? `${mny(raw, s.valuta)} ${EN ? 'a day' : 'per dag'}` : n === 'Blankning' ? `${bn(raw, 2)} % ${EN ? 'shorted' : 'blankat'}` : String(v).split(' · ')[0];
+    const vs = !ok ? String(v).split(' · ')[0] : n === 'Skulder' && raw >= 0 ? `${EN ? 'Debt/equity' : 'Skuld/EK'} ${bn(raw, 2)}` : n === 'Handel' ? `${mny(raw, s.valuta)} ${EN ? 'a day' : 'per dag'}` : n === 'Blankning' ? (raw > 0 ? `${bn(raw, 2)} % ${EN ? 'shorted' : 'blankat'}` : (EN ? 'None reported' : 'Ingen anmäld')) : n === 'Storlek' ? mny(raw, s.valuta) : String(v).split(' · ')[0];
     return { n, l, v: vs, t, raw, c, pos: same || !ok ? pos : (l - 0.5) / 3, same }; });
   // Närmast en ändring: den gräns som ligger närmast, uppåt eller nedåt
   const near = rows.filter((r) => r.same).map((r) => {
@@ -1941,7 +1945,7 @@ function bRisk(panel, ctx) {
   <div class="b-grid r-top">
     ${bCard('c3', `${bLabel('Riskkoll', 'Riskkoll')}<div class="b-rk">${bGauge(s.poang)}<div class="stack" style="gap:6px;align-items:flex-start">${lvl ? bLevel(lvl) : `<span class="faint">${EN ? 'Too little data' : 'För lite data'}</span>`}<span class="small r-sum">${esc(s.sammanfattning || '')}</span></div></div><div id="r-cmp">${loading()}</div>`)}
     ${bCard('c6', `<div class="b-ch">${bLabel(EN ? 'What the risk check is built on' : 'Vad riskkollen bygger på')}<span class="small faint">${EN ? 'scale: Low to High · hover over a name for the rule' : 'skala: Låg till Hög · håll över namnet för regeln'}</span></div>${rows.length ? `<div class="r-parts">${rows.map((r) => `<div class="r-part"><span class="b-fn"><b>${esc(r.n)}</b>${tipMark(r.n, `${ORD[r.n] ? ORD[r.n] + ' ' : ''}${B_RULES[r.n] || ''}`)}</span><span class="b-fl">${bSeg(r.l)}${bLevel(r.l)}</span><span class="num r-pv" title="${esc(r.t)}">${esc(r.v)}</span><span class="r-pt">${esc(r.t)}</span>${bMeter(r.pos)}</div>`).join('')}</div>` : `<p class="b-note">${EN ? 'The data source does not have enough key figures for a risk check.' : 'Datakällan har inte tillräckligt med nyckeltal för en riskkoll.'}</p>`}`)}
-    ${bCard('c3', `<div class="b-ch">${bLabel(EN ? 'Closest to a change' : 'Närmast en ändring')}<span class="small faint">${EN ? 'to the next level' : 'till nästa nivå'}</span></div>${near.length ? near.map((x) => `<div class="r-near"><div><b>${esc(x.n)}</b><span class="${x.toUp ? 'warn' : 'up'}">${esc(x.left)}</span></div><span class="small faint">${esc(x.v)} · ${esc(x.rule)}</span><span class="r-nbar"><i class="${x.toUp ? 'warn' : 'up'}" style="width:${x.w.toFixed(0)}%"></i></span></div>`).join('') : `<p class="b-note">${EN ? 'Cannot be calculated for this stock.' : 'Går inte att räkna för den här aktien.'}</p>`}<p class="b-src">${EN ? 'Yellow = towards higher risk, green = towards lower.' : 'Gult = mot högre risk, grönt = mot lägre.'}</p>`)}
+    ${bCard('c3', `<div class="b-ch">${bLabel(EN ? 'Closest to a change' : 'Närmast en ändring')}</div>${near.length ? near.map((x) => `<div class="r-near"><div><b>${esc(x.n)}</b><span class="${x.toUp ? 'warn' : 'up'}">${esc(x.left)}</span></div><span class="small faint">${esc(x.v)} · ${esc(x.rule)}</span><span class="r-nbar"><i class="${x.toUp ? 'warn' : 'up'}" style="width:${x.w.toFixed(0)}%"></i></span></div>`).join('') : `<p class="b-note">${EN ? 'Cannot be calculated for this stock.' : 'Går inte att räkna för den här aktien.'}</p>`}<p class="b-src">${EN ? 'Yellow = towards higher risk, green = towards lower.' : 'Gult = mot högre risk, grönt = mot lägre.'}</p>`)}
   </div>
   <div class="r-krh"><b>${EN ? 'The risk in money' : 'Risken i kronor'}</b><span>${EN ? 'calculated on' : 'räknat på'} 10 000 ${esc(U)} ${EN ? 'in the stock' : 'i aktien'}</span></div>
   <div class="r-kr" id="r-kr">${loading('Räknar …')}</div>
@@ -4914,6 +4918,10 @@ const langSwitch = () => `<div class="lang-switch" role="group" aria-label="${EN
 document.addEventListener('click', (e) => { const b = e.target.closest('[data-lang]'); if (b && b.dataset.lang !== LANG) setLang(b.dataset.lang); });
 
 window.addEventListener('popstate', render);
+// När man pekar på en bolagslänk hämtas bolagsdatan i förväg, så att sidan öppnas direkt vid klick
+{ let last = '';
+  const warm = (e) => { const a = e.target.closest?.('a[href^="/bolag/"]'); if (!a) return; const sym = decodeURIComponent(a.getAttribute('href').split('/')[2].split('?')[0] || ''); if (!sym || sym === last) return; last = sym; api('/api/stock?s=' + encodeURIComponent(sym), 10 * 60e3); };
+  document.addEventListener('pointerover', warm, { passive: true }); document.addEventListener('touchstart', warm, { passive: true }); }
 // Kolla inloggningen först så att ingenting av sidan syns innan
 (async () => {
   document.body.classList.add('booting');
