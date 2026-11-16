@@ -30,14 +30,14 @@ export function buildFactors({ m = {}, price, cur, mcapM }) {
     if (beta != null) parts.push(`Beta ${sv(beta, 2)}`);
     if (spread != null) parts.push(`${sv(lo, 2)}–${sv(hi, 2)} på ett år`);
     out.push(['Kurssvängningar', l, parts.join(' · '),
-      l === 1 ? 'Kursen rör sig lugnare än börsen i stort.' : l === 2 ? 'Kursen rör sig ungefär som börsen, med perioder av större rörelser.' : 'Kursen rör sig kraftigt. Värdet kan ändras mycket på kort tid.']);
+      l === 1 ? 'Kursen rör sig lugnare än börsen i stort.' : l === 2 ? 'Kursen rör sig ungefär som börsen, med perioder av större rörelser.' : 'Kursen rör sig kraftigt. Värdet kan ändras mycket på kort tid.', beta ?? null]);
   }
 
   const de = val(m['totalDebt/totalEquityQuarterly']) ?? val(m['totalDebt/totalEquityAnnual']);
   if (de != null) {
     const l = de < 0 ? 3 : de < 0.5 ? 1 : de < 1.5 ? 2 : 3;
     out.push(['Skulder', l, de < 0 ? 'Negativt eget kapital' : `Skuld/eget kapital ${sv(de, 2)}`,
-      l === 1 ? 'Skulderna är små jämfört med vad ägarna har satt in.' : l === 2 ? 'Bolaget har en del lån. Det är vanligt, men värt att följa om räntorna stiger.' : de < 0 ? 'Bolaget är skyldigt mer än det äger.' : 'Mycket lån jämfört med eget kapital. Stiger räntorna eller faller vinsten blir det tungt.']);
+      l === 1 ? 'Skulderna är små jämfört med vad ägarna har satt in.' : l === 2 ? 'Bolaget har en del lån. Det är vanligt, men värt att följa om räntorna stiger.' : de < 0 ? 'Bolaget är skyldigt mer än det äger.' : 'Mycket lån jämfört med eget kapital. Stiger räntorna eller faller vinsten blir det tungt.', de]);
   }
 
   const pe = val(m.peTTM) ?? val(m.peBasicExclExtraTTM) ?? val(m.peExclExtraTTM);
@@ -46,26 +46,26 @@ export function buildFactors({ m = {}, price, cur, mcapM }) {
     if ((eps != null && eps <= 0) || (pe != null && pe <= 0)) out.push(['Värdering', 3, 'Ingen vinst just nu', 'Priset bygger på förhoppningar om framtida vinster.']);
     else if (pe != null) {
       const l = pe < 20 ? 1 : pe < 35 ? 2 : 3;
-      out.push(['Värdering', l, `P/E ${sv(pe, 1)}`, l === 1 ? 'Priset är inte högt jämfört med vinsten.' : l === 2 ? 'Investerarna betalar en del för framtida tillväxt.' : 'Aktien är dyr jämfört med vinsten. Besvikelser kan ge stora fall.']);
+      out.push(['Värdering', l, `P/E ${sv(pe, 1)}`, l === 1 ? 'Priset är inte högt jämfört med vinsten.' : l === 2 ? 'Investerarna betalar en del för framtida tillväxt.' : 'Aktien är dyr jämfört med vinsten. Besvikelser kan ge stora fall.', pe]);
     }
   }
 
   const pm = val(m.netProfitMarginTTM) ?? val(m.netProfitMarginAnnual);
   if (pm != null) {
     const l = pm < 0 ? 3 : pm < 8 ? 2 : 1;
-    out.push(['Lönsamhet', l, `Vinstmarginal ${sv(pm, 1)} %`, l === 1 ? 'Bolaget behåller en bra del av intäkterna som vinst.' : l === 2 ? 'Bolaget går med vinst, men marginalen är liten.' : 'Bolaget går med förlust.']);
+    out.push(['Lönsamhet', l, `Vinstmarginal ${sv(pm, 1)} %`, l === 1 ? 'Bolaget behåller en bra del av intäkterna som vinst.' : l === 2 ? 'Bolaget går med vinst, men marginalen är liten.' : 'Bolaget går med förlust.', pm]);
   }
 
   const volM = val(m['10DayAverageTradingVolume']) ?? val(m['3MonthAverageTradingVolume']);
   if (volM != null && price) {
     const t = volM * 1e6 * price; const l = t >= 50e6 ? 1 : t >= 5e6 ? 2 : 3;
-    out.push(['Handel', l, `Omsätter ca ${money(t, cur)} per dag`, l === 1 ? 'Lätt att köpa och sälja.' : l === 2 ? 'Går att handla, men stora affärer kan påverka priset.' : 'Liten handel. Det kan vara svårt att sälja när man vill.']);
+    out.push(['Handel', l, `Omsätter ca ${money(t, cur)} per dag`, l === 1 ? 'Lätt att köpa och sälja.' : l === 2 ? 'Går att handla, men stora affärer kan påverka priset.' : 'Liten handel. Det kan vara svårt att sälja när man vill.', t]);
   }
 
   const mc = (val(mcapM) ?? val(m.marketCapitalization));
   if (mc != null && mc > 0) {
     const v = mc * 1e6; const l = v >= 10e9 ? 1 : v >= 1e9 ? 2 : 3;
-    out.push(['Storlek', l, `Börsvärde ${money(v, cur)}`, l === 1 ? 'Stort bolag med många ägare och mycket granskning.' : l === 2 ? 'Medelstort bolag.' : 'Litet bolag. Små bolag svänger mer och granskas mindre.']);
+    out.push(['Storlek', l, `Börsvärde ${money(v, cur)}`, l === 1 ? 'Stort bolag med många ägare och mycket granskning.' : l === 2 ? 'Medelstort bolag.' : 'Litet bolag. Små bolag svänger mer och granskas mindre.', v]);
   }
   return out;
 }
@@ -73,9 +73,9 @@ export function buildFactors({ m = {}, price, cur, mcapM }) {
 // Blankning: hur stor del av aktierna som professionella investerare har satsat på ska falla.
 // summa = summan av anmälda positioner i procent, null = ingen position över 0,5 %.
 export function blankFactor(summa) {
-  if (summa == null) return ['Blankning', 1, 'Ingen anmäld blankning över 0,5 %', 'Inga större investerare satsar öppet på att kursen ska falla.'];
+  if (summa == null) return ['Blankning', 1, 'Ingen anmäld blankning över 0,5 %', 'Inga större investerare satsar öppet på att kursen ska falla.', 0];
   const l = summa < 2 ? 1 : summa < 5 ? 2 : 3;
-  return ['Blankning', l, `${sv(summa, 2)} % av aktierna blankade`, l === 1 ? 'Lite blankning. Få satsar på att kursen ska falla.' : l === 2 ? 'En del investerare satsar på att kursen ska falla.' : 'Många professionella investerare satsar på att kursen ska falla.'];
+  return ['Blankning', l, `${sv(summa, 2)} % av aktierna blankade`, l === 1 ? 'Lite blankning. Få satsar på att kursen ska falla.' : l === 2 ? 'En del investerare satsar på att kursen ska falla.' : 'Många professionella investerare satsar på att kursen ska falla.', summa];
 }
 
 export function perfFromMetric(m = {}, d1 = null) {

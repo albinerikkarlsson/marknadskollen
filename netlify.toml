@@ -23,7 +23,8 @@
 [[headers]]
   for = "/assets/*"
   [headers.values]
-    Cache-Control = "public, max-age=300"
+    # Kod och stilmall hämtas med ?v=<version>, så de kan sparas länge i webbläsaren utan att bli gamla
+    Cache-Control = "public, max-age=31536000, immutable"
 
 # Själva sidan sparas aldrig gammal, så att nya versioner syns direkt
 [[headers]]
