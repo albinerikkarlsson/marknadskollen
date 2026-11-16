@@ -114,7 +114,10 @@ const ICON = {
   user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0',
   bell: 'M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0',
   calendar: 'M5 6h14v14H5zM5 10h14M9 4v4M15 4v4',
-  chart: 'M4 19h16M7 15l3-4 3 2 4-6'
+  chart: 'M4 19h16M7 15l3-4 3 2 4-6',
+  panel: 'M4 5h16v14H4zM9 5v14',
+  chevL: 'M14 7l-5 5 5 5',
+  chevR: 'M10 7l5 5-5 5'
 };
 // Bara vanliga webblänkar släpps igenom (inga javascript:- eller data:-länkar)
 const safeUrl = (u) => { try { const x = new URL(u); return x.protocol === 'https:' || x.protocol === 'http:' ? x.href : null; } catch { return null; } };
@@ -259,10 +262,10 @@ function sidebar(active) {
   const watchCount = getWatch().length;
   return `
   <nav class="nav" aria-label="Huvudmeny">
-    <a class="brand" href="/" data-link>
-      <span class="brand-mark">${svg('logo', 20, '#FFFFFF')}</span>
-      <span class="brand-text"><span class="brand-name">Finanskollen</span></span>
+    <a class="brand" href="/" data-link aria-label="Finanskollen">
+      <span class="brand-word" aria-hidden="true">FINANSKOLLEN<span>.</span></span>
     </a>
+    <button type="button" class="nav-hide" data-navtoggle aria-label="${EN ? 'Hide menu' : 'Dölj menyn'}" title="${EN ? 'Hide menu' : 'Dölj menyn'}">${svg('chevL', 18)}</button>
     ${NAV.map((g) => `
       <div class="nav-group">
         <span class="nav-label">${g.group}</span>
@@ -4362,7 +4365,7 @@ const authErr = (e) => AUTH_ERR[e?.code] || (e?.status === 400 ? 'Kontrollera up
 function viewKonto() {
   if (locked()) {
     return `<div class="auth-wrap">
-      <div class="auth-top"><a class="auth-brand" href="/" data-link><span class="brand-mark">${svg('logo', 22, '#FFFFFF')}</span><span><b>Finanskollen</b><span class="small muted">Trygg börskoll</span></span></a>${langSwitch()}</div>
+      <div class="auth-top"><a class="auth-brand" href="/" data-link aria-label="Finanskollen"><span class="brand-word" aria-hidden="true">FINANSKOLLEN<span>.</span></span></a>${langSwitch()}</div>
       <div class="auth-intro"><h1 class="title" style="font-size:clamp(30px,5vw,42px)">Börsen på enkel svenska</h1>
         <p class="muted" style="margin:0;font-size:16px">Skapa ett gratis konto för att bevaka aktier, få prislarm, följa din portfölj och öva med låtsaspengar. Riskkollen, nyheterna och alla aktier kan du se utan konto.</p></div>
       <div id="konto" class="auth-card">${loading('Hämtar …')}</div>
@@ -5009,6 +5012,10 @@ async function mountStatistik() {
 }
 
 function refreshNav(active) { $('#sidebar').innerHTML = sidebar(active); }
+// Menyn kan fällas in åt vänster och fällas ut igen. Valet sparas i webbläsaren.
+const setNavOff = (off) => { document.body.classList.toggle('nav-off', off); writeLS('mk-navoff', off); const b = $('#nav-show'); if (b) b.hidden = !off; };
+document.addEventListener('click', (e) => { if (e.target.closest('[data-navtoggle]')) setNavOff(!document.body.classList.contains('nav-off')); });
+{ const b = document.createElement('button'); b.type = 'button'; b.id = 'nav-show'; b.className = 'nav-show'; b.setAttribute('data-navtoggle', ''); b.setAttribute('aria-label', EN ? 'Show menu' : 'Visa menyn'); b.title = EN ? 'Show menu' : 'Visa menyn'; b.innerHTML = svg('chevR', 18); document.body.append(b); setNavOff(readLS('mk-navoff', false) === true); }
 
 function render() {
   const r = route();

@@ -91,3 +91,6 @@ INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
 DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
+
+---
+archivo-800-logo.woff2: Archivo ExtraBold (bara tecknen i loggan), Copyright 2020 The Archivo Project Authors (https://github.com/Omnibus-Type/Archivo). Licensierad under SIL Open Font License 1.1.
