@@ -275,7 +275,6 @@ function sidebar(active) {
           </a>`).join('')}
       </div>`).join('')}
     ${isAdmin() ? `<div class="nav-group"><span class="nav-label">Ägare</span><a class="nav-link" href="/statistik" data-link ${active === 'statistik' ? 'aria-current="page"' : ''}>${svg('chart')}<span>Statistik</span></a></div>` : ''}
-    <div class="nav-foot">Data från Yahoo Finance, Finnhub och Finansinspektionen. Ingen investeringsrådgivning.</div>
   </nav>`;
 }
 
@@ -296,7 +295,7 @@ function topbar(crumbs, withSearch = true) {
 }
 
 const footer = (extra = '') =>
-  `<footer class="foot"><nav class="foot-links" aria-label="Om sidan"><a href="/om" data-link>Om oss</a><a href="/integritet" data-link>Integritet</a><a href="/ordlista" data-link>Ordlista</a><a href="/metod" data-link>Så räknas riskkollen</a></nav>Ingen investeringsrådgivning. Kurser, nyckeltal och nyheter kommer från Yahoo Finance och Finnhub, insynshandel och blankning från Finansinspektionen. Riskkollen räknas fram med fasta regler som förklaras på varje bolagssida. ${extra}</footer>`;
+  `<footer class="foot"><nav class="foot-links" aria-label="Om sidan"><a href="/om" data-link>Om oss</a><a href="/integritet" data-link>Integritet</a><a href="/ordlista" data-link>Ordlista</a><a href="/metod" data-link>Så räknas riskkollen</a></nav>${extra}</footer>`;
 
 /* ================= Nyheter ================= */
 async function getNews(region) {
@@ -348,7 +347,7 @@ function frontNewsHTML(data, region) {
         </div>`).join('') || '<p class="muted">Inga fler nyheter.</p>'}
     </div>
   </div>
-  <p class="small faint" style="margin:8px 0 0">Nyheterna visas på originalspråket, oftast engelska. Klicka på en rubrik för att läsa hela artikeln hos källan.</p>`;
+  <p class="small faint" style="margin:8px 0 0">Nyheterna visas på originalspråket, oftast engelska.</p>`;
 }
 
 /* ================= Finansinspektionen: insynshandel och blankning ================= */
@@ -741,7 +740,7 @@ async function mountOversiktMin() {
       + (rows.length > 7 ? `<a class="b-more" href="/portfolj?flik=dagen" data-link>${EN ? `All ${rows.length} in Your portfolio →` : `Alla ${rows.length} under Dagen →`}</a>` : '')
       + (notYet.length ? `<p class="b-src">${EN ? 'Not traded yet' : 'Inte handlade än'}: ${esc(notYet.map((h) => ovName(h.sym)).join(', '))}</p>` : '')
       + (sel ? `<div class="n-sel"><span><span class="n-k">${EN ? 'Value' : 'Värde'}</span><b class="num">${sel.varde != null ? sekBig(sel.varde) : '–'}</b></span><span><span class="n-k">${EN ? 'Since purchase' : 'Sedan köp'}</span><b class="num ${tone(sel.vinst)}">${sel.vinst != null && sel.insatt ? pctDiff((sel.vinst / sel.insatt) * 100) : '–'}</b></span><span><span class="n-k">${EN ? 'Risk check' : 'Riskkoll'}</span><b class="num">${sel.poang != null ? sel.poang + ' / 10' : '–'}</b></span><a class="b-more" href="/bolag/${encodeURIComponent(sel.sym)}" data-link>${EN ? 'Company page' : 'Bolagssidan'} →</a></div>` : '')
-      + (!sel && stocks.length ? `<p class="b-src">${EN ? 'Tap a stock to see more.' : 'Tryck på en aktie för att se mer.'}</p>` : '');
+      + '';
   };
   drawDrv();
   $('#n-drv').addEventListener('click', (e) => { const b = e.target.closest('[data-nsel]'); if (!b) return; selSym = selSym === b.dataset.nsel ? null : b.dataset.nsel; drawDrv(); });
@@ -761,7 +760,7 @@ async function mountOversiktMin() {
       const last = pts[pts.length - 1][1];
       $('#n-chg').innerHTML = `<span class="${tone(last)}">${krDiff(last)}</span> <span class="faint">${pd.dagIdag ? (EN ? 'today' : 'i dag') : esc(dayShort(pd.refDag + 'T12:00:00'))}</span>`;
       const hm = (t) => HMF.format(new Date(t * 1000));
-      $('#n-axis').innerHTML = `<span>${hm(t0)}</span><span>${dots.length ? (EN ? 'Dots = news about your stocks' : 'Prickarna är nyheter om dina aktier') : (EN ? 'Dashed line = start of the day' : 'Streckad linje = början av dagen')}</span><span>${hm(t1)}</span>`;
+      $('#n-axis').innerHTML = `<span>${hm(t0)}</span><span></span><span>${hm(t1)}</span>`;
       return;
     }
     if (!ser) { el.innerHTML = loading(EN ? 'Loading the history …' : 'Hämtar historiken …'); return; }
@@ -773,7 +772,7 @@ async function mountOversiktMin() {
     const dv = V[V.length - 1][1] - V[0][1]; const di = I[I.length - 1][1] - I[0][1]; const g = dv - di;
     $('#n-chg').innerHTML = `<span class="${tone(g)}">${krDiff(g)}</span> <span class="faint">${EN ? 'in the period' : 'under perioden'}${di > 0.5 ? (EN ? `, not counting ${sekBig(di)} added` : `, utan ${sekBig(di)} som satts in`) : ''}</span>`;
     const d = (t) => new Date(t * 1000).toLocaleDateString(L, { day: 'numeric', month: 'short', year: per === '1m' ? undefined : 'numeric', timeZone: 'Europe/Stockholm' });
-    $('#n-axis').innerHTML = `<span>${esc(d(V[0][0]))}</span><span>${EN ? 'Dashed line = money you put in' : 'Streckad linje = pengar du satt in'}</span><span>${esc(d(V[V.length - 1][0]))}</span>`;
+    $('#n-axis').innerHTML = `<span>${esc(d(V[0][0]))}</span><span></span><span>${esc(d(V[V.length - 1][0]))}</span>`;
   };
   $('.n-curve').addEventListener('click', (e) => {
     const b = e.target.closest('[data-nper]'); if (!b) return;
@@ -1060,7 +1059,7 @@ async function mountDinDag() {
     for (const nn of own) { const t = new Date(nn.datum).getTime() / 1000; if (t < t0 || t > t1) continue; if (dots.some((d) => Math.abs(new Date(d.datum).getTime() / 1000 - t) < (t1 - t0) * 0.03)) continue; dots.push(nn); if (dots.length === 6) break; }
     nDraw(el, pts, { base: 0, money: false, dots });
     const hm = (t) => HMF.format(new Date(t * 1000));
-    if ($('#dd-axis')) $('#dd-axis').innerHTML = `<span>${hm(t0)}</span><span>${past ? (EN ? 'Dashed line = previous close' : 'Streckad linje = föregående stängning') : (EN ? "Dashed line = yesterday's close" : 'Streckad linje = gårdagens stängning')}${dots.length ? (EN ? ' · dots are news' : ' · prickarna är nyheter') : ''}</span><span>${hm(t1)}</span>`;
+    if ($('#dd-axis')) $('#dd-axis').innerHTML = `<span>${hm(t0)}</span><span></span><span>${hm(t1)}</span>`;
   }).catch(() => { const el = $('#dd-chart'); if (el) el.innerHTML = `<p class="b-note">${EN ? 'The curve could not be shown right now. The numbers are still correct.' : 'Kurvan kunde inte visas just nu. Siffrorna stämmer ändå.'}</p>`; });
   // Nyheter från dagen om de tre som påverkade mest
   const top = stocks.slice().sort((a, b) => Math.abs(b.idag) - Math.abs(a.idag)).slice(0, 3);
@@ -1855,7 +1854,7 @@ function bDagen(panel, ctx) {
   const minDay = isoDay(Date.now() - 58 * 864e5);
   panel.innerHTML = `<div class="b-grid">
     ${bCard('c12 b-daynav', `<button type="button" class="b-ib" data-dstep="-1" aria-label="Föregående börsdag">‹</button><label class="sr-only" for="b-day">Välj dag</label><input type="date" id="b-day" min="${minDay}" max="${today}" value="${esc(st.day || today)}"><button type="button" class="b-ib" data-dstep="1" aria-label="Nästa dag">›</button><button type="button" class="btn small" data-dtoday>I dag</button><span class="small muted">Kurser var femte minut finns för de senaste 60 dagarna.</span>`)}
-    ${bCard('c8', `<div class="b-ch">${bLabel('Kursen under dagen')}<span class="small num" id="d-chg"></span></div><div id="d-chart">${loading('Hämtar dagens kurser …')}</div><p class="b-src">Streckad linje = föregående dags stängning. Källa: Yahoo Finance.</p>`)}
+    ${bCard('c8', `<div class="b-ch">${bLabel('Kursen under dagen')}<span class="small num" id="d-chg"></span></div><div id="d-chart">${loading('Hämtar dagens kurser …')}</div>`)}
     ${bCard('c4', `${bLabel('Dagen i siffror')}<div id="d-kv">${loading()}</div>`)}
     ${bCard('c12', `${bLabel('Nyheter den dagen')}<div id="d-news">${loading('Hämtar nyheter …')}</div>`)}
   </div>`;
@@ -3147,7 +3146,7 @@ function viewPortfolj() {
   ${P('oversikt', `<div class="b-grid">
     ${C('c8', `<div class="b-ch"><div class="b-chl"><h2 class="b-lbl">${EN ? 'Value over time' : 'Värde över tid'}</h2><span class="small" id="pf-tlchg"></span></div><div class="b-ctrl"><div class="b-segc" role="tablist" aria-label="Period" id="pf-range">${[['1m', '1M'], ['6m', '6M'], ['1y', '1Å'], ['all', 'Allt']].map(([k, t]) => `<button role="tab" type="button" data-pfrange="${k}" aria-selected="${k === 'all'}">${t}</button>`).join('')}</div><button type="button" class="b-tog ma200" data-pfidx aria-pressed="true">${EN ? 'Compare with OMXS30' : 'Jämför med OMXS30'}</button></div></div>
       <div id="pf-tl" class="chart p-tl">${loading('Räknar fram tidslinjen …')}</div>`)}
-    ${C('c4', `${H(EN ? 'In plain words' : 'I klartext')}${S(EN ? 'The most important about your portfolio right now' : 'Det viktigaste om din portfölj just nu')}<div id="pf-ins">${loading()}</div>`)}
+    ${C('c4', `${H(EN ? 'In plain words' : 'I klartext')}<div id="pf-ins">${loading()}</div>`)}
     ${C('c5', `${H(EN ? 'Return per period' : 'Avkastning per period', S(EN ? 'time-weighted, without deposits' : 'tidsviktad, utan insättningar'))}<div id="pf-perf">${loading()}</div>`)}
     ${C('c4', `${H(EN ? 'What made the profit' : 'Vad har gett vinsten', S(EN ? 'since purchase, SEK' : 'sedan köp, kr'))}<div id="pf-contr">${loading()}</div>`)}
     ${C('c3', `${H(EN ? 'Allocation' : 'Fördelning')}<div class="b-segc" role="tablist" aria-label="Fördelning" id="pf-aseg">${[['bransch', 'Bransch'], ['land', 'Land'], ['valuta', 'Valuta'], ['innehav', 'Innehav']].map(([k, t]) => `<button role="tab" type="button" data-pfalloc="${k}" aria-selected="${k === 'bransch'}">${t}</button>`).join('')}</div><div id="pf-alloc">${loading()}</div>`)}
@@ -3156,7 +3155,7 @@ function viewPortfolj() {
   ${P('dagen', ddPanelHTML())}
   ${P('innehav', `<div class="b-grid">
     ${C('c12', `${H(EN ? 'All holdings' : 'Alla innehav', `<span class="small muted" id="pf-count"></span>`)}<div id="pf-htable">${loading('Hämtar kurser …')}</div>`)}
-    ${C('c12', `${H(EN ? 'Your purchases per stock' : 'Dina köp per aktie')}${S(EN ? 'Tap a holding to see your purchases, add more or remove one.' : 'Tryck på ett innehav för att se dina köp, lägga till fler eller ta bort ett.')}<div id="pf-list">${loading('Hämtar kurser …')}</div>`)}
+    ${C('c12', `${H(EN ? 'Your purchases per stock' : 'Dina köp per aktie')}<div id="pf-list">${loading('Hämtar kurser …')}</div>`)}
   </div>`)}
   ${P('risk', `<div id="pf-risk">${loading('Räknar på risken …')}</div><div class="p-side" id="pf-side"></div>`)}
   ${P('nyheter', `<div class="b-grid">
@@ -3439,7 +3438,7 @@ function drawDayCurve(el, pts, past) {
     <line x1="0" x2="${W}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="rgba(255,255,255,.25)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>
     <path d="${line} L${X(t1).toFixed(1)} ${Y(0).toFixed(1)} L${X(t0).toFixed(1)} ${Y(0).toFixed(1)} Z" fill="${col}" opacity=".12"/>
     <path d="${line}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>
-    <div class="dd-axis small num"><span>${hm(t0)}</span><span>${past ? (EN ? 'Dashed line = start of the day (previous close)' : 'Streckad linje = början av dagen (föregående stängning)') : (EN ? 'Dashed line = start of the day (yesterday\'s close)' : 'Streckad linje = början av dagen (gårdagens stängning)')}</span><span>${hm(t1)}</span></div>`;
+    <div class="dd-axis small num"><span>${hm(t0)}</span><span></span><span>${hm(t1)}</span></div>`;
 }
 // Dagliga stängningskurser, en per dag (den senaste om en dag förekommer två gånger)
 const closesByDay = (pts) => { const m = new Map(); for (const [t, v] of pts || []) m.set(sthlmDay(t * 1000), v); return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])); };
@@ -3548,7 +3547,7 @@ function mountPortfolj() {
         <label class="field"><span>Belopp</span><input name="belopp" type="number" min="1" step="any" inputmode="decimal" placeholder="T.ex. 5 000" required></label>
         <label class="field"><span>Valuta</span><select class="select field-select" name="valuta">${PF_VALUTOR.map((v) => `<option value="${v}" ${v === 'SEK' ? 'selected' : ''}>${v === 'SEK' ? 'SEK, kronor' : v === 'USD' ? 'USD, dollar' : 'EUR, euro'}</option>`).join('')}</select></label>
         <label class="field"><span>Datum för köpet</span><input name="datum" type="date" max="${todayIso}" value="${todayIso}" required></label>
-        <label class="field"><span>Klockslag</span><input name="tid" type="time" value="12:00" required></label>
+        <label class="field"><span>Klockslag</span><input name="tid" type="text" inputmode="numeric" value="12:00" placeholder="12:00" pattern="([01][0-9]|2[0-3])[:.][0-5][0-9]" maxlength="5" autocomplete="off" title="Timmar och minuter, till exempel 09:30" required></label>
       </div>
       <div class="pf-preview" data-preview><span class="small muted">Fyll i belopp, datum och tid så hämtar vi kursen vid köpet.</span></div>
       <div class="chips"><button class="btn" type="submit" disabled>Lägg till köpet</button><button class="btn ghost" type="button" data-pfcancel>Avbryt</button></div>
@@ -3557,7 +3556,7 @@ function mountPortfolj() {
     const preview = async () => {
       const id = ++seq; calc = null; f.querySelector('[type=submit]').disabled = true;
       const belopp = Number(String(f.belopp.value).replace(',', '.'));
-      const when = new Date(`${f.datum.value}T${f.tid.value || '12:00'}:00`);
+      const when = new Date(`${f.datum.value}T${(f.tid.value || '12:00').replace('.', ':').padStart(5, '0')}:00`);
       const box = f.querySelector('[data-preview]');
       if (!(belopp > 0) || Number.isNaN(when.getTime())) { box.innerHTML = '<span class="small muted">Fyll i belopp, datum och tid så hämtar vi kursen vid köpet.</span>'; return; }
       if (when.getTime() > Date.now() + 60e3) { box.innerHTML = '<span class="small" style="color:var(--down)">Tiden ligger i framtiden.</span>'; return; }
@@ -4095,7 +4094,7 @@ function drawMoneyChart(box, V, I, o = {}) {
       <span class="chart-cross" hidden></span><span class="chart-dot" hidden style="background:${col}"></span>
       <div class="chart-tip" hidden></div>
     </div>
-    <div class="pf-tl-facts"><span class="small muted">Högst: <b class="num">${sekBig(peak[1])}</b> ${esc(fmtDag(peak[0]))}</span><span class="small muted">Lägst: <b class="num">${sekBig(low[1])}</b> ${esc(fmtDag(low[0]))}</span><span class="small faint">${esc(o.note || 'Streckad linje = pengar du satt in. Ytan = vad de var värda varje dag.')}</span></div>`;
+    <div class="pf-tl-facts"><span class="small muted">Högst: <b class="num">${sekBig(peak[1])}</b> ${esc(fmtDag(peak[0]))}</span><span class="small muted">Lägst: <b class="num">${sekBig(low[1])}</b> ${esc(fmtDag(low[0]))}</span><span class="small faint">${esc(o.note || '')}</span></div>`;
   const plot = box.querySelector('.chart-plot'); const tipEl = box.querySelector('.chart-tip'); const cross = box.querySelector('.chart-cross'); const dot = box.querySelector('.chart-dot');
   let frame = 0; let lastX = 0;
   const move = () => {
