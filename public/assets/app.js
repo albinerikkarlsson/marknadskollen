@@ -257,14 +257,12 @@ const NAV = [
 
 function sidebar(active) {
   const watchCount = getWatch().length;
-  const today = new Date().toLocaleDateString(L, { weekday: 'long', day: 'numeric', month: 'long' });
   return `
   <nav class="nav" aria-label="Huvudmeny">
     <a class="brand" href="/" data-link>
       <span class="brand-mark">${svg('logo', 20, '#FFFFFF')}</span>
-      <span class="brand-text"><span class="brand-name">Finanskollen</span><span class="brand-sub">Trygg börskoll</span></span>
+      <span class="brand-text"><span class="brand-name">Finanskollen</span></span>
     </a>
-    <div class="welcome"><b>${ACC.user ? `Välkommen tillbaka${firstName() ? `, ${esc(firstName())}` : ''}` : 'Välkommen'}</b><span>${esc(today)}</span></div>
     ${NAV.map((g) => `
       <div class="nav-group">
         <span class="nav-label">${g.group}</span>
@@ -282,7 +280,7 @@ function topbar(crumbs, withSearch = true) {
   const parts = crumbs.map((c, i) => (i === crumbs.length - 1 ? `<span class="here">${esc(c[0])}</span>` : `<a href="${c[1]}" data-link>${esc(c[0])}</a><span>/</span>`)).join('');
   return `
   <div class="topbar">
-    <div class="crumbs">${svg('home', 20)}${parts}</div>
+    <nav class="sr-only" aria-label="${EN ? 'You are here' : 'Du är här'}">${parts}</nav>
     ${langSwitch()}
     ${withSearch ? `
     <form class="searchbar" role="search" data-topsearch>
@@ -5150,7 +5148,7 @@ async function startI18n() {
 }
 function setLang(l) { try { localStorage.setItem('mk-lang', l); } catch { /* privat läge */ } location.reload(); }
 const langSwitch = () => `<div class="lang-switch" role="group" aria-label="${EN ? 'Language' : 'Språk'}" data-noi18n>
-  <button type="button" data-lang="sv" aria-pressed="${!EN}" title="Svenska">${flag('SE')}<span>SV</span></button><button type="button" data-lang="en" aria-pressed="${EN}" title="English">${flag('GB')}<span>EN</span></button></div>`;
+  <button type="button" data-lang="sv" aria-pressed="${!EN}" title="Svenska"><span>SV</span></button><button type="button" data-lang="en" aria-pressed="${EN}" title="English"><span>EN</span></button></div>`;
 document.addEventListener('click', (e) => { const b = e.target.closest('[data-lang]'); if (b && b.dataset.lang !== LANG) setLang(b.dataset.lang); });
 
 window.addEventListener('popstate', render);

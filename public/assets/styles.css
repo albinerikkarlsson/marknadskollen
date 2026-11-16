@@ -1603,3 +1603,29 @@ a.p-wf:hover { background: var(--surface); }
 @media (max-width: 900px) { .sidebar { padding: 0; } .nav { border: 0; border-bottom: 1px solid var(--line-soft); border-radius: 0; padding: 8px 12px; background: #12151A; } .nav-link { border-radius: 4px; } .nav-link[aria-current="page"] { background: #1A2A40; } }
 .guest-bar { border-color: transparent; }
 @media (max-width: 560px) { .guest-bar > .chips { flex: 1 1 100% !important; flex-wrap: wrap; } .guest-bar .btn { flex: 1 1 auto; } }
+/* Neutral meny och topplist utan sökväg */
+.topbar { justify-content: flex-end; gap: 12px; }
+.topbar .lang-switch { margin-left: auto; }
+.lang-switch { background: transparent; border: 0; padding: 0; gap: 0; }
+.lang-switch button { padding: 6px 8px; font-size: 13px; font-weight: 500; letter-spacing: .02em; }
+.lang-switch button + button { border-left: 1px solid var(--line); border-radius: 0; }
+.lang-switch button[aria-pressed="true"] { background: none; color: var(--ink); }
+.lang-switch button:not([aria-pressed="true"]):hover { background: none; }
+.searchbar { min-height: 40px; padding: 0 4px 0 14px; }
+.searchbar input { padding: 9px 0; font-size: 14px; }
+.searchbar .btn.small { min-height: 32px; padding: 5px 14px; font-size: 13px; background: var(--surface); color: var(--ink); border-color: var(--surface); }
+@media (min-width: 901px) {
+  .nav { background: var(--bg); gap: 22px; }
+  .brand { gap: 10px; }
+  .brand-mark { width: 28px; height: 28px; border-radius: 4px; background: var(--surface); }
+  .brand-name { font-size: 15px; font-weight: 600; }
+  .nav-label { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--faint); }
+  .nav-link { color: var(--ink-2); font-size: 14px; min-height: 36px; }
+  .nav-link svg { opacity: .75; }
+  .nav-link:hover { background: var(--card); color: var(--ink); }
+  .nav-link[aria-current="page"] { background: var(--surface); color: var(--ink); box-shadow: none; font-weight: 500; }
+  .nav-link[aria-current="page"] svg { opacity: 1; }
+  .nav-link[aria-current="page"] .nav-badge { background: var(--ink); color: var(--on-ink); }
+  .nav-foot { font-size: 11.5px; color: var(--faint); }
+}
+@media (max-width: 900px) { .nav { background: var(--bg); } .nav-link[aria-current="page"] { background: var(--surface); color: var(--ink); } .brand-mark { background: var(--surface); border-radius: 4px; } .topbar .lang-switch { margin-left: auto; } }
