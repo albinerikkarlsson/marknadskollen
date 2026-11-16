@@ -315,9 +315,14 @@ const TOPICS = [
 const topicOf = (n) => { const t = `${n.rubrik || ''} ${n.text || ''}`; for (const [k, re, w] of TOPICS) if (re.test(t)) return { amne: k, vikt: w }; return { amne: null, vikt: 0 }; };
 const prepNews = (n, region, sym) => ({ ...n, ...topicOf(n), tidTxt: when(n.datum), bolagTxt: (n.bolag || []).join(', '), land: newsLand(n, region, sym) });
 
+// Nyheter visas på det språk de skrevs. Är det ett annat språk än sidans märks rubriken med språket.
+const SV_W = /\b(och|att|för|med|på|är|som|av|till|det|inte|från|efter|vd|vinst|ökar|minskar|köper|säljer|aktien|börsen|bolaget|miljoner|kronor)\b/gi;
+const EN_W = /\b(the|and|of|to|for|with|on|is|are|from|after|shares|stock|profit|says|its|will|has|new|than)\b/gi;
+const newsLangOf = (t) => { const s = String(t || ''); const sv = (s.match(SV_W) || []).length + (/[åäö]/i.test(s) ? 2 : 0); const en = (s.match(EN_W) || []).length; return sv > en ? 'sv' : en > sv ? 'en' : null; };
+const langTag = (n) => { const l = newsLangOf(`${n.rubrik || ''} ${n.text || ''}`); return l && l !== LANG ? ` <span class="news-lang" data-noi18n title="${EN ? 'The news is in Swedish' : 'Nyheten är på engelska'}">${EN ? 'SV' : 'EN'}</span>` : ''; };
 function newsTitle(n) {
   const u = safeUrl(n.lank);
-  return u ? `<a class="news-title" href="${esc(u)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${esc(n.rubrik)} <span class="sr-only">${EN ? '(opens in a new tab)' : '(öppnas i ny flik)'}</span></a>` : `<span class="news-title">${esc(n.rubrik)}</span>`;
+  return u ? `<a class="news-title" href="${esc(u)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${esc(n.rubrik)} <span class="sr-only">${EN ? '(opens in a new tab)' : '(öppnas i ny flik)'}</span></a>${langTag(n)}` : `<span class="news-title">${esc(n.rubrik)}</span>${langTag(n)}`;
 }
 const sourceLink = (n) => { const u = safeUrl(n.lank); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" style="margin-left:auto;display:inline-flex;gap:6px;align-items:center">Läs hos källan ${svg('ext', 15)}</a>` : ''; };
 
@@ -406,31 +411,51 @@ function blankOverviewHTML(d) {
 
 /* ================= Översikt ================= */
 // Startsidan för besökare utan konto: vad Finanskollen är, och en väg in
+// Startsidan för den som inte har någon portfölj än: sök, några exempelbolag och vad som gör Finanskollen annorlunda
+const START_EX = ['VOLV-B.ST', 'INVE-B.ST', 'SAAB-B.ST', 'ERIC-B.ST', 'NVDA', 'AAPL'];
 const visitorHero = () => `
-  <section class="card visitor-hero" aria-labelledby="vh-h">
-    <div class="stack" style="gap:14px;max-width:640px">
-      <span class="pill outline" style="align-self:flex-start">Gratis · Ingen reklam · Inga köptips</span>
-      <h2 id="vh-h" class="vh-title">Se exakt vad som hände med dina aktier i dag</h2>
-      <div class="chips"><a class="btn" href="/portfolj" data-link>Testa med dina aktier</a><button type="button" class="btn ghost" data-demo-load="/">Se ett exempel</button></div>
-      <span class="small muted" style="margin-top:-4px">Inget konto behövs för att testa.</span>
-      <p class="muted" style="margin:0;font-size:16.5px">Finanskollen visar risken i över 3 000 svenska och amerikanska aktier på enkel svenska. Se vad ledningen själv köper och säljer, hur många som satsar på att kursen ska falla och vad nyheterna säger.</p>
-      <p class="small" style="margin:0"><a href="/konto?ny=1" data-link>Skapa gratis konto</a> så sparas portföljen och du kan få larm.</p>
+  <section class="card visitor-hero start-hero" aria-labelledby="vh-h">
+    <div class="stack" style="gap:14px;min-width:0">
+      <span class="pill outline" style="align-self:flex-start">${EN ? 'Free · No ads · No buy tips' : 'Gratis · Ingen reklam · Inga köptips'}</span>
+      <h2 id="vh-h" class="vh-title">${EN ? 'See the risk in a stock before you buy' : 'Se risken i en aktie innan du köper'}</h2>
+      <p class="muted" style="margin:0;font-size:16px;max-width:620px">${EN ? 'Every stock gets a risk check from 1 to 10, calculated with fixed rules you can read. Next to it you see what the management buys and sells and how many are betting on a fall. Free and without buy tips.' : 'Varje aktie får en riskkoll från 1 till 10, räknad med fasta regler som du kan läsa. Bredvid ser du vad ledningen köper och säljer och hur många som satsar på att kursen ska falla. Gratis och utan köptips.'}</p>
+      <form class="searchbar sh-search" role="search" data-topsearch>
+        ${svg('search', 18, '#6B6F76')}
+        <label class="sr-only" for="shq">${EN ? 'Search company or ticker' : 'Sök bolag eller ticker'}</label>
+        <input id="shq" name="q" type="search" placeholder="${EN ? 'Search a company, e.g. Volvo or Apple' : 'Sök ett bolag, t.ex. Volvo eller Apple'}" autocomplete="off" data-noi18n>
+        <button class="btn small" type="submit">${EN ? 'Search' : 'Sök'}</button>
+      </form>
+      <div class="sh-ex" id="sh-ex" aria-label="${EN ? 'Examples' : 'Exempel'}">${START_EX.map((x) => `<a class="sh-tile" href="/bolag/${encodeURIComponent(x)}" data-link data-shx="${esc(x)}"><span class="sh-n">${av(x)}<b>${esc(ovName(x))}</b></span><span class="sh-v"><span class="faint small">…</span></span></a>`).join('')}</div>
+      <div class="chips small sh-go">
+        <a class="btn ghost small" href="/portfolj?flik=kop" data-link>${EN ? 'Import from Avanza or Nordnet' : 'Importera från Avanza eller Nordnet'}</a>
+        ${locked() ? `<button type="button" class="btn ghost small" data-demo-load="/">${EN ? 'See an example portfolio' : 'Se en exempelportfölj'}</button><a class="btn ghost small" href="/konto?ny=1" data-link>${EN ? 'Create free account' : 'Skapa gratis konto'}</a>` : ''}
+      </div>
     </div>
     <ul class="vh-points">
-      <li>${svg('check', 16)}<span><b>Din dag</b>: vilka aktier som drog upp eller ner portföljen, och hur mycket valutan påverkade</span></li>
-      <li>${svg('check', 16)}<span><b>Riskkoll för varje aktie</b> från 1 till 10, del för del</span></li>
-      <li>${svg('check', 16)}<span><b>Din portfölj</b> med tidslinje, utdelningar och rapportdagar</span></li>
-      <li>${svg('check', 16)}<span><b>Larm</b> när kursen rör sig, ledningen handlar eller blankningen ökar</span></li>
-      <li>${svg('check', 16)}<span><b>Import</b> av dina affärer från Avanza och Nordnet</span></li>
+      <li>${svg('check', 16)}<span><b>${EN ? 'Risk check for every stock' : 'Riskkoll för varje aktie'}</b> ${EN ? 'from 1 to 10, part by part, with open rules' : 'från 1 till 10, del för del, med öppna regler'}</span></li>
+      <li>${svg('check', 16)}<span><b>${EN ? 'Insider trading and short selling' : 'Insynshandel och blankning'}</b> ${EN ? 'from Finansinspektionen on every Swedish stock' : 'från Finansinspektionen på varje svensk aktie'}</span></li>
+      <li>${svg('check', 16)}<span><b>${EN ? 'Your portfolio' : 'Din portfölj'}</b> ${EN ? 'with your day, dividends and report dates' : 'med din dag, utdelningar och rapportdagar'}</span></li>
+      <li>${svg('check', 16)}<span><b>${EN ? 'Alerts' : 'Larm'}</b> ${EN ? 'when the price moves, the management trades or short selling increases' : 'när kursen rör sig, ledningen handlar eller blankningen ökar'}</span></li>
+      <li>${svg('check', 16)}<span><b>${EN ? 'Import' : 'Import'}</b> ${EN ? 'of your trades from Avanza and Nordnet, read only in your browser' : 'av dina affärer från Avanza och Nordnet, läses bara i din webbläsare'}</span></li>
     </ul>
   </section>`;
+// Fyll exempelbolagen med kurs och riskkoll
+async function fillStartEx(quotes) {
+  const box = $('#sh-ex'); if (!box) return;
+  const st = await Promise.all(START_EX.map((x) => getStock(x).catch(() => null)));
+  START_EX.forEach((x, i) => {
+    const el = box.querySelector(`[data-shx="${CSS.escape(x)}"] .sh-v`); if (!el) return;
+    const q = quotes?.[x]; const s = st[i] && !st[i].error ? st[i] : null; const l = s?.poang != null ? lvlOf(s.poang) : null;
+    el.innerHTML = `${l ? `<span class="pill ${LV[l].c}" title="${EN ? 'Risk check' : 'Riskkoll'}">${s.poang} / 10</span>` : `<span class="faint small">${EN ? 'Risk missing' : 'Riskkoll saknas'}</span>`}<span class="num small ${tone(q?.d1)}">${q?.d1 != null ? esc(pct(q.d1)) : ''}</span>`;
+  });
+}
 
-const minOversikt = () => (!!ACC.user && !locked()) || (locked() && getPort().length > 0);
+const minOversikt = () => getPort().length > 0;
 function viewOversikt() {
   if (minOversikt()) return viewOversiktMin();
   return `
   ${topbar([['Översikt', '/']])}
-  ${locked() ? visitorHero() : ''}
+  ${visitorHero()}
   <div class="ticker num" aria-label="Marknaden" id="ticker">
     ${MARKET.map((m) => `<span><span class="muted">${esc(m.namn)}</span><span data-q="${m.sym}">…</span></span>`).join('')}
   </div>
@@ -529,7 +554,8 @@ async function mountOversikt() {
 
   // Marknaden och mina aktier i ett anrop
   const watch = getWatch().slice(0, 12);
-  const quotes = await getQuotes([...new Set([...MARKET.map((m) => m.sym), ...watch, ...(ACC.user ? mySyms().all.slice(0, 30) : [])])]);
+  const quotes = await getQuotes([...new Set([...MARKET.map((m) => m.sym), ...watch, ...START_EX, ...(ACC.user ? mySyms().all.slice(0, 30) : [])])]);
+  fillStartEx(quotes);
   if (ACC.user) drawKoll(quotes);
   if (!$('#ticker')) return;
   for (const m of MARKET) {
@@ -1485,7 +1511,7 @@ function bPriceChart(box, pts, { per = '1y', ma50 = true, ma200 = true, from = n
 /* ---------- Små diagram ---------- */
 const bGauge = (p) => {
   const arc = (a0, a1, r) => { const pt = (a) => `${(80 + r * Math.cos(a)).toFixed(2)} ${(80 + r * Math.sin(a)).toFixed(2)}`; return `M${pt(a0)} A${r} ${r} 0 0 1 ${pt(a1)}`; };
-  return `<svg viewBox="0 0 160 92" class="b-gauge" role="img" aria-label="Riskkoll ${p ?? 'saknas'} av 10">${Array.from({ length: 10 }, (_, i) => { const a0 = Math.PI + i * Math.PI / 10 + 0.025; const a1 = Math.PI + (i + 1) * Math.PI / 10 - 0.025; const c = i < 3 ? 'var(--up)' : i < 6 ? 'var(--warn)' : 'var(--down)'; return `<path d="${arc(a0, a1, 62)}" stroke="${p != null && i < p ? c : 'var(--line)'}" stroke-width="12" fill="none"/>`; }).join('')}<text x="80" y="78" text-anchor="middle" font-size="32" font-weight="500" fill="var(--ink)">${p ?? '–'}</text><text x="80" y="91" text-anchor="middle" font-size="9.5" fill="var(--muted)">${EN ? 'of 10' : 'av 10'}</text></svg>`;
+  return `<svg viewBox="0 0 160 92" class="b-gauge" role="img" aria-label="${p != null ? (EN ? `Risk check ${p} of 10` : `Riskkoll ${p} av 10`) : (EN ? 'Risk check missing' : 'Riskkoll saknas')}">${Array.from({ length: 10 }, (_, i) => { const a0 = Math.PI + i * Math.PI / 10 + 0.025; const a1 = Math.PI + (i + 1) * Math.PI / 10 - 0.025; const c = i < 3 ? 'var(--up)' : i < 6 ? 'var(--warn)' : 'var(--down)'; return `<path d="${arc(a0, a1, 62)}" stroke="${p != null && i < p ? c : 'var(--line)'}" stroke-width="12" fill="none"/>`; }).join('')}<text x="80" y="78" text-anchor="middle" font-size="32" font-weight="500" fill="var(--ink)">${p ?? '–'}</text><text x="80" y="91" text-anchor="middle" font-size="9.5" fill="var(--muted)">${EN ? 'of 10' : 'av 10'}</text></svg>`;
 };
 const bSeg = (l) => `<span class="b-seg" aria-hidden="true">${[1, 2, 3].map((i) => `<i style="background:${i <= l ? `var(--${LV[l].c})` : 'var(--line)'}"></i>`).join('')}</span>`;
 const bLevel = (l) => `<span class="pill ${LV[l].c}">${LV[l].t}</span>`;
@@ -1552,7 +1578,14 @@ function bHead(s, tabs, active) {
   const hi = s.fakta?.find((x) => x[0] === '52 veckor')?.[1];
   const rng = (() => { const m = /^([\d\s.,]+)–([\d\s.,]+)$/.exec(hi || ''); if (!m) return null; const p = (x) => Number(x.replace(/\s/g, '').replace(',', '.')); const lo = p(m[1]); const h = p(m[2]); if (!(h > lo) || s.kurs == null) return null; return { lo, h, f: Math.min(100, Math.max(0, ((s.kurs - lo) / (h - lo)) * 100)) }; })();
   const nt = Object.fromEntries((s.nyckeltal || []).map(([k, v]) => [k, v]));
-  const stats = [
+  const eq = !s.typ || s.typ === 'Aktie'; const pf = (k) => { const v = s.perf?.find((x) => x[0] === k)?.[1]; return v == null ? null : pct(v); };
+  const stats = !eq ? [
+    ['Typ', s.typ, null],
+    [EN ? 'This year' : 'I år', pf('I år'), null],
+    [EN ? '1 year' : '1 år', pf('1 år'), null],
+    ['Riskkoll', s.poang != null ? `${s.poang} / 10` : null, 'Riskkoll'],
+    ['Beta', s.beta != null ? bn(s.beta, 2) : null, 'Beta']
+  ] : [
     ['Börsvärde', s.fakta?.find((x) => x[0] === 'Börsvärde')?.[1] ?? null, 'Börsvärde'],
     ['P/E', nt['P/E'] ?? null, 'P/E'],
     ['Direktavkastning', nt.Direktavkastning ?? null, 'Direktavkastning'],
@@ -1563,16 +1596,16 @@ function bHead(s, tabs, active) {
   <section class="b-card b-top">
     <div class="b-top-row">
       <div class="b-id">
-        <span class="b-av">${esc(s.kort)}${symFlag(s.sym, 'on-avatar')}</span>
+        <span class="b-av">${esc(/^0P/.test(s.kort || '') ? String(s.namn).split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() : s.kort)}${symFlag(s.sym, 'on-avatar')}</span>
         <div style="min-width:0">
           <h1 class="b-name">${esc(s.namn)}</h1>
-          <div class="b-chips"><span>${esc(s.sym)}</span>${s.lista ? `<span>${esc(s.lista)}</span>` : ''}${s.aktieslag ? `<span>${esc(s.aktieslag)}${tip('Aktieslag')}</span>` : ''}</div>
+          <div class="b-chips"><span>${esc(s.sym)}</span>${!eq ? `<span>${esc(s.typ)}</span>` : ''}${s.lista && s.typ !== 'Fond' ? `<span>${esc(s.lista)}</span>` : ''}${s.aktieslag ? `<span>${esc(s.aktieslag)}${tip('Aktieslag')}</span>` : ''}</div>
         </div>
       </div>
       <div class="b-px">
         <div class="b-px-main"><span class="num b-px-v">${s.kurs != null ? kr(s.kurs) : '–'}</span><span class="muted">${esc(cur(s.valuta))}</span></div>
         ${s.d1 != null ? `<span class="num b-px-d ${tone(s.d1)}">${esc(pct(s.d1))} ${EN ? 'today' : 'i dag'}</span>` : '<span class="faint small">Dagens förändring saknas</span>'}
-        <span class="b-px-t"><i class="b-live" aria-hidden="true"></i>${esc(EN ? 'Latest price' : 'Senaste kurs')} ${esc(when(s.kursTid || s.hamtad))}${s.sym.endsWith('.ST') ? (EN ? ' · delayed 15 min' : ' · fördröjd 15 min') : ''}</span>
+        <span class="b-px-t"><i class="b-live" aria-hidden="true"></i>${esc(EN ? 'Latest price' : 'Senaste kurs')} ${esc(when(s.kursTid || s.hamtad))}${s.typ === 'Fond' ? (EN ? ' · fund price once a day' : ' · fondkurs en gång per dag') : s.sym.endsWith('.ST') ? (EN ? ' · delayed 15 min' : ' · fördröjd 15 min') : ''}</span>
       </div>
       <div class="b-acts">
         <button class="btn small ${watched ? 'ghost' : ''}" type="button" data-watch="${esc(s.sym)}" data-namn="${esc(s.namn)}" aria-pressed="${watched}">${watched ? 'Bevakas ✓' : 'Bevaka'}</button>
@@ -1581,7 +1614,7 @@ function bHead(s, tabs, active) {
       </div>
     </div>
     <div class="b-stats">
-      ${stats.map(([k, v, t]) => `<div><span class="b-stat-k">${esc(k)}${tip(t)}</span><b class="num">${bMiss(v)}</b></div>`).join('')}
+      ${stats.map(([k, v, t]) => `<div><span class="b-stat-k">${esc(k)}${t ? tip(t) : ''}</span><b class="num">${bMiss(v)}</b></div>`).join('')}
       <div class="b-52"><span class="b-stat-k">52 veckor${tip('52 veckor')}</span>${rng ? `<span class="b-52-bar"><i style="width:${rng.f.toFixed(0)}%"></i><b style="left:${rng.f.toFixed(0)}%"></b></span><span class="b-52-l num"><span>${kr(rng.lo)}</span><span>${kr(rng.h)}</span></span>` : `<b>${bMiss(null)}</b>`}</div>
     </div>
     <div class="b-tabs" role="tablist" aria-label="Delar av bolagssidan">
@@ -1610,13 +1643,13 @@ async function mountBolag(sym) {
     }
     return;
   }
-  { const nm = String(s.namn).replace(/\s*\(publ\.?\)/i, '').trim(); const tk = String(s.sym || sym).replace(/\.[A-Z]{1,3}$/, ''); document.title = EN ? `${nm} (${tk}) stock: risk, reports, insider trading · Finanskollen` : `${nm} (${tk}) aktie: risk, rapporter och insynshandel · Finanskollen`; }
+  { const nm = String(s.namn).replace(/\s*\(publ\.?\)/i, '').trim(); const tk = String(s.sym || sym).replace(/\.[A-Z]{1,3}$/, ''); const sort = !s.typ || s.typ === 'Aktie' ? null : s.typ; document.title = sort ? (EN ? `${nm} (${tk}) ${sort === 'Fond' ? 'fund' : sort}: risk and performance · Finanskollen` : `${nm} (${tk}) ${sort === 'Fond' ? 'fond' : sort}: risk och utveckling · Finanskollen`) : EN ? `${nm} (${tk}) stock: risk, reports, insider trading · Finanskollen` : `${nm} (${tk}) aktie: risk, rapporter och insynshandel · Finanskollen`; }
   setMeta({}, EN ? `${s.namn}: risk check ${s.poang != null ? s.poang + ' of 10' : ''}, price chart, reports, insider trading and news. Free, without buy tips.` : `${s.namn}: riskkoll ${s.poang != null ? s.poang + ' av 10' : ''}, kursdiagram, rapporter, insynshandel och nyheter. Gratis och utan köptips.`);
   const crumb = $('.crumbs .here'); if (crumb) crumb.textContent = s.namn;
 
   const se = isSwedish(s.sym);
   const isEq = !s.typ || s.typ === 'Aktie';
-  const tabs = B_TABS.filter(([k]) => (k !== 'insyn' || se) && (isEq || !['rapporter', 'kalender'].includes(k)));
+  const tabs = B_TABS.filter(([k]) => (k !== 'insyn' || (se && isEq)) && (isEq || !['rapporter', 'kalender'].includes(k))).map(([k, t]) => [k, k === 'om' && !isEq ? (s.typ === 'Index' ? 'Om indexet' : 'Om fonden') : t]);
   const params = new URLSearchParams(location.search);
   let active = tabs.some((t) => t[0] === params.get('flik')) ? params.get('flik') : 'oversikt';
   el.innerHTML = bHead(s, tabs, active);
@@ -1698,17 +1731,19 @@ const bLink = (k, t) => `<button type="button" class="b-more" data-bgo="${k}">${
 
 /* ---------- Översikt ---------- */
 function bOversikt(panel, ctx) {
-  const { s, se, st, get } = ctx;
+  const { s, se, st, get, isEq } = ctx; const seq = se && isEq;
+  const pf = (k) => s.perf?.find((x) => x[0] === k)?.[1] ?? null;
   panel.innerHTML = `<div class="b-grid">
-    ${bCard('c7', `<div class="b-ch"><div class="b-chl">${bLabel('Aktiekurs')}<span class="small num" id="ov-chg"></span></div>${bChartControls(st)}</div><div id="ov-chart">${loading('Hämtar kurser …')}</div><div class="b-foot">${bLink('kurs', 'Större diagram och egna datum')}</div>`)}
+    ${bCard('c7', `<div class="b-ch"><div class="b-chl">${bLabel(isEq ? 'Aktiekurs' : (EN ? 'Price' : 'Kurs'))}<span class="small num" id="ov-chg"></span></div>${bChartControls(st)}</div><div id="ov-chart">${loading('Hämtar kurser …')}</div><div class="b-foot">${bLink('kurs', 'Större diagram och egna datum')}</div>`)}
     ${bCard('c3', bRiskMini(s))}
     <div class="c2 b-quick">
       <button type="button" class="b-card b-q" data-bgo="dagen"><span class="b-lbl">Dagen</span><b class="num" id="q-day">–</b><span id="q-spark" class="b-q-sp"></span><span class="b-q-s" id="q-day-s">Hämtar …</span></button>
-      <button type="button" class="b-card b-q" data-bgo="kalender"><span class="b-lbl">Nästa rapport</span><b id="q-kal">–</b><span class="b-q-s" id="q-kal-s">Hämtar …</span></button>
-      <button type="button" class="b-card b-q" data-bgo="risk"><span class="b-lbl">${se ? 'Blankning' : 'Fall från toppen'}</span><b class="num" id="q-3">–</b><span class="b-q-s" id="q-3-s">Hämtar …</span></button>
+      ${isEq ? `<button type="button" class="b-card b-q" data-bgo="kalender"><span class="b-lbl">Nästa rapport</span><b id="q-kal">–</b><span class="b-q-s" id="q-kal-s">Hämtar …</span></button>` : `<button type="button" class="b-card b-q" data-bgo="kurs"><span class="b-lbl">${EN ? '1 year' : '1 år'}</span><b class="num ${tone(pf('1 år'))}">${pf('1 år') != null ? esc(pct(pf('1 år'))) : '–'}</b><span class="b-q-s">${pf('I år') != null ? `${EN ? 'This year' : 'I år'} ${esc(pct(pf('I år')))} →` : (EN ? 'See the chart →' : 'Se diagrammet →')}</span></button>`}
+      <button type="button" class="b-card b-q" data-bgo="risk"><span class="b-lbl">${seq ? 'Blankning' : 'Fall från toppen'}</span><b class="num" id="q-3">–</b><span class="b-q-s" id="q-3-s">Hämtar …</span></button>
     </div>
-    ${bCard('c7', `<div class="b-ch">${bLabel('Rapporter, per år')}${bLink('rapporter', 'Alla rapporter och nyckeltal')}</div><div id="ov-rep">${loading('Hämtar rapportsiffror …')}</div>`)}
-    ${bCard('c5', se ? `<div class="b-ch">${bLabel('Insyn och blankning', 'Insynshandel')}${bLink('insyn', 'Alla affärer')}</div><div id="ov-insyn">${loading('Hämtar insynsaffärer …')}</div>` : `<div class="b-ch">${bLabel('Nyckeltal')}${bLink('rapporter', 'Alla nyckeltal')}</div>${bKeyMini(s)}`)}
+    ${isEq ? bCard('c7', `<div class="b-ch">${bLabel('Rapporter, per år')}${bLink('rapporter', 'Alla rapporter och nyckeltal')}</div><div id="ov-rep">${loading('Hämtar rapportsiffror …')}</div>`) : bCard('c7', `<div class="b-ch">${bLabel(EN ? 'Performance' : 'Utveckling')}<span class="small faint">${EN ? 'price change per period' : 'kursens förändring per period'}</span></div>${s.perf?.length ? `<div class="b-mini4 b-perf">${s.perf.map(([k, v]) => `<div><span class="b-mini-k">${esc(k)}</span><b class="num ${tone(v)}">${v == null ? '–' : esc(pct(v))}</b></div>`).join('')}</div><p class="b-src">${EN ? 'Historical performance says nothing certain about the future. Fees are not included in the price change shown here.' : 'Historisk utveckling säger inget om framtiden. Här visas kursens förändring.'}</p>` : `<p class="b-note">${EN ? 'Performance is missing in the data source.' : 'Utvecklingen saknas i datakällan.'}</p>`}`)}
+    ${bCard('c5', seq ? `<div class="b-ch">${bLabel('Insyn och blankning', 'Insynshandel')}${bLink('insyn', 'Alla affärer')}</div><div id="ov-insyn">${loading('Hämtar insynsaffärer …')}</div>` : isEq ? `<div class="b-ch">${bLabel('Nyckeltal')}${bLink('rapporter', 'Alla nyckeltal')}</div>${bKeyMini(s)}` : `<div class="b-ch">${bLabel(s.typ === 'Index' ? (EN ? 'About the index' : 'Om indexet') : (EN ? 'About the fund' : 'Om fonden'))}${bLink('om', EN ? 'More' : 'Mer')}</div>${s.beskrivning ? `<p class="small co-desc" style="margin:0;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden">${esc(s.beskrivning)}</p>` : `<p class="b-note">${EN ? 'The data source has no description.' : 'Datakällan har ingen beskrivning.'}</p>`}${(s.fakta || []).filter(([k]) => k !== 'Börs' || s.typ !== 'Fond').map(([k, v]) => `<div class="b-kv"><span>${esc(k)}</span><b class="num">${esc(v)}</b></div>`).join('')}`)}
+    <aside class="b-card c12 b-scam"><span class="b-scam-i" aria-hidden="true">!</span><span class="b-scam-t"><b>${EN ? 'Is this a scam?' : 'Är det här bluff?'}</b> ${EN ? `Has someone contacted you about ${isEq ? 'this stock' : 'this'} with promises of quick profit? No serious company promises quick profit without risk. Check` : `Har någon kontaktat dig om ${isEq ? 'den här aktien' : 'det här'} med löften om snabb vinst? Ingen seriös aktör lovar snabb vinst utan risk. Kolla`} <a href="https://www.fi.se/sv/vara-register/varningslistan/" target="_blank" rel="noopener noreferrer">${EN ? 'Finansinspektionen\'s warning list' : 'Finansinspektionens varningslista'}</a> ${EN ? 'before you do anything.' : 'innan du gör något.'}</span></aside>
   </div>`;
   const draw = async () => {
     const d = await get.px(); const box = $('#ov-chart'); if (!box) return;
@@ -1727,24 +1762,24 @@ function bOversikt(panel, ctx) {
     $('#q-spark').innerHTML = bSpark(pts, prev, s.d1 >= 0 ? 'var(--up)' : 'var(--down)');
     $('#q-day-s').textContent = lastP != null ? `${kr(lastP)} ${cur(s.valuta)} · ${EN ? 'see the day' : 'se dagen'} →` : (EN ? 'See the day →' : 'Se dagen →');
   });
-  get.kal().then((k) => {
+  if (isEq) get.kal().then((k) => {
     const v = $('#q-kal'); if (!v) return; const today = isoDay(Date.now());
     if (!k || k.error || !k.rapport) { v.textContent = '–'; $('#q-kal-s').textContent = k?.error && k.error !== 'ingen' ? 'Kunde inte hämtas just nu' : 'Datum inte känt än'; return; }
     v.textContent = bDate(k.rapport); $('#q-kal-s').textContent = k.rapport >= today ? `${k.rapportUppskattad ? 'Preliminärt · ' : ''}${EN ? 'in' : 'om'} ${Math.round((new Date(k.rapport + 'T12:00:00') - Date.now()) / 864e5)} ${EN ? 'days' : 'dagar'} →` : (EN ? 'Latest report →' : 'Senaste rapporten →');
   });
-  if (se) get.blank().then((d) => {
+  if (seq) get.blank().then((d) => {
     const v = $('#q-3'); if (!v) return;
     if (!d || d.error) { v.textContent = '–'; $('#q-3-s').textContent = 'FI svarar inte just nu'; return; }
     if (!d.bolag) { v.textContent = '0 %'; $('#q-3-s').textContent = 'Ingen anmäld position'; return; }
     v.textContent = pc(d.bolag.summa); $('#q-3-s').textContent = `${d.bolag.positioner.length} ${EN ? 'investors' : 'investerare'} →`;
   });
   else get.stats().then((x) => { const v = $('#q-3'); if (!v) return; if (x.nowDd == null) { v.textContent = '–'; $('#q-3-s').textContent = 'Saknas'; return; } v.textContent = bSign(x.nowDd); v.className = 'num ' + (x.nowDd < -0.05 ? 'down' : ''); $('#q-3-s').textContent = 'under högsta kursen på 5 år →'; });
-  get.rep().then((rep) => {
+  if (isEq) get.rep().then((rep) => {
     const box = $('#ov-rep'); if (!box) return;
     if (!rep || rep.error || !rep.ar?.length) { box.innerHTML = bErr(rep, 'Datakällan har inga rapportsiffror för bolaget.'); return; }
     box.innerHTML = `<div class="b-mini4">${['oms', 'marg', 'eps', 'fcf'].map((m) => { const ser = bAnnualSeries(rep, m); const last = ser[ser.length - 1]; return `<div><span class="b-mini-k">${esc(B_MET[m].n)}${tip(B_MET[m].k)}</span><b class="num">${bMiss(last.v == null ? null : last.txt)}</b><span class="b-mini-s">${esc(last.l)}</span>${bBars(ser, { h: 56 })}</div>`; }).join('')}</div><p class="b-src">${esc(rep.valuta ? `Belopp i ${cur(rep.valuta)}. ` : '')}Källa: ${esc(rep.kalla || 'Yahoo Finance')}.</p>`;
   });
-  if (se) Promise.all([get.insyn(), get.blank()]).then(([d, b]) => {
+  if (seq) Promise.all([get.insyn(), get.blank()]).then(([d, b]) => {
     const box = $('#ov-insyn'); if (!box) return;
     let h = '';
     if (!d || d.error) h += `<p class="b-note">${FI_DOWN}</p>`;
@@ -1774,7 +1809,7 @@ function bKurs(panel, ctx) {
   const { s, st, get } = ctx;
   const max = Math.max(...(s.perf || []).map((p) => Math.abs(p[1])), 1);
   panel.innerHTML = `<div class="b-grid">
-    ${bCard('c12', `<div class="b-ch"><div class="b-chl">${bLabel('Aktiekurs')}<span class="small num" id="k-chg"></span></div>${bChartControls(st, { dates: true })}</div><div id="k-chart">${loading('Hämtar kurser …')}</div><p class="b-src" id="k-src"></p>`)}
+    ${bCard('c12', `<div class="b-ch"><div class="b-chl">${bLabel(ctx.isEq ? 'Aktiekurs' : (EN ? 'Price' : 'Kurs'))}<span class="small num" id="k-chg"></span></div>${bChartControls(st, { dates: true })}</div><div id="k-chart">${loading('Hämtar kurser …')}</div><p class="b-src" id="k-src"></p>`)}
     ${bCard('c4', `${bLabel('Utveckling')}<div class="stack" style="gap:10px;margin-top:6px">${(s.perf || []).map(([label, v]) => { const w = (Math.abs(v) / max) * 50; return `<div class="perf-row"><span class="muted">${esc(label)}</span><div class="perf-track" role="img" aria-label="${esc(label)} ${pct(v)}"><span class="zero"></span><span class="perf-bar ${v < 0 ? 'neg' : ''}" style="${v < 0 ? `right:50%;width:${w}%` : `left:50%;width:${w}%`}"></span></div><span class="num ${tone(v)}" style="text-align:right">${pct(v)}</span></div>`; }).join('') || '<p class="b-note">Datakällan har ingen kursutveckling för det här värdepappret.</p>'}</div><p class="b-src">Historisk utveckling säger inget om framtiden.</p>`)}
     ${bCard('c4', `${bLabel('Medelvärden just nu', 'MA200')}<div id="k-ma">${loading()}</div>`)}
     ${bCard('c4', `${bLabel('Välj ett datum')}<label class="b-dl">Datum <input type="date" id="k-date"></label><div id="k-dres"><p class="b-note">Välj ett datum för att se kursen då, och hur 10 000 ${esc(cur(s.valuta))} hade utvecklats sedan dess.</p></div>`)}
@@ -1924,7 +1959,7 @@ const bFinVal = {
   pay: (b, f) => (f.netto != null && f.utd ? f.netto / Math.abs(f.utd) : null)
 };
 function bRisk(panel, ctx) {
-  const { s, se, st, get, idxName } = ctx;
+  const { s, se, st, get, idxName } = ctx; const sShort = /^0P/.test(s.sym) ? (EN ? 'the fund' : 'fonden') : short(s.sym);
   const f = s.faktorer || []; const lvl = lvlOf(s.poang);
   const U = cur(s.valuta); const miss = `<span class="faint">${EN ? 'Missing' : 'Saknas'}</span>`;
   const own = getPort().filter((h) => h.sym === s.sym).reduce((a, h) => a + h.antal, 0);
@@ -1947,7 +1982,7 @@ function bRisk(panel, ctx) {
     ${bCard('c6', `<div class="b-ch">${bLabel(EN ? 'What the risk check is built on' : 'Vad riskkollen bygger på')}<span class="small faint">${EN ? 'scale: Low to High · hover over a name for the rule' : 'skala: Låg till Hög · håll över namnet för regeln'}</span></div>${rows.length ? `<div class="r-parts">${rows.map((r) => `<div class="r-part"><span class="b-fn"><b>${esc(r.n)}</b>${tipMark(r.n, `${ORD[r.n] ? ORD[r.n] + ' ' : ''}${B_RULES[r.n] || ''}`)}</span><span class="b-fl">${bSeg(r.l)}${bLevel(r.l)}</span><span class="num r-pv" title="${esc(r.t)}">${esc(r.v)}</span><span class="r-pt">${esc(r.t)}</span>${bMeter(r.pos)}</div>`).join('')}</div>` : `<p class="b-note">${EN ? 'The data source does not have enough key figures for a risk check.' : 'Datakällan har inte tillräckligt med nyckeltal för en riskkoll.'}</p>`}`)}
     ${bCard('c3', `<div class="b-ch">${bLabel(EN ? 'Closest to a change' : 'Närmast en ändring')}</div>${near.length ? near.map((x) => `<div class="r-near"><div><b>${esc(x.n)}</b><span class="${x.toUp ? 'warn' : 'up'}">${esc(x.left)}</span></div><span class="small faint">${esc(x.v)} · ${esc(x.rule)}</span><span class="r-nbar"><i class="${x.toUp ? 'warn' : 'up'}" style="width:${x.w.toFixed(0)}%"></i></span></div>`).join('') : `<p class="b-note">${EN ? 'Cannot be calculated for this stock.' : 'Går inte att räkna för den här aktien.'}</p>`}<p class="b-src">${EN ? 'Yellow = towards higher risk, green = towards lower.' : 'Gult = mot högre risk, grönt = mot lägre.'}</p>`)}
   </div>
-  <div class="r-krh"><b>${EN ? 'The risk in money' : 'Risken i kronor'}</b><span>${EN ? 'calculated on' : 'räknat på'} 10 000 ${esc(U)} ${EN ? 'in the stock' : 'i aktien'}</span></div>
+  <div class="r-krh"><b>${EN ? 'The risk in money' : 'Risken i kronor'}</b><span>${EN ? 'calculated on' : 'räknat på'} 10 000 ${esc(U)} ${EN ? (ctx.isEq ? 'in the stock' : 'in the fund') : (ctx.isEq ? 'i aktien' : 'i fonden')}</span></div>
   <div class="r-kr" id="r-kr">${loading('Räknar …')}</div>
   ${bH('01', 'Kursrisk', EN ? 'How much and how hard the price moves' : 'Hur mycket och hur hårt kursen rör sig', 'r3')}
   <div class="b-grid">
@@ -1982,7 +2017,7 @@ function bRisk(panel, ctx) {
   Promise.all([get.stats(), ctx.isEq ? get.kal().catch(() => null) : null]).then(([x, kal]) => {
     if (!$('#r-kr')) return;
     /* 01: jämförelse med index */
-    $('#r-cmp').innerHTML = kv(`${EN ? 'Volatility' : 'Volatilitet'}, ${short(s.sym)}`, bPct(x.vol1), 'Volatilitet') + kv(`${EN ? 'Volatility' : 'Volatilitet'}, ${idxName}`, bPct(x.idxVol1)) + kv('Beta', s.beta != null ? bn(s.beta, 2) : null, 'Beta');
+    $('#r-cmp').innerHTML = kv(`${EN ? 'Volatility' : 'Volatilitet'}, ${sShort}`, bPct(x.vol1), 'Volatilitet') + kv(`${EN ? 'Volatility' : 'Volatilitet'}, ${idxName}`, bPct(x.idxVol1)) + kv('Beta', s.beta != null ? bn(s.beta, 2) : null, 'Beta');
     /* 02: i kronor per 10 000 */
     const badMonth = x.vol1 != null ? -1.2816 * (x.vol1 / Math.sqrt(12)) : null; const dy = kal && !kal.error ? kal.direktavkastning : null;
     const money = (p) => (p == null || !Number.isFinite(p) ? null : `${p > 0 ? '+' : p < 0 ? '−' : ''}${nf(Math.abs(p * 100), 0)} ${U}`);
@@ -2010,7 +2045,7 @@ function bRisk(panel, ctx) {
       const X = (t) => ((t - t0) / (t1 - t0)) * W; const Y = (v) => H - 4 - (v / hi) * (H - 12); const pth = (arr) => arr.filter((p) => p[0] >= t0).map((p, i) => `${i ? 'L' : 'M'}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join('');
       const top = A.reduce((a, p) => (p[1] > a[1] ? p : a)); const gv = Math.round(hi / 2 / 5) * 5 || Math.round(hi / 2);
       $('#r-roll').innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="b-svg" role="img" aria-label="Volatilitet över tid"><line x1="0" x2="${W}" y1="${Y(gv).toFixed(1)}" y2="${Y(gv).toFixed(1)}" stroke="var(--line-soft)"/><text x="${W - 2}" y="${(Y(gv) - 3).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--muted)">${gv} %</text>${B.length > 5 ? `<path d="${pth(B)}" fill="none" stroke="var(--b-ma200)" stroke-width="1.3"/>` : ''}<path d="${pth(A)}" fill="none" stroke="var(--info)" stroke-width="1.6"/><circle cx="${X(top[0]).toFixed(1)}" cy="${Y(top[1]).toFixed(1)}" r="3.5" fill="var(--info)" stroke="var(--card)" stroke-width="1.5"/></svg>
-        <div class="r-leg"><span><i style="background:var(--info)"></i>${esc(short(s.sym))} ${bPct(A[A.length - 1][1])}</span>${B.length > 5 ? `<span><i style="background:var(--b-ma200)"></i>${esc(idxName)} ${bPct(B[B.length - 1][1])}</span>` : ''}<span class="faint">${EN ? 'highest' : 'högst'} ${bPct(top[1], 0)}, ${esc(bDate(bKey(top[0]), false))}</span></div>`;
+        <div class="r-leg"><span><i style="background:var(--info)"></i>${esc(sShort)} ${bPct(A[A.length - 1][1])}</span>${B.length > 5 ? `<span><i style="background:var(--b-ma200)"></i>${esc(idxName)} ${bPct(B[B.length - 1][1])}</span>` : ''}<span class="faint">${EN ? 'highest' : 'högst'} ${bPct(top[1], 0)}, ${esc(bDate(bKey(top[0]), false))}</span></div>`;
     } else $('#r-roll').innerHTML = err;
     $('#r-rollkv').innerHTML = kv(EN ? '1 year' : '1 år', bPct(x.vol1)) + kv(EN ? '3 years' : '3 år', bPct(x.vol3)) + kv(EN ? 'Own beta, 1 year' : 'Beta, egen 1 år', x.betaOwn != null ? bn(x.betaOwn, 2) : null, 'Beta') + kv(EN ? 'Correlation' : 'Samvariation', x.corr != null ? bn(x.corr, 2) : null, 'Korrelation');
     /* Dagsrörelser */
@@ -2031,7 +2066,7 @@ function bRisk(panel, ctx) {
     /* Upp och ned mot börsen */
     $('#r-cap').innerHTML = x.capUp != null && x.capDn != null ? `<div class="r-cap"><div><span class="b-mini-k">${EN ? 'When the market rises' : 'När börsen stiger'}</span><b class="num up">${bn(x.capUp, 0).replace('-', '−')} %</b><span class="small faint">${EN ? 'of the rise is followed' : 'av uppgången följer med'}</span></div><div><span class="b-mini-k">${EN ? 'When the market falls' : 'När börsen faller'}</span><b class="num down">${bn(x.capDn, 0).replace('-', '−')} %</b><span class="small faint">${EN ? 'of the fall is followed' : 'av nedgången följer med'}</span></div></div><p class="b-src">${EN ? `The stock's average move on days when ${esc(idxName)} rose or fell, compared with the index's own. Over 100 % means the stock moves more than the market in that direction.` : `Aktiens snittrörelse de dagar ${esc(idxName)} steg respektive föll, jämfört med indexets egen. Över 100 % betyder att aktien rör sig mer än börsen åt det hållet.`}</p>` : `<p class="b-note">${EN ? 'Needs a year of prices for both the stock and the index.' : 'Kräver ett års kurser för både aktien och index.'}</p>`;
     /* Verkliga fall */
-    $('#r-falls').innerHTML = x.falls?.length ? `<div class="b-falls"><div class="b-fhead"><span>${EN ? 'Real falls' : 'Verkliga fall'}</span><span>${esc(idxName)}</span><span>${esc(short(s.sym))}</span></div>${x.falls.map((w) => `<div><span class="small">${esc(bDate(w.from))} → ${esc(bDate(w.to))}</span><b class="num down">${bSign(w.idx)}</b><b class="num ${tone(w.own)}">${bSign(w.own)}</b></div>`).join('')}</div><p class="b-src">${EN ? `The ${x.falls.length} largest falls for ${esc(idxName)} over 20 trading days in the last five years.` : `De ${x.falls.length} största fallen för ${esc(idxName)} under 20 börsdagar de senaste fem åren.`}</p>` : `<p class="b-note">${esc(idxName)} ${EN ? 'has not fallen more than 5 % in 20 trading days during the period.' : 'har inte fallit mer än 5 % på 20 börsdagar under perioden vi har kurser för.'}</p>`;
+    $('#r-falls').innerHTML = x.falls?.length ? `<div class="b-falls"><div class="b-fhead"><span>${EN ? 'Real falls' : 'Verkliga fall'}</span><span>${esc(idxName)}</span><span>${esc(sShort)}</span></div>${x.falls.map((w) => `<div><span class="small">${esc(bDate(w.from))} → ${esc(bDate(w.to))}</span><b class="num down">${bSign(w.idx)}</b><b class="num ${tone(w.own)}">${bSign(w.own)}</b></div>`).join('')}</div><p class="b-src">${EN ? `The ${x.falls.length} largest falls for ${esc(idxName)} over 20 trading days in the last five years.` : `De ${x.falls.length} största fallen för ${esc(idxName)} under 20 börsdagar de senaste fem åren.`}</p>` : `<p class="b-note">${esc(idxName)} ${EN ? 'has not fallen more than 5 % in 20 trading days during the period.' : 'har inte fallit mer än 5 % på 20 börsdagar under perioden vi har kurser för.'}</p>`;
   });
 
   if (!ctx.isEq) return;
@@ -2185,7 +2220,7 @@ async function bNyheter(panel, ctx) {
 }
 function bOm(panel, ctx) {
   const { s, sym } = ctx;
-  panel.innerHTML = `<div class="b-grid">${bCard('c8', `${bLabel('Affärsidé och historia')}<div id="about-body">${loading('Hämtar affärsidé och historia …')}</div>`)}${bCard('c4', `${bLabel('Fakta')}${s.fakta?.length ? s.fakta.map(([k, v]) => `<div class="b-kv"><span>${esc(k)}${tip(k)}</span><b>${esc(v)}</b></div>`).join('') : '<p class="b-note">Saknas.</p>'}${safeUrl(s.webb) ? `<a class="b-more" href="${esc(safeUrl(s.webb))}" target="_blank" rel="noopener noreferrer">Bolagets webbplats ↗</a>` : ''}`)}</div>`;
+  panel.innerHTML = `<div class="b-grid">${bCard('c8', `${bLabel(ctx.isEq ? 'Affärsidé och historia' : (EN ? 'About' : 'Om'))}<div id="about-body">${loading('Hämtar affärsidé och historia …')}</div>`)}${bCard('c4', `${bLabel('Fakta')}${s.fakta?.length ? s.fakta.filter(([k]) => k !== 'Börs' || s.typ !== 'Fond').map(([k, v]) => `<div class="b-kv"><span>${esc(k)}${tip(k)}</span><b>${esc(v)}</b></div>`).join('') : '<p class="b-note">Saknas.</p>'}${safeUrl(s.webb) ? `<a class="b-more" href="${esc(safeUrl(s.webb))}" target="_blank" rel="noopener noreferrer">Bolagets webbplats ↗</a>` : ''}`)}</div>`;
   api('/api/about?s=' + encodeURIComponent(sym) + (EN ? '&lang=en' : ''), 60 * 60e3).then((a) => { const b = $('#about-body'); if (b) b.innerHTML = aboutHTML(a, s); });
 }
 

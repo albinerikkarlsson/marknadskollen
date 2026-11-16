@@ -1532,3 +1532,21 @@ a.p-wf:hover { background: var(--surface); }
 @media (max-width: 720px) { .r-krc .small { white-space: normal; } }
 .r-finr > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (min-width: 561px) and (max-width: 1500px) { .r-part { grid-template-columns: 108px 96px minmax(0, 1fr) 56px; gap: 8px; } }
+/* Startsidan för nya: sök och exempelbolag */
+.start-hero { align-items: start; }
+.sh-search { max-width: 620px; width: 100%; flex: 0 0 auto !important; align-self: stretch; }
+.sh-search input { font-size: 16px; }
+.sh-ex { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-width: 620px; }
+.sh-tile { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; color: var(--ink); background: var(--surface); min-width: 0; }
+.sh-tile:hover { border-color: var(--ink-2); }
+.sh-n { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13.5px; } .sh-n b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-n .avatar { width: 28px; height: 28px; font-size: 9px; flex: none; }
+.sh-v { display: flex; align-items: center; justify-content: space-between; gap: 6px; } .sh-v .pill { font-size: 11px; padding: 1px 8px; }
+.sh-v .up { color: var(--up); } .sh-v .down { color: var(--down); }
+.sh-go { gap: 8px; }
+@media (max-width: 560px) { .sh-ex { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.news-lang { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; font-size: 9.5px; font-weight: 500; letter-spacing: 0.06em; color: var(--muted); vertical-align: 2px; line-height: 1.5; }
+.b-scam { flex-direction: row !important; align-items: center; gap: 12px !important; padding: 10px 14px !important; font-size: 12.5px; color: var(--ink-2); }
+.b-scam-i { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: rgba(231,181,71,.15); color: var(--warn); font-weight: 600; font-size: 12px; }
+.b-scam b { font-weight: 500; color: var(--ink); }
+@media (max-width: 720px) { .sh-search { display: none !important; } }

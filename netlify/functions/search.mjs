@@ -8,7 +8,7 @@ import { ySearch } from '../lib/yahoo.mjs';
 const TYP = { 'Common Stock': 'Aktie', EQUITY: 'Aktie', 'ETP': 'ETF', 'ETF': 'ETF', 'ADR': 'ADR', 'REIT': 'Fastighetsbolag', 'Open-End Fund': 'Fond', MUTUALFUND: 'Fond', 'Closed-End Fund': 'Fond', 'Preference': 'Preferensaktie', 'Unit': 'Andel' };
 const OTC = new Set(['PNK', 'OTC', 'OBB', 'OQB', 'OQX']);
 // Vanliga svenska sökord som Yahoo inte förstår
-const ALIAS = { 'h&m': 'Hennes & Mauritz', 'h & m': 'Hennes & Mauritz', 'hm': 'Hennes & Mauritz', 'hennes': 'Hennes & Mauritz', 'seb': 'Skandinaviska Enskilda Banken', 'shb': 'Svenska Handelsbanken', 'nordea': 'Nordea Bank' };
+const ALIAS = { 'h&m': 'Hennes & Mauritz', 'h & m': 'Hennes & Mauritz', 'hm': 'Hennes & Mauritz', 'hennes': 'Hennes & Mauritz', 'seb': 'Skandinaviska Enskilda Banken', 'shb': 'Svenska Handelsbanken', 'nordea': 'Nordea Bank', 'investor': 'Investor AB', 'industrivärden': 'Industrivarden', 'industrivarden': 'Industrivarden', 'lundbergs': 'Lundbergforetagen', 'lundbergföretagen': 'Lundbergforetagen', 'ratos': 'Ratos AB', 'latour': 'Investment AB Latour', 'öresund': 'Investment AB Oresund' };
 const IDX = (sym, namn, typ = 'Index') => ({ sym, namn, typ, klass: null, borsen: 'IDX', lista: null });
 const FIXED = {
   'omx': [IDX('^OMX', 'OMX Stockholm 30')], 'omxs30': [IDX('^OMX', 'OMX Stockholm 30')], 'stockholmsbörsen': [IDX('^OMX', 'OMX Stockholm 30')],
@@ -27,6 +27,9 @@ export default async (req) => {
     const look = ALIAS[key] || q;
     let results = await fromYahoo(look).catch((e) => { console.warn('[search] Yahoo:', e?.message); return null; });
     if (!results) results = await fromFinnhub(look).catch(() => []);
+    // Yahoo förstår ofta inte å, ä och ö. Hittas inget svenskt bolag provar vi utan prickar.
+    const plain = look.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (plain !== look && !results.some((x) => x.borsen === 'ST')) results = [...results, ...((await fromYahoo(plain).catch(() => null)) || [])];
     const main = results.filter((x) => !MINOR.has(x.borsen));
     results = [...(FIXED[key] || []), ...(main.length ? main : results)];
     return cached({ results: order(results, ALIAS[key] ? look : raw, klass).slice(0, 12) }, 86400);
