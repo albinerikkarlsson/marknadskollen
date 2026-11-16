@@ -1550,3 +1550,21 @@ a.p-wf:hover { background: var(--surface); }
 .b-scam-i { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: rgba(231,181,71,.15); color: var(--warn); font-weight: 600; font-size: 12px; }
 .b-scam b { font-weight: 500; color: var(--ink); }
 @media (max-width: 720px) { .sh-search { display: none !important; } }
+.tip-fd { padding-top: 6px; border-top: 1px solid #3A3F48; } .tip-fd i { font-style: normal; color: var(--ink); font-weight: 500; }
+/* Så räknas riskkollen */
+.m-sec { display: flex; flex-direction: column; gap: 12px; padding: 20px 24px; }
+.m-h { margin: 0; font-size: 17px; font-weight: 500; display: flex; align-items: center; gap: 10px; }
+.m-h span { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; background: var(--chip); color: var(--info); flex: none; }
+.m-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.m-tbl th, .m-tbl td { text-align: left; vertical-align: top; padding: 10px 12px 10px 0; border-top: 1px solid var(--line-soft); line-height: 1.5; }
+.m-tbl thead th { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; border-top: 0; }
+.m-tbl tbody th { font-weight: 500; white-space: nowrap; }
+.m-tbl td { color: var(--ink-2); }
+.m-fd { display: block; margin-top: 4px; color: var(--muted); } .m-fd i { font-style: normal; color: var(--ink-2); font-weight: 500; }
+.m-ol, .m-ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; color: var(--ink-2); line-height: 1.55; }
+.m-ul b { color: var(--ink); font-weight: 500; }
+.m-ex { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line-soft); font-size: 13.5px; color: var(--ink-2); }
+.m-ex b { color: var(--ink); font-weight: 500; }
+.b-foot { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+@media (max-width: 700px) { .m-tbl thead { display: none; } .m-tbl tr { display: grid; grid-template-columns: 1fr; border-top: 1px solid var(--line-soft); padding: 8px 0; } .m-tbl th, .m-tbl td { border: 0; padding: 2px 0; } }
+.r-src { margin-left: auto; font-size: 10.5px; color: var(--faint); } .ov-5y b { font-weight: 500; } .ov-5y .up { color: var(--up); } .ov-5y .down { color: var(--down); } .b-foot .ov-5y { margin-right: auto; }

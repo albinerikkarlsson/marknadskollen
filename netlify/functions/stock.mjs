@@ -180,6 +180,7 @@ function keyFigures(s, cur) {
   const dy = raw(sd.dividendYield); const dr = raw(sd.dividendRate) ?? raw(sd.trailingAnnualDividendRate);
   const pm = raw(fd.profitMargins); const om = raw(fd.operatingMargins); const roe = raw(fd.returnOnEquity);
   const rg = raw(fd.revenueGrowth); const rev = raw(fd.totalRevenue); const de = raw(fd.debtToEquity);
+  const ins = raw(ks.heldPercentInsiders);
   return [
     ['P/E', n1(pe), 'Priset delat med vinsten de senaste 12 månaderna. Saknas när bolaget går med förlust.'],
     ['Vinst per aktie (EPS)', eps == null ? null : `${n2(eps)} ${funit}`, 'Bolagets vinst de senaste 12 månaderna delat på antalet aktier.'],
@@ -193,7 +194,8 @@ function keyFigures(s, cur) {
     ['Avkastning på eget kapital', pc(roe), 'Vinsten i procent av det kapital ägarna har i bolaget.'],
     ['Försäljning 12 mån', rev ? money(rev, fcur) : null, 'Bolagets intäkter de senaste 12 månaderna.'],
     ['Försäljningstillväxt', pc(rg), 'Hur mycket försäljningen ändrats jämfört med samma kvartal året innan.'],
-    ['Skuld / eget kapital', de == null ? null : n2(de / 100), 'Lånen jämfört med ägarnas kapital. Högre betyder mer lån.']
+    ['Skuld / eget kapital', de == null ? null : n2(de / 100), 'Lånen jämfört med ägarnas kapital. Högre betyder mer lån.'],
+    ['Ägs av insiders', ins == null || ins < 0 || ins > 1 ? null : pc(ins), 'Andel av aktierna som ägs av personer i ledning och styrelse och av större ägare med insyn, enligt Yahoo Finance.']
   ];
 }
 const fmt = (n) => n.toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -295,7 +295,7 @@ function topbar(crumbs, withSearch = true) {
 }
 
 const footer = (extra = '') =>
-  `<footer class="foot"><nav class="foot-links" aria-label="Om sidan"><a href="/om" data-link>Om oss</a><a href="/integritet" data-link>Integritet</a><a href="/ordlista" data-link>Ordlista</a></nav>Ingen investeringsrådgivning. Kurser, nyckeltal och nyheter kommer från Yahoo Finance och Finnhub, insynshandel och blankning från Finansinspektionen. Riskkollen räknas fram med fasta regler som förklaras på varje bolagssida. ${extra}</footer>`;
+  `<footer class="foot"><nav class="foot-links" aria-label="Om sidan"><a href="/om" data-link>Om oss</a><a href="/integritet" data-link>Integritet</a><a href="/ordlista" data-link>Ordlista</a><a href="/metod" data-link>Så räknas riskkollen</a></nav>Ingen investeringsrådgivning. Kurser, nyckeltal och nyheter kommer från Yahoo Finance och Finnhub, insynshandel och blankning från Finansinspektionen. Riskkollen räknas fram med fasta regler som förklaras på varje bolagssida. ${extra}</footer>`;
 
 /* ================= Nyheter ================= */
 async function getNews(region) {
@@ -1734,7 +1734,7 @@ function bOversikt(panel, ctx) {
   const { s, se, st, get, isEq } = ctx; const seq = se && isEq;
   const pf = (k) => s.perf?.find((x) => x[0] === k)?.[1] ?? null;
   panel.innerHTML = `<div class="b-grid">
-    ${bCard('c7', `<div class="b-ch"><div class="b-chl">${bLabel(isEq ? 'Aktiekurs' : (EN ? 'Price' : 'Kurs'))}<span class="small num" id="ov-chg"></span></div>${bChartControls(st)}</div><div id="ov-chart">${loading('Hämtar kurser …')}</div><div class="b-foot">${bLink('kurs', 'Större diagram och egna datum')}</div>`)}
+    ${bCard('c7', `<div class="b-ch"><div class="b-chl">${bLabel(isEq ? 'Aktiekurs' : (EN ? 'Price' : 'Kurs'))}<span class="small num" id="ov-chg"></span></div>${bChartControls(st)}</div><div id="ov-chart">${loading('Hämtar kurser …')}</div><div class="b-foot"><span class="small muted ov-5y" id="ov-5y"></span>${bLink('kurs', 'Större diagram och egna datum')}</div>`)}
     ${bCard('c3', bRiskMini(s))}
     <div class="c2 b-quick">
       <button type="button" class="b-card b-q" data-bgo="dagen"><span class="b-lbl">Dagen</span><b class="num" id="q-day">–</b><span id="q-spark" class="b-q-sp"></span><span class="b-q-s" id="q-day-s">Hämtar …</span></button>
@@ -1743,6 +1743,7 @@ function bOversikt(panel, ctx) {
     </div>
     ${isEq ? bCard('c7', `<div class="b-ch">${bLabel('Rapporter, per år')}${bLink('rapporter', 'Alla rapporter och nyckeltal')}</div><div id="ov-rep">${loading('Hämtar rapportsiffror …')}</div>`) : bCard('c7', `<div class="b-ch">${bLabel(EN ? 'Performance' : 'Utveckling')}<span class="small faint">${EN ? 'price change per period' : 'kursens förändring per period'}</span></div>${s.perf?.length ? `<div class="b-mini4 b-perf">${s.perf.map(([k, v]) => `<div><span class="b-mini-k">${esc(k)}</span><b class="num ${tone(v)}">${v == null ? '–' : esc(pct(v))}</b></div>`).join('')}</div><p class="b-src">${EN ? 'Historical performance says nothing certain about the future. Fees are not included in the price change shown here.' : 'Historisk utveckling säger inget om framtiden. Här visas kursens förändring.'}</p>` : `<p class="b-note">${EN ? 'Performance is missing in the data source.' : 'Utvecklingen saknas i datakällan.'}</p>`}`)}
     ${bCard('c5', seq ? `<div class="b-ch">${bLabel('Insyn och blankning', 'Insynshandel')}${bLink('insyn', 'Alla affärer')}</div><div id="ov-insyn">${loading('Hämtar insynsaffärer …')}</div>` : isEq ? `<div class="b-ch">${bLabel('Nyckeltal')}${bLink('rapporter', 'Alla nyckeltal')}</div>${bKeyMini(s)}` : `<div class="b-ch">${bLabel(s.typ === 'Index' ? (EN ? 'About the index' : 'Om indexet') : (EN ? 'About the fund' : 'Om fonden'))}${bLink('om', EN ? 'More' : 'Mer')}</div>${s.beskrivning ? `<p class="small co-desc" style="margin:0;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden">${esc(s.beskrivning)}</p>` : `<p class="b-note">${EN ? 'The data source has no description.' : 'Datakällan har ingen beskrivning.'}</p>`}${(s.fakta || []).filter(([k]) => k !== 'Börs' || s.typ !== 'Fond').map(([k, v]) => `<div class="b-kv"><span>${esc(k)}</span><b class="num">${esc(v)}</b></div>`).join('')}`)}
+    ${seq ? bCard('c12', `<div class="b-ch">${bLabel('Nyckeltal')}${bLink('rapporter', 'Alla nyckeltal')}</div>${bKeyMini(s)}`) : ''}
     <aside class="b-card c12 b-scam"><span class="b-scam-i" aria-hidden="true">!</span><span class="b-scam-t"><b>${EN ? 'Is this a scam?' : 'Är det här bluff?'}</b> ${EN ? `Has someone contacted you about ${isEq ? 'this stock' : 'this'} with promises of quick profit? No serious company promises quick profit without risk. Check` : `Har någon kontaktat dig om ${isEq ? 'den här aktien' : 'det här'} med löften om snabb vinst? Ingen seriös aktör lovar snabb vinst utan risk. Kolla`} <a href="https://www.fi.se/sv/vara-register/varningslistan/" target="_blank" rel="noopener noreferrer">${EN ? 'Finansinspektionen\'s warning list' : 'Finansinspektionens varningslista'}</a> ${EN ? 'before you do anything.' : 'innan du gör något.'}</span></aside>
   </div>`;
   const draw = async () => {
@@ -1752,6 +1753,13 @@ function bOversikt(panel, ctx) {
     const c = $('#ov-chg'); if (c && r) { c.textContent = `${pct(r.chg)} ${EN ? 'in the period' : 'under perioden'}`; c.className = `small num ${tone(r.chg)}`; }
   };
   bWireChart(panel.querySelector('.c7'), ctx, draw); draw();
+  // Fem år mot index: första och sista stängningskursen i samma period
+  Promise.all([get.px(), get.idx()]).then(([p, i]) => {
+    const el = $('#ov-5y'); const P = p?.punkter || []; const I = i?.punkter || []; if (!el || P.length < 200 || I.length < 200) return;
+    const t0 = Math.max(P[0][0], I[0][0]); const first = (a) => a.find((x) => x[0] >= t0)?.[1]; const a0 = first(P); const b0 = first(I);
+    if (!a0 || !b0) return; const ra = (P[P.length - 1][1] / a0 - 1) * 100; const rb = (I[I.length - 1][1] / b0 - 1) * 100; const yrs = (P[P.length - 1][0] - t0) / (365.25 * 86400);
+    el.innerHTML = `<span class="tip-host">${EN ? 'Last' : 'Senaste'} ${bn(yrs, 0)} ${EN ? 'years' : 'åren'}: <b class="${tone(ra)}">${esc(pct(ra, 0))}</b>, ${esc(ctx.idxName)} <b class="${tone(rb)}">${esc(pct(rb, 0))}</b>${tip('5 år mot index')}</span>`;
+  });
   // Dagen
   get.today().then((d) => {
     const v = $('#q-day'); if (!v) return;
@@ -1796,10 +1804,10 @@ function bRiskMini(s) {
   return `<div class="b-ch">${bLabel('Riskkoll', 'Riskkoll')}<span class="faint small">${EN ? 'Updated' : 'Uppdaterad'} ${esc(when(s.hamtad))}</span></div>
     <div class="b-rk">${bGauge(s.poang)}<div>${lvl ? bLevel(lvl) : '<span class="faint">För lite data</span>'}<p class="small muted" style="margin:6px 0 0">${esc(s.faktorer?.length ? `${s.faktorer.length} ${EN ? 'parts weighed together' : 'delar vägda samman'}` : '')}</p></div></div>
     ${s.faktorer?.length ? `<div class="b-frows">${s.faktorer.map(([n, l, v]) => `<div title="${esc(v)}"><span>${esc(n)}${tip(n)}</span>${bSeg(l)}<span class="${LV[l].c}">${LV[l].t}</span></div>`).join('')}</div>` : '<p class="b-note">Datakällan har för få nyckeltal för en riskkoll.</p>'}
-    <div class="b-foot">${bLink('risk', 'Hela riskanalysen')}</div>`;
+    <div class="b-foot">${bLink('risk', 'Hela riskanalysen')}<a class="b-more" href="/metod" data-link>${EN ? 'How it is calculated' : 'Så räknas den'}</a></div>`;
 }
 function bKeyMini(s) {
-  const nt = (s.nyckeltal || []).filter(([k]) => ['P/E', 'Vinst per aktie (EPS)', 'Direktavkastning', 'Vinstmarginal', 'Rörelsemarginal', 'Avkastning på eget kapital'].includes(k));
+  const nt = (s.nyckeltal || []).filter(([k]) => ['P/E', 'P/S', 'Vinst per aktie (EPS)', 'Direktavkastning', 'Försäljningstillväxt', 'Vinstmarginal', 'Rörelsemarginal', 'Avkastning på eget kapital', 'Ägs av insiders'].includes(k));
   if (!nt.length) return '<p class="b-note">Datakällan har inga nyckeltal för det här värdepappret.</p>';
   return `<div class="b-kgrid">${nt.map(([k, v, h]) => `<div><span class="b-mini-k">${esc(k)}${tip(k)}</span><b class="num">${bMiss(v)}</b></div>`).join('')}</div><p class="b-src">Källa: Yahoo Finance, senaste 12 månaderna.</p>`;
 }
@@ -1912,7 +1920,7 @@ function bDagen(panel, ctx) {
 
 /* ---------- Riskanalys ---------- */
 const B_RULES = {
-  'Kurssvängningar': 'Beta under 0,8 ger Låg, 0,8–1,3 Medel, över 1,3 Hög. Svänger kursen mer än 100 % mellan årets lägsta och högsta blir det Hög.',
+  'Kurssvängningar': 'Beta under 0,8 ger Låg, 0,8–1,3 Medel, över 1,3 Hög. Ligger årets högsta kurs mer än 60 % över den lägsta blir det minst Medel, och mer än 100 % ger Hög.',
   'Skulder': 'Skuld delat med eget kapital. Under 0,5 Låg, 0,5–1,5 Medel, över 1,5 Hög.',
   'Värdering': 'P/E under 20 Låg, 20–35 Medel, över 35 Hög. Ingen vinst räknas som Hög.',
   'Lönsamhet': 'Vinstmarginal över 8 % Låg, 0–8 % Medel, förlust Hög.',
@@ -1982,7 +1990,7 @@ function bRisk(panel, ctx) {
     ${bCard('c6', `<div class="b-ch">${bLabel(EN ? 'What the risk check is built on' : 'Vad riskkollen bygger på')}<span class="small faint">${EN ? 'scale: Low to High · hover over a name for the rule' : 'skala: Låg till Hög · håll över namnet för regeln'}</span></div>${rows.length ? `<div class="r-parts">${rows.map((r) => `<div class="r-part"><span class="b-fn"><b>${esc(r.n)}</b>${tipMark(r.n, `${ORD[r.n] ? ORD[r.n] + ' ' : ''}${B_RULES[r.n] || ''}`)}</span><span class="b-fl">${bSeg(r.l)}${bLevel(r.l)}</span><span class="num r-pv" title="${esc(r.t)}">${esc(r.v)}</span><span class="r-pt">${esc(r.t)}</span>${bMeter(r.pos)}</div>`).join('')}</div>` : `<p class="b-note">${EN ? 'The data source does not have enough key figures for a risk check.' : 'Datakällan har inte tillräckligt med nyckeltal för en riskkoll.'}</p>`}`)}
     ${bCard('c3', `<div class="b-ch">${bLabel(EN ? 'Closest to a change' : 'Närmast en ändring')}</div>${near.length ? near.map((x) => `<div class="r-near"><div><b>${esc(x.n)}</b><span class="${x.toUp ? 'warn' : 'up'}">${esc(x.left)}</span></div><span class="small faint">${esc(x.v)} · ${esc(x.rule)}</span><span class="r-nbar"><i class="${x.toUp ? 'warn' : 'up'}" style="width:${x.w.toFixed(0)}%"></i></span></div>`).join('') : `<p class="b-note">${EN ? 'Cannot be calculated for this stock.' : 'Går inte att räkna för den här aktien.'}</p>`}<p class="b-src">${EN ? 'Yellow = towards higher risk, green = towards lower.' : 'Gult = mot högre risk, grönt = mot lägre.'}</p>`)}
   </div>
-  <div class="r-krh"><b>${EN ? 'The risk in money' : 'Risken i kronor'}</b><span>${EN ? 'calculated on' : 'räknat på'} 10 000 ${esc(U)} ${EN ? (ctx.isEq ? 'in the stock' : 'in the fund') : (ctx.isEq ? 'i aktien' : 'i fonden')}</span></div>
+  <div class="r-krh"><b>${EN ? 'The risk in money' : 'Risken i kronor'}</b><span>${EN ? 'calculated on' : 'räknat på'} 10 000 ${esc(U)} ${EN ? (ctx.isEq ? 'in the stock' : 'in the fund') : (ctx.isEq ? 'i aktien' : 'i fonden')}</span><span class="r-src" id="r-src"></span></div>
   <div class="r-kr" id="r-kr">${loading('Räknar …')}</div>
   ${bH('01', 'Kursrisk', EN ? 'How much and how hard the price moves' : 'Hur mycket och hur hårt kursen rör sig', 'r3')}
   <div class="b-grid">
@@ -1999,7 +2007,7 @@ function bRisk(panel, ctx) {
     ${bCard('c3', `<div class="b-ch">${bLabel(EN ? 'How stable is the profit' : 'Hur stabil är vinsten')}<span class="small faint">${EN ? 'operating margin per quarter, %' : 'rörelsemarginal per kvartal, %'}</span></div><div id="r-earn">${loading()}</div>`)}
     ${bCard('c4', `<div class="b-ch">${bLabel(EN ? 'Events and signals' : 'Händelser och signaler')}<span class="small faint">${EN ? 'things that can change the picture' : 'sådant som kan ändra bilden'}</span></div><div id="r-sig">${loading()}</div>`)}
   </div>` : ''}
-  <p class="b-src" style="margin-top:6px">Riskkollen är vår egen förenkling räknad med fasta regler från siffrorna ovan. Ett högt tal betyder mer risk, inte att aktien är dålig. Inget råd.</p>`;
+  <p class="b-src" style="margin-top:6px">Riskkollen är vår egen förenkling räknad med fasta regler från siffrorna ovan. Ett högt tal betyder mer risk, inte att aktien är dålig. Inget råd. <a href="/metod" data-link>Så räknas riskkollen →</a></p>`;
 
   const kv = (k, v, t) => `<div class="b-kv"><span>${esc(k)}${t ? tip(t) : ''}</span><b class="num">${v ?? miss}</b></div>`;
   const sim = () => {
@@ -2015,6 +2023,7 @@ function bRisk(panel, ctx) {
   panel.addEventListener('click', (e) => { const b = e.target.closest('[data-sp]'); if (!b) return; st.sp = Number(b.dataset.sp); panel.querySelectorAll('[data-sp]').forEach((x) => x.setAttribute('aria-selected', String(x === b))); sim(); });
 
   Promise.all([get.stats(), ctx.isEq ? get.kal().catch(() => null) : null]).then(([x, kal]) => {
+    { const src = $('#r-src'); const lt = x?.dd?.[x.dd.length - 1]?.[0]; if (src && lt) src.textContent = `${EN ? 'Source' : 'Källa'}: Yahoo Finance, ${EN ? 'closing prices up to' : 'stängningskurser till och med'} ${bDate(bKey(lt))}`; }
     if (!$('#r-kr')) return;
     /* 01: jämförelse med index */
     $('#r-cmp').innerHTML = kv(`${EN ? 'Volatility' : 'Volatilitet'}, ${sShort}`, bPct(x.vol1), 'Volatilitet') + kv(`${EN ? 'Volatility' : 'Volatilitet'}, ${idxName}`, bPct(x.idxVol1)) + kv('Beta', s.beta != null ? bn(s.beta, 2) : null, 'Beta');
@@ -2459,10 +2468,41 @@ const ORD = {
   'Räntetäckning': 'Rörelseresultatet delat med räntekostnaden. 10 ggr betyder att vinsten räcker till räntorna tio gånger om.',
   'Balanslikviditet': 'Tillgångar som snart blir pengar, delat med skulder som ska betalas inom ett år. Över 1 betyder att de korta skulderna täcks.',
   'Vinst mot utdelning': 'Nettoresultatet delat med utbetald utdelning. Under 1 betyder att bolaget delade ut mer än det tjänade.',
+  'P/S': 'Priset jämfört med bolagets försäljning de senaste 12 månaderna. Används ofta för bolag som inte tjänar pengar än.',
+  'Försäljningstillväxt': 'Hur mycket försäljningen ändrats jämfört med samma kvartal året innan.',
+  'Avkastning på eget kapital': 'Vinsten i procent av det kapital ägarna har i bolaget. Kallas också ROE. Visar hur bra bolaget får pengarna att växa.',
+  'Ägs av insiders': 'Andel av aktierna som ägs av personer i ledning och styrelse och av större ägare med insyn, enligt Yahoo Finance.',
+  '5 år mot index': 'Hur mycket kursen har gått upp eller ner de senaste fem åren, jämfört med börsindex under samma tid. Utdelningar räknas inte med.',
   'Fakta': 'Grundfakta om bolaget från Yahoo Finance.',
   'Börs': 'Var aktien handlas.',
   'Land': 'Var bolaget har sitt huvudkontor.',
   'Anställda': 'Antal heltidsanställda enligt senaste uppgift.'
+};
+// En mening om vad varje begrepp betyder för dig som äger aktien. Inga råd, bara vad siffran kan innebära.
+const FOR_DIG = {
+  "Riskkoll": "Ett högt tal betyder att värdet på det du äger kan svänga mer, så du behöver tåla större upp- och nedgångar. Det säger inget om aktien blir en bra eller dålig affär.",
+  "Beta": "Har aktien beta 1,5 och börsen faller 10 % har den brukat falla runt 15 %. Det är ett snitt bakåt i tiden, inget löfte.",
+  "P/E": "Ett högt P/E betyder att du betalar mycket för dagens vinst. Då behöver vinsten växa, och en besvikelse kan slå hårt mot kursen.",
+  "Kurssvängningar": "Mer svängningar betyder att värdet på ditt innehav kan gå upp och ner mer från dag till dag.",
+  "Skulder": "Mycket lån gör bolaget känsligare för högre räntor och sämre tider, vilket kan pressa både kursen och utdelningen.",
+  "Värdering": "Är aktien dyr i förhållande till vinsten kan kursen falla mycket om vinsten blir lägre än väntat.",
+  "Lönsamhet": "Ett bolag med god marginal har mer utrymme att klara en dålig period utan att gå med förlust.",
+  "Handel": "Handlas aktien lite kan det vara svårt att sälja snabbt till det pris du vill, särskilt när många vill sälja samtidigt.",
+  "Storlek": "Små bolag kan röra sig mer åt båda hållen och det finns ofta mindre information om dem.",
+  "Blankning": "Hög blankning betyder att flera professionella tror på ett fall. Det kan också ge snabba uppgångar om de måste köpa tillbaka aktierna.",
+  "Insynshandel": "Ledningen vet mest om bolaget. Köp kan visa att de tror på det, men försäljningar kan ha många skäl, till exempel skatt eller ett husköp.",
+  "Volatilitet": "Med 20 % volatilitet och 10 000 kr i aktien kan värdet under ett vanligt år hamna ungefär 2 000 kr över eller under snittet.",
+  "Direktavkastning": "Utdelningen kan sänkas eller tas bort om bolaget går sämre. Den är inte garanterad.",
+  "Utdelning": "Utdelningen kan sänkas eller tas bort om bolaget går sämre. Den är inte garanterad.",
+  "Börsvärde": "Större bolag svänger oftast mindre och följs av fler analytiker och journalister.",
+  "52 veckor": "Visar var dagens kurs ligger mellan årets botten och topp, så att du ser hur mycket den har rört sig på ett år.",
+  "Fall från toppen": "Visar hur långt ner du kunde ha hamnat om du köpte på toppen, och hur länge det tog att komma tillbaka.",
+  "Dålig dag": "Med 10 000 kr i aktien visar det ungefär vad du kunde förlora en dag av tjugo.",
+  "Skuld / eget kapital": "Ju mer lån, desto mer av vinsten går till räntor när räntorna stiger.",
+  "Vinst mot utdelning": "Under 1 betyder att utdelningen inte täcks av vinsten. Då kan den behöva sänkas om vinsten inte ökar.",
+  "Ägs av insiders": "När ledningen äger mycket själv tjänar de på samma sätt som du när aktien går bra, och förlorar när den går dåligt.",
+  "Försäljningstillväxt": "Växer försäljningen har bolaget lättare att öka vinsten. Krymper den kan vinsten pressas även om kostnaderna hålls nere.",
+  "Fritt kassaflöde": "Det är pengarna som kan gå till utdelning. Är det lägre än utdelningen över tid måste bolaget låna eller sänka den."
 };
 // Förklaringar sitter på själva texten: håll musen över eller tryck på ordet. En osynlig markör talar om vilket ord det gäller.
 const tipMark = (k, txt) => `<span class="tip" data-tip="${esc(k)}"${txt ? ` data-tiptext="${esc(txt)}"` : ''} tabindex="0" role="button" aria-label="Vad betyder ${esc(k)}?" aria-expanded="false"></span>`;
@@ -2477,7 +2517,10 @@ const tip = (k) => (ORD[k] ? tipMark(k) : '');
     const m = markOf(host); if (!m) return;
     close(); owner = host; byHover = hover; m.setAttribute('aria-expanded', 'true'); host.classList.add('tip-on');
     box = document.createElement('div'); box.className = 'tip-box'; box.setAttribute('role', 'tooltip');
-    box.innerHTML = `<b>${esc(m.dataset.tip)}</b><span>${esc(ORD[m.dataset.tip] || m.dataset.tiptext || '')}</span><a href="/ordlista" data-link>Fler förklaringar</a>`;
+    const k = m.dataset.tip; const fd = FOR_DIG[k];
+    // Förklaringen och regeln visas som egna stycken, så att båda kan översättas var för sig
+    const def = ORD[k] || ''; let extra = m.dataset.tiptext || ''; if (def && extra.startsWith(def)) extra = extra.slice(def.length).trim(); if (!def && !extra) extra = '';
+    box.innerHTML = `<b>${esc(k)}</b>${def ? `<span>${esc(def)}</span>` : ''}${extra ? `<span>${esc(extra)}</span>` : ''}${fd ? `<span class="tip-fd"><i>För dig:</i> ${esc(fd)}</span>` : ''}<a href="/ordlista" data-link>Fler förklaringar</a>`;
     document.body.append(box);
     const r = host.getBoundingClientRect(); const w = Math.min(320, innerWidth - 24);
     box.style.width = w + 'px';
@@ -2523,6 +2566,53 @@ function viewOrdlista() {
   <section class="card" style="padding:8px 24px">
     <dl class="glossary">${Object.entries(ORD).sort((a, b) => a[0].localeCompare(b[0], 'sv')).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
   </section>
+  ${footer()}`;
+}
+
+/* ================= Så räknas riskkollen ================= */
+// Öppen beskrivning av modellen. Allt här ska stämma med netlify/lib/risk.mjs och B_FIN.
+const L2 = (sv, en) => (EN ? en : sv);
+const M_SRC = { 'Kurssvängningar': 'Yahoo Finance', 'Skulder': 'Yahoo Finance', 'Värdering': 'Yahoo Finance', 'Lönsamhet': 'Yahoo Finance', 'Handel': 'Yahoo Finance', 'Storlek': 'Yahoo Finance', 'Blankning': L2('Finansinspektionen, bara svenska aktier', 'Finansinspektionen, Swedish stocks only') };
+function viewMetod() {
+  const parts = Object.keys(B_RULES);
+  return `${topbar([['Översikt', '/'], [L2('Så räknas riskkollen', 'How the risk check works'), '/metod']], false)}
+  <div class="stack" style="gap:6px"><span class="eyebrow">${L2('Öppen metod', 'Open method')}</span><h1 class="title">${L2('Så räknas riskkollen', 'How the risk check works')}</h1>
+    <p class="muted" style="margin:0;max-width:760px">${L2('Riskkollen är vår egen förenkling av hur mycket en aktie kan svänga i värde, från 1 (låg) till 10 (hög). Den räknas med samma fasta regler för alla aktier. Ingen AI och ingen person bedömer bolagen för hand, och ingen kan betala för en bättre siffra.', 'The risk check is our own simplification of how much a stock can swing in value, from 1 (low) to 10 (high). It is calculated with the same fixed rules for every stock. No AI and no person rates the companies by hand, and nobody can pay for a better number.')}</p></div>
+  <section class="card m-sec"><h2 class="m-h"><span>1</span>${L2('Sju delar, var och en Låg, Medel eller Hög', 'Seven parts, each Low, Medium or High')}</h2>
+    <div class="table-wrap"><table class="m-tbl"><thead><tr><th>${L2('Del', 'Part')}</th><th>${L2('Vad den mäter', 'What it measures')}</th><th>${L2('Gränser', 'Limits')}</th><th>${L2('Källa', 'Source')}</th></tr></thead><tbody>
+    ${parts.map((n) => `<tr><th scope="row">${esc(n)}</th><td>${esc(ORD[n] || '')}${FOR_DIG[n] ? `<span class="m-fd"><i>För dig:</i> ${esc(FOR_DIG[n])}</span>` : ''}</td><td>${esc(B_RULES[n])}</td><td class="small muted">${esc(M_SRC[n])}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="b-src">${L2('Saknas data för en del hoppas den över. Negativt eget kapital räknas som Hög skuld, och ett bolag utan vinst får Hög värdering.', 'If data is missing for a part it is skipped. Negative equity counts as High debt, and a company without profit gets High valuation.')}</p></section>
+  <section class="card m-sec"><h2 class="m-h"><span>2</span>${L2('Från delar till en siffra', 'From parts to one number')}</h2>
+    <ol class="m-ol">
+      <li>${L2('Låg räknas som 1, Medel som 2 och Hög som 3.', 'Low counts as 1, Medium as 2 and High as 3.')}</li>
+      <li>${L2('Vi tar snittet av alla delar som finns.', 'We take the average of all parts that exist.')}</li>
+      <li>${L2('Snittet räknas om till skalan 1–10: (snitt − 1) ÷ 2 × 9 + 1, avrundat till heltal.', 'The average is converted to the 1–10 scale: (average − 1) ÷ 2 × 9 + 1, rounded to a whole number.')}</li>
+      <li>${L2('Har någon del Hög blir riskkollen minst 4, så att en stor risk inte göms av många små.', 'If any part is High the risk check is at least 4, so one big risk is not hidden by many small ones.')}</li>
+      <li>${L2('Det krävs minst tre delar. Annars visar vi För lite data i stället för en siffra.', 'At least three parts are needed. Otherwise we show Too little data instead of a number.')}</li>
+    </ol>
+    <div class="m-ex"><b>${L2('Exempel', 'Example')}</b><span>${L2('Två delar Medel och fem Låg ger snittet 9 ÷ 7 = 1,29. Omräknat blir det (1,29 − 1) ÷ 2 × 9 + 1 = 2,3, alltså riskkoll 2.', 'Two parts Medium and five Low give the average 9 ÷ 7 = 1.29. Converted that is (1.29 − 1) ÷ 2 × 9 + 1 = 2.3, so risk check 2.')}</span></div>
+    <p class="b-src">${L2('1–3 visas som Låg, 4–6 som Medel och 7–10 som Hög.', '1–3 is shown as Low, 4–6 as Medium and 7–10 as High.')}</p></section>
+  <section class="card m-sec"><h2 class="m-h"><span>3</span>${L2('Var siffrorna kommer ifrån', 'Where the numbers come from')}</h2>
+    <ul class="m-ul">
+      <li><b>Yahoo Finance</b> ${L2('ger kurser, beta, P/E, vinstmarginal, skulder, handel och börsvärde. Saknar Yahoo en aktie används Finnhub.', 'provides prices, beta, P/E, profit margin, debt, trading and market cap. If Yahoo lacks a stock, Finnhub is used.')}</li>
+      <li><b>Finansinspektionen</b> ${L2('ger blankning och insynshandel för svenska aktier. Blankning anmäls från 0,5 % av aktierna, så mindre positioner syns inte.', 'provides short selling and insider trading for Swedish stocks. Short positions are reported from 0.5 % of the shares, so smaller positions are not visible.')}</li>
+      <li>${L2('Riskkollen räknas om när någon öppnar aktien, högst var 15:e minut. Nyckeltal från rapporter ändras först när bolaget lämnar en ny rapport.', 'The risk check is recalculated when someone opens the stock, at most every 15 minutes. Key figures from reports only change when the company publishes a new report.')}</li>
+      <li>${L2('Vid varje siffra på bolagssidan står källan. Ser något fel ut, jämför gärna med bolagets egen rapport.', 'The source is shown next to the numbers on the company page. If something looks wrong, compare with the company\'s own report.')}</li>
+    </ul></section>
+  <section class="card m-sec"><h2 class="m-h"><span>4</span>${L2('Finansiell styrka under Riskanalys', 'Financial strength under Risk analysis')}</h2>
+    <p class="muted" style="margin:0">${L2('Under Riskanalys visar vi också sex mått på bolagets finanser. De ingår inte i riskkollen. Nivåerna är våra egna enkla gränser:', 'Under Risk analysis we also show six measures of the company\'s finances. They are not part of the risk check. The levels are our own simple limits:')}</p>
+    <div class="table-wrap"><table class="m-tbl"><tbody>${Object.values(B_FIN).map((c) => `<tr><th scope="row">${esc(c.k)}</th><td>${esc(ORD[c.k] || '')}</td><td>${esc(c.rule)}</td></tr>`).join('')}</tbody></table></div>
+    <p class="b-src">${L2('Banker och bolag med egen finansverksamhet har ofta högre skulder av naturliga skäl, så jämför hellre med liknande bolag.', 'Banks and companies with their own finance business often have higher debt for natural reasons, so compare with similar companies instead.')}</p></section>
+  <section class="card m-sec"><h2 class="m-h"><span>5</span>${L2('Vad riskkollen inte säger', 'What the risk check does not say')}</h2>
+    <ul class="m-ul">
+      <li>${L2('Den säger inte om en aktie är ett bra eller dåligt köp. Låg risk kan också betyda låg tillväxt.', 'It does not say whether a stock is a good or bad buy. Low risk can also mean low growth.')}</li>
+      <li>${L2('Den bygger på hur det har sett ut, inte på vad som kommer att hända.', 'It is based on how things have looked, not on what will happen.')}</li>
+      <li>${L2('Den jämför inte med branschen. En bank och ett mjukvarubolag bedöms med samma gränser.', 'It does not compare with the industry. A bank and a software company are judged by the same limits.')}</li>
+      <li>${L2('Fonder och ETF:er saknar ofta nyckeltal och får därför oftast För lite data.', 'Funds and ETFs often lack key figures and therefore usually get Too little data.')}</li>
+      <li>${L2('Det är ingen investeringsrådgivning. Fatta egna beslut och sprid gärna riskerna.', 'It is not investment advice. Make your own decisions and spread your risks.')}</li>
+    </ul>
+    <p class="b-src">${L2('Ändrar vi reglerna skriver vi det här. Senast ändrad 16 november 2026.', 'If we change the rules we write it here. Last changed 16 November 2026.')}</p></section>
   ${footer()}`;
 }
 
@@ -4677,12 +4767,13 @@ const cleanSym = (s) => { const v = String(s || '').trim().toUpperCase(); return
 
 function route() {
   // Sidor som alla får se, även utan konto
-  const PUBLIC = ['/om', '/integritet', '/ordlista'];
+  const PUBLIC = ['/om', '/integritet', '/ordlista', '/metod'];
   const PRIVATE = ['/portfolj', '/ova', '/bevakning', '/kalender', '/idag'];
   const here = location.pathname.replace(/\/+$/, '') || '/';
   if (here === '/om') return { active: 'om', title: 'Om oss', html: viewOm(), mount: () => {} };
   if (here === '/integritet') return { active: 'integritet', title: 'Integritet', html: viewIntegritet(), mount: () => {} };
   if (here === '/ordlista') return { active: 'ordlista', title: 'Ordlista', html: viewOrdlista(), mount: () => {} };
+  if (here === '/metod') return { active: 'ordlista', title: 'Så räknas riskkollen', html: viewMetod(), mount: () => {} };
   // Första gången efter inloggning: välj aktier
   if (needsOnboarding() && here !== '/valkommen' && !here.startsWith('/konto') && !PUBLIC.includes(here)) {
     if (!readLS('mk-efter-login', null)) writeLS('mk-efter-login', location.pathname + location.search);

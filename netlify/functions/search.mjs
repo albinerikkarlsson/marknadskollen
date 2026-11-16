@@ -8,7 +8,7 @@ import { ySearch } from '../lib/yahoo.mjs';
 const TYP = { 'Common Stock': 'Aktie', EQUITY: 'Aktie', 'ETP': 'ETF', 'ETF': 'ETF', 'ADR': 'ADR', 'REIT': 'Fastighetsbolag', 'Open-End Fund': 'Fond', MUTUALFUND: 'Fond', 'Closed-End Fund': 'Fond', 'Preference': 'Preferensaktie', 'Unit': 'Andel' };
 const OTC = new Set(['PNK', 'OTC', 'OBB', 'OQB', 'OQX']);
 // Vanliga svenska sökord som Yahoo inte förstår
-const ALIAS = { 'h&m': 'Hennes & Mauritz', 'h & m': 'Hennes & Mauritz', 'hm': 'Hennes & Mauritz', 'hennes': 'Hennes & Mauritz', 'seb': 'Skandinaviska Enskilda Banken', 'shb': 'Svenska Handelsbanken', 'nordea': 'Nordea Bank', 'investor': 'Investor AB', 'industrivärden': 'Industrivarden', 'industrivarden': 'Industrivarden', 'lundbergs': 'Lundbergforetagen', 'lundbergföretagen': 'Lundbergforetagen', 'ratos': 'Ratos AB', 'latour': 'Investment AB Latour', 'öresund': 'Investment AB Oresund' };
+const ALIAS = { 'h&m': 'Hennes & Mauritz', 'h & m': 'Hennes & Mauritz', 'hm': 'Hennes & Mauritz', 'hennes': 'Hennes & Mauritz', 'seb': 'Skandinaviska Enskilda Banken', 'shb': 'Svenska Handelsbanken', 'nordea': 'Nordea Bank', 'investor': 'Investor AB', 'industrivärden': 'INDU-C.ST', 'industrivarden': 'INDU-C.ST', 'lundbergs': 'lundberg', 'lundbergföretagen': 'lundberg', 'öresund': 'ORES.ST', 'oresund': 'ORES.ST' };
 const IDX = (sym, namn, typ = 'Index') => ({ sym, namn, typ, klass: null, borsen: 'IDX', lista: null });
 const FIXED = {
   'omx': [IDX('^OMX', 'OMX Stockholm 30')], 'omxs30': [IDX('^OMX', 'OMX Stockholm 30')], 'stockholmsbörsen': [IDX('^OMX', 'OMX Stockholm 30')],
