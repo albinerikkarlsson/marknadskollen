@@ -5173,7 +5173,9 @@ function route() {
   }
   const path = location.pathname.replace(/\/+$/, '') || '/';
   const params = new URLSearchParams(location.search);
-  // Startsidan är alltid landningssidan. Översikten ligger på /oversikt.
+  // Översikten ligger på /oversikt.
+  // Inloggade går direkt till översikten. Alla andra får landningssidan.
+  if (path === '/' && ACC.user) { history.replaceState(null, '', '/oversikt' + location.search + location.hash); return route(); }
   if (path === '/') return { active: 'landing', title: 'Finanskollen', html: viewLanding(), mount: mountLanding };
   if (path === '/oversikt') return { active: 'oversikt', title: 'Översikt', html: viewOversikt(), mount: mountOversikt };
   if (path === '/sok' && params.get('s')) { history.replaceState(null, '', '/bolag/' + encodeURIComponent(params.get('s'))); return route(); }
