@@ -1804,7 +1804,7 @@ body.landing .main { padding: 0 !important; gap: 0; display: block; }
 /* ================= Bolagsmeddelanden med kursreaktion ================= */
 .md-card { padding: 6px 20px; }
 .md-list { display: flex; flex-direction: column; }
-.md-row { display: grid; grid-template-columns: 1fr 270px; gap: 18px; align-items: center; padding: 13px 0; border-top: 1px solid var(--line-soft); }
+.md-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; padding: 13px 0; border-top: 1px solid var(--line-soft); }
 .md-list .md-row:first-child, .md-card .md-row:first-child { border-top: 0; }
 .md-main { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .md-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -1816,9 +1816,10 @@ a.md-co:hover { text-decoration: underline; }
 a.md-title:hover { text-decoration: underline; }
 .md-px { display: flex; align-items: center; gap: 12px; justify-content: flex-end; min-height: 34px; }
 .md-spark { flex: none; display: block; }
-.md-pxt { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; min-width: 82px; text-align: right; white-space: nowrap; }
+.md-pxt { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; width: 112px; flex: none; text-align: right; }
+.md-pxt .small { font-size: 11.5px; }
 .md-pxt b { font-size: 15px; font-weight: 600; }
-.md-skel { width: 200px; height: 30px; border-radius: 4px; background: linear-gradient(90deg, rgba(255,255,255,.03), rgba(255,255,255,.07), rgba(255,255,255,.03)); background-size: 200% 100%; animation: mdSk 1.2s linear infinite; }
+.md-skel { width: 220px; height: 30px; border-radius: 4px; background: linear-gradient(90deg, rgba(255,255,255,.03), rgba(255,255,255,.07), rgba(255,255,255,.03)); background-size: 200% 100%; animation: mdSk 1.2s linear infinite; }
 @keyframes mdSk { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 .md-filt { margin-bottom: 6px; }
 .md-note { margin: 10px 0 8px; }
@@ -1828,3 +1829,4 @@ a.md-title:hover { text-decoration: underline; }
   .md-pxt { align-items: flex-start; text-align: left; }
   .md-skel { width: 100%; }
 }
+@media (max-width: 720px) { .tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; } .tabs::-webkit-scrollbar { display: none; } .tabs > button { flex: none; } }

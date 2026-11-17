@@ -102,7 +102,8 @@ export default async (req) => {
     // Alla bolag: tre sidor, eftersom Köpenhamn, Helsingfors och Island också är med
     const pages = await Promise.all([0, 50, 100].map((start) => query({ start: String(start) }, sprak).catch((e) => (start ? [] : Promise.reject(e)))));
     const all = pages.flat();
-    const se = all.filter((it) => SE_MARKET.test(String(it.market || '')));
+    // Riksbankens och Riksgäldens certifikat är inga bolag, de visas inte
+    const se = all.filter((it) => SE_MARKET.test(String(it.market || '')) && !/riksbank|riksgälden/i.test(String(it.company || '')));
     const items = pick(se.length ? se : all, sprak);
     return cached({ kalla: 'Nasdaq Nordic', items: items.slice(0, 80), hamtad: new Date().toISOString() }, 300);
   } catch (e) { return fail(e); }

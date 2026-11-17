@@ -2389,7 +2389,7 @@ function mdSpark(P, r) {
   if (!r) return '';
   const end = r.after ?? r.b; const i0 = Math.max(0, r.b - 7); const i1 = Math.min(P.length - 1, end + 7);
   const pts = P.slice(i0, i1 + 1); if (pts.length < 2) return '';
-  const W = 116; const H = 34; const lo = Math.min(...pts.map((p) => p[1])); const hi = Math.max(...pts.map((p) => p[1])); const span = hi - lo || hi * 0.01 || 1;
+  const W = 100; const H = 34; const lo = Math.min(...pts.map((p) => p[1])); const hi = Math.max(...pts.map((p) => p[1])); const span = hi - lo || hi * 0.01 || 1;
   const X = (i) => ((i - i0) / (i1 - i0 || 1)) * W; const Y = (v) => 3 + (1 - (v - lo) / span) * (H - 6);
   const line = pts.map((p, k) => `${k ? 'L' : 'M'}${X(i0 + k).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join('');
   const c = r.pct == null ? 'var(--muted)' : r.pct >= 0 ? 'var(--up)' : 'var(--down)';
@@ -2408,7 +2408,7 @@ function mdRow(it, opt = {}) {
   const g = mdGroup(it.kategori); const u = safeUrl(it.lank);
   return `<article class="md-row" data-mdid="${esc(it.id)}"${opt.sym ? ` data-mdsym="${esc(opt.sym)}"` : ''} style="--c:${g[3]}">
     <div class="md-main">
-      <div class="md-meta small"><span class="md-cat" data-noi18n>${esc(it.kategori || mdLbl(g))}</span>${opt.showCo ? (opt.sym ? `<a class="md-co" href="/bolag/${encodeURIComponent(opt.sym)}" data-link data-noi18n>${esc(ovName(opt.sym))}</a>` : `<span class="md-co" data-noi18n>${esc(it.bolag)}</span>`) : ''}<span class="faint num">${esc(mdWhen(it.tid))}</span></div>
+      <div class="md-meta small"><span class="md-cat" data-noi18n>${esc(it.kategori && it.kategori.length <= 32 ? it.kategori : mdLbl(g))}</span>${opt.showCo ? (opt.sym ? `<a class="md-co" href="/bolag/${encodeURIComponent(opt.sym)}" data-link data-noi18n>${esc(ovName(opt.sym))}</a>` : `<span class="md-co" data-noi18n>${esc(it.bolag)}</span>`) : ''}<span class="faint num">${esc(mdWhen(it.tid))}</span></div>
       ${u ? `<a class="md-title" href="${esc(u)}" target="_blank" rel="noopener noreferrer" data-noi18n>${esc(it.rubrik)}<span class="sr-only">${EN ? ' (opens in a new tab)' : ' (öppnas i ny flik)'}</span></a>` : `<span class="md-title" data-noi18n>${esc(it.rubrik)}</span>`}
     </div>
     <div class="md-px" aria-label="${EN ? 'Price reaction' : 'Kursreaktion'}">${opt.px ?? (opt.sym || opt.pending ? '<span class="md-skel"></span>' : '')}</div>
