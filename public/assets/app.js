@@ -245,7 +245,7 @@ function toggleWatch(sym, namn) {
 /* ================= Gemensamma delar ================= */
 const NAV = [
   { group: 'Översikt', items: [
-    { id: 'oversikt', href: '/', label: 'Översikt', icon: 'home' },
+    { id: 'oversikt', href: '/oversikt', label: 'Översikt', icon: 'home' },
     { id: 'nyheter', href: '/nyheter', label: 'Nyheter', icon: 'news' },
     { id: 'portfolj', href: '/portfolj', label: 'Min portfölj', icon: 'pie' }
   ] },
@@ -428,7 +428,7 @@ const visitorHero = () => `
       <div class="sh-ex" id="sh-ex" aria-label="${EN ? 'Examples' : 'Exempel'}">${START_EX.map((x) => `<a class="sh-tile" href="/bolag/${encodeURIComponent(x)}" data-link data-shx="${esc(x)}"><span class="sh-n">${av(x)}<b>${esc(ovName(x))}</b></span><span class="sh-v"><span class="faint small">…</span></span></a>`).join('')}</div>
       <div class="chips small sh-go">
         <a class="btn ghost small" href="/portfolj?flik=kop" data-link>${EN ? 'Import from Avanza or Nordnet' : 'Importera från Avanza eller Nordnet'}</a>
-        ${locked() ? `<button type="button" class="btn ghost small" data-demo-load="/">${EN ? 'See an example portfolio' : 'Se en exempelportfölj'}</button><a class="btn ghost small" href="/konto?ny=1" data-link>${EN ? 'Create free account' : 'Skapa gratis konto'}</a>` : ''}
+        ${locked() ? `<button type="button" class="btn ghost small" data-demo-load="/oversikt">${EN ? 'See an example portfolio' : 'Se en exempelportfölj'}</button><a class="btn ghost small" href="/konto?ny=1" data-link>${EN ? 'Create free account' : 'Skapa gratis konto'}</a>` : ''}
       </div>
     </div>
     <ul class="vh-points">
@@ -475,8 +475,8 @@ function viewLanding() {
   return `<div class="lp" data-noi18n>
   <section class="lp-hero">${lpBg()}<div class="lp-fade"></div>
     <nav class="lp-w lp-nav lp-in" aria-label="${lpT('Huvudmeny', 'Main menu')}"><a class="lp-logo brand-word" href="/" data-link>FINANSKOLLEN<span>.</span></a>
-      <span class="lp-links"><a href="#lp-risk">${lpT('Riskkoll', 'Risk check')}</a><a href="/portfolj" data-link>${lpT('Portfölj', 'Portfolio')}</a><a href="/metod" data-link>${lpT('Så räknas den', 'How it works')}</a><a href="#lp-faq">${lpT('Frågor', 'Questions')}</a></span>
-      <span class="lp-acts"><a class="lp-pill lp-ghost" href="/konto" data-link>${lpT('Logga in', 'Log in')}</a><a class="lp-pill lp-white" href="/konto?ny=1" data-link>${lpT('Skapa konto', 'Sign up')}</a></span></nav>
+      <span class="lp-links"><a href="/oversikt" data-link>${lpT('Översikt', 'Overview')}</a><a href="#lp-risk">${lpT('Riskkoll', 'Risk check')}</a><a href="/portfolj" data-link>${lpT('Portfölj', 'Portfolio')}</a><a href="/metod" data-link>${lpT('Så räknas den', 'How it works')}</a><a href="#lp-faq">${lpT('Frågor', 'Questions')}</a></span>
+      <span class="lp-acts">${ACC.user ? '' : `<a class="lp-pill lp-ghost" href="/konto" data-link>${lpT('Logga in', 'Log in')}</a>`}${ACC.user || minOversikt() ? `<a class="lp-pill lp-white" href="/oversikt" data-link>${lpT('Till översikten', 'Go to overview')}</a>` : `<a class="lp-pill lp-white" href="/konto?ny=1" data-link>${lpT('Skapa konto', 'Sign up')}</a>`}</span></nav>
     <div class="lp-w lp-hc">
       <h1 class="lp-in" style="animation-delay:.1s">${lpT('Se risken innan du köper', 'See the risk before you buy')}</h1>
       <p class="lp-sub lp-in" style="animation-delay:.25s">${lpT('Riskkoll för varje aktie, med regler du kan läsa.', 'A risk check for every stock, with rules you can read.')}</p>
@@ -503,7 +503,7 @@ function viewLanding() {
       </div><p class="lp-k lp-xs" style="margin:10px 0 0">${lpT('Du väljer själv vilka notiser du vill ha, per bolag.', 'You choose which alerts you want, per company.')}</p></div>
       <div class="lp-card lp-rv d2"><span class="lp-lbl">${lpT('Din portfölj', 'Your portfolio')}</span><p class="lp-p" style="font-size:19px">${lpT('Se hela portföljens risk, din dag i kronor, utdelningar och rapportdagar. Och hur du gått mot börsen.', "See your whole portfolio's risk, your day in money, dividends and report dates. And how you did against the market.")}</p>
         <ul class="lp-ul"><li>${lpT('Importera dina affärer från Avanza och Nordnet', 'Import your trades from Avanza and Nordnet')}</li><li>${lpT('Filen läses bara i din webbläsare', 'The file is only read in your browser')}</li><li>${lpT('Testa utan konto, spara med ett gratis konto', 'Try without an account, save with a free account')}</li></ul>
-        <div class="lp-row"><button type="button" class="lp-pill lp-or" data-demo-load="/portfolj">${lpT('Se en exempelportfölj', 'See an example portfolio')}</button><a class="lp-pill lp-ghost" href="/portfolj?flik=kop" data-link>${lpT('Importera', 'Import')}</a></div></div>
+        <div class="lp-row">${ACC.user || minOversikt() ? `<a class="lp-pill lp-or" href="/portfolj" data-link>${lpT('Till din portfölj', 'Go to your portfolio')}</a>` : `<button type="button" class="lp-pill lp-or" data-demo-load="/portfolj">${lpT('Se en exempelportfölj', 'See an example portfolio')}</button>`}<a class="lp-pill lp-ghost" href="/portfolj?flik=kop" data-link>${lpT('Importera', 'Import')}</a></div></div>
     </div>
     <div class="lp-card lp-rv lp-rules"><div><span class="lp-lbl">${lpT('Öppna regler', 'Open rules')}</span><h3>${lpT('Samma regler för alla aktier. Ingen AI sätter siffran.', 'The same rules for every stock. No AI sets the number.')}</h3><p class="lp-k" style="margin:0">${lpT('Varje del blir Låg, Medel eller Hög. Snittet räknas om till 1–10, och har någon del Hög blir det minst 4.', 'Each part becomes Low, Medium or High. The average is converted to 1–10, and if any part is High it is at least 4.')}</p></div>
       <div class="lp-f lp-m">(${lpT('snitt', 'avg')} − 1) ÷ 2 × 9 + 1<br><span class="lp-k" id="lp-calc">…</span></div></div>
@@ -526,8 +526,8 @@ function viewLanding() {
 
   <section class="lp-w lp-sec lp-rv" id="lp-faq"><h2 class="lp-h2">${lpT('Frågor', 'Questions')}</h2>${faq.map(([q, a]) => `<div class="lp-faq"><b>${q}</b><span class="lp-k">${a}</span></div>`).join('')}</section>
 
-  <section class="lp-w lp-cta lp-rv"><h2>${lpT('Se risken innan du köper', 'See the risk before you buy')}</h2><p>${lpT('Gratis, utan konto.', 'Free, no account.')}</p>
-    <div class="lp-row" style="justify-content:center"><a class="lp-pill lp-or lp-big" href="#lpq">${lpT('Sök en aktie', 'Search a stock')}</a><a class="lp-pill lp-ghost lp-big" href="/konto?ny=1" data-link>${lpT('Skapa gratis konto', 'Create free account')}</a></div></section>
+  <section class="lp-w lp-cta lp-rv"><h2>${lpT('Se risken innan du köper', 'See the risk before you buy')}</h2><p>${ACC.user ? lpT('Sök ett bolag eller gå till din översikt.', 'Search a company or go to your overview.') : lpT('Gratis, utan konto.', 'Free, no account.')}</p>
+    <div class="lp-row" style="justify-content:center"><a class="lp-pill lp-or lp-big" href="#lpq">${lpT('Sök en aktie', 'Search a stock')}</a>${ACC.user || minOversikt() ? `<a class="lp-pill lp-ghost lp-big" href="/oversikt" data-link>${lpT('Till översikten', 'Go to overview')}</a>` : `<a class="lp-pill lp-ghost lp-big" href="/konto?ny=1" data-link>${lpT('Skapa gratis konto', 'Create free account')}</a>`}</div></section>
 
   <footer class="lp-w lp-foot"><div class="lp-fr"><span class="brand-word lp-flogo">FINANSKOLLEN<span>.</span></span><nav class="lp-fl" aria-label="${lpT('Om sidan', 'About')}"><a href="/metod" data-link>${lpT('Så räknas riskkollen', 'How the risk check works')}</a><a href="/om" data-link>${lpT('Om oss', 'About us')}</a><a href="/integritet" data-link>${lpT('Integritet', 'Privacy')}</a><a href="/ordlista" data-link>${lpT('Ordlista', 'Glossary')}</a>${langSwitch()}</nav></div>
     <p class="lp-k lp-xs">${lpT('Finanskollen visar information, inte investeringsrådgivning. Historisk utveckling säger inget om framtiden.', 'Finanskollen shows information, not investment advice. Past performance says nothing about the future.')}</p></footer>
@@ -578,7 +578,7 @@ const minOversikt = () => getPort().length > 0;
 function viewOversikt() {
   if (minOversikt()) return viewOversiktMin();
   return `
-  ${topbar([['Översikt', '/']])}
+  ${topbar([['Översikt', '/oversikt']])}
   ${visitorHero()}
   <div class="ticker num" aria-label="Marknaden" id="ticker">
     ${MARKET.map((m) => `<span><span class="muted">${esc(m.namn)}</span><span data-q="${m.sym}">…</span></span>`).join('')}
@@ -760,7 +760,7 @@ const nTopic = (n) => ({ Vinstvarning: 'var(--down)', Rapport: 'var(--info)', Af
 
 function viewOversiktMin() {
   return `
-  ${topbar([['Översikt', '/']])}
+  ${topbar([['Översikt', '/oversikt']])}
   <div class="n-head">
     <div class="n-hl"><h1>${esc(nGreet())}${locked() && isDemo() ? ' <span class="pill outline ov-expill">Exempel</span>' : ''}</h1><span class="small muted" id="market-status">${EN ? 'Fetching the market …' : 'Hämtar marknaden …'}</span></div>
     <div class="n-bors" id="n-bors">${['VOLV-B.ST', 'AAPL'].map((s) => { const b = borsStatus(s); return `<span class="n-pill ${b.kod}"><i></i>${esc(b.bors)} · ${esc(b.txt)}</span>`; }).join('')}</div>
@@ -1213,7 +1213,7 @@ const POPULAR = [
 function viewSok(params) {
   const q = params.get('q') || '';
   return `
-  ${topbar([['Översikt', '/'], ['Bolag', '/sok']], false)}
+  ${topbar([['Översikt', '/oversikt'], ['Bolag', '/sok']], false)}
   <div class="stack" style="gap:6px">
     <span class="eyebrow">Sök på en aktie, fond eller ETF. Du får affärsidé, historia, kursutveckling och en full riskkoll på samma sida.</span>
     <h1 class="title">Bolag</h1>
@@ -1285,7 +1285,7 @@ async function getStock(sym) {
 /* ================= Nyheter ================= */
 function viewNyheter() {
   return `
-  ${topbar([['Översikt', '/'], ['Nyheter', '/nyheter']])}
+  ${topbar([['Översikt', '/oversikt'], ['Nyheter', '/nyheter']])}
   <div class="section-head" style="align-items:flex-end">
     <div class="stack" style="gap:6px">
       <span class="eyebrow" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">Börsnyheter från hela världen <span id="news-status"></span></span>
@@ -1372,7 +1372,7 @@ function mountNyheter() {
 /* ================= Bevakning ================= */
 function viewBevakning() {
   return `
-  ${topbar([['Översikt', '/'], ['Bevakning', '/bevakning']])}
+  ${topbar([['Översikt', '/oversikt'], ['Bevakning', '/bevakning']])}
   <div class="stack" style="gap:6px">
     <span class="eyebrow">${ACC.user ? `Sparas på ditt konto (${esc(ACC.user.email)}) och följer med till alla dina enheter` : 'Sparas i den här webbläsaren. <a href="/konto" data-link>Logga in</a> för att få listan på alla enheter.'}</span>
     <h1 class="title">Mina aktier</h1>
@@ -2355,11 +2355,11 @@ function bOm(panel, ctx) {
 
 function viewNotFound() {
   return `
-  ${topbar([['Översikt', '/'], ['Sidan finns inte', location.pathname]])}
+  ${topbar([['Översikt', '/oversikt'], ['Sidan finns inte', location.pathname]])}
   <div class="card stack" style="max-width:560px">
     <h1 class="title" style="font-size:36px">Sidan finns inte</h1>
     <p class="muted" style="margin:0">Länken kan vara fel, eller så har sidan flyttat.</p>
-    <a class="btn" href="/" data-link style="align-self:flex-start">Till översikten</a>
+    <a class="btn" href="/oversikt" data-link style="align-self:flex-start">Till översikten</a>
   </div>`;
 }
 
@@ -2386,7 +2386,7 @@ const PAGE = 50;
 
 function viewAktier() {
   return `
-  ${topbar([['Översikt', '/'], ['Alla aktier', '/aktier']])}
+  ${topbar([['Översikt', '/oversikt'], ['Alla aktier', '/aktier']])}
   <div class="stack" style="gap:6px">
     <span class="eyebrow" id="ak-status">Hämtar listan …</span>
     <h1 class="title">Alla aktier</h1>
@@ -2681,7 +2681,7 @@ const tip = (k) => (ORD[k] ? tipMark(k) : '');
 })();
 
 function viewOrdlista() {
-  return `${topbar([['Översikt', '/'], ['Ordlista', '/ordlista']], false)}
+  return `${topbar([['Översikt', '/oversikt'], ['Ordlista', '/ordlista']], false)}
   <div class="stack" style="gap:6px"><span class="eyebrow">Börsens ord på enkel svenska</span><h1 class="title">Ordlista</h1></div>
   <section class="card" style="padding:8px 24px">
     <dl class="glossary">${Object.entries(ORD).sort((a, b) => a[0].localeCompare(b[0], 'sv')).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
@@ -2695,7 +2695,7 @@ const L2 = (sv, en) => (EN ? en : sv);
 const M_SRC = { 'Kurssvängningar': 'Yahoo Finance', 'Skulder': 'Yahoo Finance', 'Värdering': 'Yahoo Finance', 'Lönsamhet': 'Yahoo Finance', 'Handel': 'Yahoo Finance', 'Storlek': 'Yahoo Finance', 'Blankning': L2('Finansinspektionen, bara svenska aktier', 'Finansinspektionen, Swedish stocks only') };
 function viewMetod() {
   const parts = Object.keys(B_RULES);
-  return `${topbar([['Översikt', '/'], [L2('Så räknas riskkollen', 'How the risk check works'), '/metod']], false)}
+  return `${topbar([['Översikt', '/oversikt'], [L2('Så räknas riskkollen', 'How the risk check works'), '/metod']], false)}
   <div class="stack" style="gap:6px"><span class="eyebrow">${L2('Öppen metod', 'Open method')}</span><h1 class="title">${L2('Så räknas riskkollen', 'How the risk check works')}</h1>
     <p class="muted" style="margin:0;max-width:760px">${L2('Riskkollen är vår egen förenkling av hur mycket en aktie kan svänga i värde, från 1 (låg) till 10 (hög). Den räknas med samma fasta regler för alla aktier. Ingen AI och ingen person bedömer bolagen för hand, och ingen kan betala för en bättre siffra.', 'The risk check is our own simplification of how much a stock can swing in value, from 1 (low) to 10 (high). It is calculated with the same fixed rules for every stock. No AI and no person rates the companies by hand, and nobody can pay for a better number.')}</p></div>
   <section class="card m-sec"><h2 class="m-h"><span>1</span>${L2('Sju delar, var och en Låg, Medel eller Hög', 'Seven parts, each Low, Medium or High')}</h2>
@@ -2763,7 +2763,7 @@ const OM = {
 
 function viewOm() {
   const p = OM.vi === 'vi';
-  return `${topbar([['Översikt', '/'], ['Om oss', '/om']], false)}
+  return `${topbar([['Översikt', '/oversikt'], ['Om oss', '/om']], false)}
   <div class="stack" style="gap:6px"><span class="eyebrow">Vem står bakom Finanskollen?</span><h1 class="title">Om oss</h1></div>
   <div class="om-grid">
     <section class="card om-person">
@@ -2803,7 +2803,7 @@ function viewOm() {
 /* ================= Integritet ================= */
 const SUPA_REGION = 'Sverige, inom EU';
 function viewIntegritet() {
-  return `${topbar([['Översikt', '/'], ['Integritet', '/integritet']], false)}
+  return `${topbar([['Översikt', '/oversikt'], ['Integritet', '/integritet']], false)}
   <div class="stack" style="gap:6px"><span class="eyebrow">Senast uppdaterad 9 november 2026</span><h1 class="title">Så hanterar vi dina uppgifter</h1></div>
   <section class="card co-section prose-sec">
     <h2 class="section">Kort sagt</h2>
@@ -3256,7 +3256,7 @@ function viewPortfolj() {
   const C = (cls, inner, id) => `<section class="b-card ${cls}"${id ? ` id="${id}"` : ''}>${inner}</section>`;
   const H = (t, sub) => `<div class="b-ch"><h2 class="b-lbl">${esc(t)}</h2>${sub || ''}</div>`;
   const S = (t) => `<span class="small faint">${t}</span>`;
-  return `${topbar([['Översikt', '/'], ['Min portfölj', '/portfolj']])}
+  return `${topbar([['Översikt', '/oversikt'], ['Min portfölj', '/portfolj']])}
   ${guestBar()}
   <section class="b-card b-top p-top">
     <div class="b-top-row">
@@ -4478,9 +4478,9 @@ const AUTH_ERR = {
 };
 // Efter inloggning: tillbaka till sidan man försökte öppna, annars översikten
 function goAfterLogin() {
-  let to = readLS('mk-efter-login', '/');
+  let to = readLS('mk-efter-login', '/oversikt');
   try { localStorage.removeItem('mk-efter-login'); } catch { /* privat läge */ }
-  if (typeof to !== 'string' || !to.startsWith('/') || to.startsWith('//') || to.startsWith('/konto') || to.startsWith('/valkommen')) to = '/';
+  if (typeof to !== 'string' || !to.startsWith('/') || to.startsWith('//') || to.startsWith('/konto') || to.startsWith('/valkommen') || to === '/') to = '/oversikt';
   navigate(to);
 }
 const authErr = (e) => AUTH_ERR[e?.code] || (e?.status === 400 ? 'Kontrollera uppgifterna och prova igen.' : 'Det gick inte att nå inloggningen just nu.');
@@ -4497,7 +4497,7 @@ function viewKonto() {
     </div>`;
   }
   return `
-  ${topbar([['Översikt', '/'], [ACC.user ? 'Mitt konto' : 'Logga in', '/konto']])}
+  ${topbar([['Översikt', '/oversikt'], [ACC.user ? 'Mitt konto' : 'Logga in', '/konto']])}
   <div class="stack" style="gap:6px">
     <span class="eyebrow">Spara din bevakning och dina prislarm på alla enheter</span>
     <h1 class="title">${ACC.user ? 'Mitt konto' : 'Logga in'}</h1>
@@ -4909,7 +4909,7 @@ async function aiSummary(sym, namn) {
 /* ================= Jämför två bolag ================= */
 function viewJamfor() {
   return `
-  ${topbar([['Översikt', '/'], ['Jämför', '/jamfor']])}
+  ${topbar([['Översikt', '/oversikt'], ['Jämför', '/jamfor']])}
   <div class="stack" style="gap:6px">
     <span class="eyebrow">Välj två aktier eller fonder och se dem sida vid sida</span>
     <h1 class="title">Jämför två bolag</h1>
@@ -5001,7 +5001,7 @@ const cleanSym = (s) => { const v = String(s || '').trim().toUpperCase(); return
 
 function route() {
   // Sidor som alla får se, även utan konto
-  const PUBLIC = ['/om', '/integritet', '/ordlista', '/metod'];
+  const PUBLIC = ['/', '/om', '/integritet', '/ordlista', '/metod'];
   const PRIVATE = ['/portfolj', '/ova', '/bevakning', '/kalender', '/idag'];
   const here = location.pathname.replace(/\/+$/, '') || '/';
   if (here === '/om') return { active: 'om', title: 'Om oss', html: viewOm(), mount: () => {} };
@@ -5022,8 +5022,9 @@ function route() {
   }
   const path = location.pathname.replace(/\/+$/, '') || '/';
   const params = new URLSearchParams(location.search);
-  if (path === '/' && !ACC.user && !minOversikt()) return { active: 'landing', title: 'Översikt', html: viewLanding(), mount: mountLanding };
-  if (path === '/') return { active: 'oversikt', title: 'Översikt', html: viewOversikt(), mount: mountOversikt };
+  // Startsidan är alltid landningssidan. Översikten ligger på /oversikt.
+  if (path === '/') return { active: 'landing', title: 'Finanskollen', html: viewLanding(), mount: mountLanding };
+  if (path === '/oversikt') return { active: 'oversikt', title: 'Översikt', html: viewOversikt(), mount: mountOversikt };
   if (path === '/sok' && params.get('s')) { history.replaceState(null, '', '/bolag/' + encodeURIComponent(params.get('s'))); return route(); }
   if (path === '/sok') return { active: 'sok', title: 'Bolag', html: viewSok(params), mount: () => mountSok(params) };
   if (path === '/nyheter') return { active: 'nyheter', title: 'Nyheter', html: viewNyheter(), mount: mountNyheter };

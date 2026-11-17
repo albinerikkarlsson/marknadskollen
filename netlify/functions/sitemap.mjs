@@ -2,7 +2,7 @@ import aktierHandler from './aktier.mjs';
 
 // GET /sitemap.xml  →  lista över sidor för Google: de öppna sidorna och en bolagssida per aktie
 const SITE = 'https://finanskollen.live';
-const STATIC = ['/', '/aktier', '/nyheter', '/sok', '/jamfor', '/ordlista', '/metod', '/om', '/integritet'];
+const STATIC = ['/', '/oversikt', '/aktier', '/nyheter', '/sok', '/jamfor', '/ordlista', '/metod', '/om', '/integritet'];
 
 export default async () => {
   const syms = [];
