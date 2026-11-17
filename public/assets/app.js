@@ -1295,6 +1295,7 @@ function viewNyheter() {
       ${newsMine() ? '<button role="tab" data-region="mina" aria-selected="true">Mina aktier</button>' : ''}
       <button role="tab" data-region="world" aria-selected="${!newsMine()}">Världen</button>
       <button role="tab" data-region="se" aria-selected="false">Sverige</button>
+      <button role="tab" data-region="md" aria-selected="false">Bolagsmeddelanden</button>
     </div>
   </div>
   <div class="split">
@@ -1329,9 +1330,11 @@ async function getMyNews() {
   return { ok: true, hamtad: new Date().toISOString(), items, mina: true };
 }
 function mountNyheter() {
-  let region = newsMine() ? 'mina' : 'world'; let filt = 'Alla'; let sort = 'viktigt'; let data = null;
+  let region = new URLSearchParams(location.search).get('flik') === 'meddelanden' ? 'md' : newsMine() ? 'mina' : 'world'; let filt = 'Alla';
+  document.querySelectorAll('[data-region]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.region === region))); let sort = 'viktigt'; let data = null;
+  const mdState = { get region() { return region; } };
   const draw = () => {
-    if (!data || !$('#newslist')) return;
+    if (region === 'md' || !data || !$('#newslist')) return;
     if (!data.ok) { $('#newslist').innerHTML = `<div class="empty">${esc(errText(data.error))}</div>`; $('#newsfilter').innerHTML = ''; $('#news-status').innerHTML = ''; return; }
     const byTime = (a, b) => String(b.datum).localeCompare(String(a.datum));
     const all = data.items.slice().sort(data.mina && sort === 'viktigt' ? (a, b) => b.poang - a.poang || byTime(a, b) : byTime);
@@ -1356,7 +1359,7 @@ function mountNyheter() {
       </article>`).join('') || `<div class="empty">${filt !== 'Alla' ? `Inga nyheter om ${esc(filt.toLowerCase())} just nu.` : region === 'mina' ? 'Inga nyheter om dina aktier de senaste två veckorna.' : region === 'se' ? 'Inga nyheter om svenska bolag just nu.' : 'Inga nyheter just nu.'}</div>`;
   };
   const load = async () => {
-    const r = region; $('#newslist').innerHTML = loading('Hämtar nyheter …');
+    const r = region; if (r === 'md') return mdNyheter(mdState); $('#newslist').innerHTML = loading('Hämtar nyheter …');
     const d = r === 'mina' ? await getMyNews() : await getNews(r); if (r !== region) return; data = d; draw();
   };
   $('.tabs').addEventListener('click', (e) => {
@@ -2337,7 +2340,9 @@ function bKalender(panel, ctx) {
 }
 async function bNyheter(panel, ctx) {
   const { s, sym } = ctx;
-  panel.innerHTML = `<div class="b-grid">${bCard('c12', `${bLabel(`Senaste om ${s.namn}`)}<div id="ai-sum"></div><div id="bolagnews">${loading('Hämtar nyheter …')}</div>`)}</div>`;
+  const md = ctx.se && ctx.isEq;
+  panel.innerHTML = `<div class="b-grid">${md ? bCard('c12', `${bLabel(EN ? 'Company announcements and the price reaction' : 'Bolagets meddelanden och kursreaktionen')}<div id="b-md">${loading(EN ? 'Fetching announcements …' : 'Hämtar meddelanden …')}</div>`) : ''}${bCard('c12', `${bLabel(`Senaste om ${s.namn}`)}<div id="ai-sum"></div><div id="bolagnews">${loading('Hämtar nyheter …')}</div>`)}</div>`;
+  if (md) bMeddelanden(ctx);
   aiSummary(sym, s.namn);
   const n = await ctx.get.news(); const box = $('#bolagnews'); if (!box) return;
   const items = (n?.items || []).map((x) => prepNews(x, null, sym));
@@ -2347,6 +2352,149 @@ async function bNyheter(panel, ctx) {
       <span class="grow"><span style="display:block;font-weight:500">${newsTitle(it)}</span><span class="small muted src">${it.amne ? `<span class="pill news-topic t-${esc(it.amne)}">${esc(it.amne)}</span> ` : ''}${flag(it.land)}${esc(it.kalla)}</span></span>
     </div>`).join('')}</div>` : `<p class="b-note">${n?.error ? esc(errText(n)) : n?.ingenAtkomst ? 'Inga nyheter om bolaget hittades just nu.' : 'Inga nyheter om bolaget de senaste två veckorna.'}</p>`;
 }
+/* ================= Bolagsmeddelanden från Nasdaq Nordic, med kursreaktion ================= */
+// Varje meddelande visas med hur aktien rörde sig: från stängningen före meddelandet till stängningen efter.
+// Ingen tolkning, bara rörelsen. Index samma dagar visas bredvid så att man ser om hela börsen rörde sig.
+const getMdd = (namn) => api('/api/meddelanden?sprak=' + (EN ? 'en' : 'sv') + (namn ? '&namn=' + encodeURIComponent(namn) : ''), (namn ? 15 : 5) * 60e3);
+// Grupper för filtret. Kategorierna kommer från Nasdaq, på svenska eller engelska.
+const MD_GROUPS = [
+  ['rapport', ['Rapporter', 'Reports'], /rapport|report|bokslut|annual|interim|half.?year|quarter|årsredovisning/i, '#60A5FA'],
+  ['insider', ['Insiderinformation', 'Inside information'], /insider/i, '#FF5A00'],
+  ['ledning', ['Ledning och stämma', 'Management and meetings'], /stämma|meeting|styrelse|board|ledning|management|revisor|auditor|valberedning|nomination/i, '#A78BFA'],
+  ['rutin', ['Återköp och rutin', 'Buybacks and routine'], /återköpta|buy.?back|repurchase|nav\b|nav kurs|rösträtter|voting rights|antal aktier|number of shares/i, '#6B6F76']
+];
+const mdLbl = (g) => g[1][EN ? 1 : 0];
+const mdGroup = (k) => (MD_GROUPS.find((g) => g[2].test(k || '')) || ['nyhet', ['Nyheter och ordrar', 'News and orders'], null, '#4CC38A']);
+const mdWhen = (iso) => { const d = new Date(iso); if (isNaN(d)) return ''; const y = d.toLocaleDateString('sv-SE', { year: 'numeric', timeZone: 'Europe/Stockholm' }); return when(iso) + (y !== String(new Date().getFullYear()) ? ' ' + y : ''); };
+// Svensk dag och minut för en tidpunkt
+const stoParts = (ms) => { const p = Object.fromEntries(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Stockholm', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ms)).map((x) => [x.type, x.value])); return { day: `${p.year}-${p.month}-${p.day}`, min: Number(p.hour) * 60 + Number(p.minute) }; };
+const CLOSE_MIN = 17 * 60 + 30;
+// Kursreaktionen: senaste stängning före meddelandet och första stängningen efter
+function mdReact(P, I, iso) {
+  if (!P?.length || !iso) return null;
+  const a = stoParts(new Date(iso).getTime());
+  const days = P.map((p) => bKey(p[0]));
+  let b = -1; for (let i = 0; i < P.length; i++) { if (days[i] < a.day || (days[i] === a.day && a.min >= CLOSE_MIN)) b = i; else break; }
+  if (b < 0) return null;
+  const after = b + 1 < P.length ? b + 1 : null;
+  const today = stoParts(Date.now());
+  const live = after != null && days[after] === today.day && today.min < CLOSE_MIN;
+  const pct = after != null ? (P[after][1] / P[b][1] - 1) * 100 : null;
+  let idx = null;
+  if (after != null && I?.length) { const im = new Map(I.map((p) => [bKey(p[0]), p[1]])); const i0 = im.get(days[b]); const i1 = im.get(days[after]); if (i0 && i1) idx = (i1 / i0 - 1) * 100; }
+  return { b, after, pct, idx, live };
+}
+// Litet diagram: några dagar före och efter, med meddelandet markerat
+function mdSpark(P, r) {
+  if (!r) return '';
+  const end = r.after ?? r.b; const i0 = Math.max(0, r.b - 7); const i1 = Math.min(P.length - 1, end + 7);
+  const pts = P.slice(i0, i1 + 1); if (pts.length < 2) return '';
+  const W = 116; const H = 34; const lo = Math.min(...pts.map((p) => p[1])); const hi = Math.max(...pts.map((p) => p[1])); const span = hi - lo || hi * 0.01 || 1;
+  const X = (i) => ((i - i0) / (i1 - i0 || 1)) * W; const Y = (v) => 3 + (1 - (v - lo) / span) * (H - 6);
+  const line = pts.map((p, k) => `${k ? 'L' : 'M'}${X(i0 + k).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join('');
+  const c = r.pct == null ? 'var(--muted)' : r.pct >= 0 ? 'var(--up)' : 'var(--down)';
+  const xm = X(r.after != null ? (r.b + r.after) / 2 : r.b);
+  const seg = r.after != null ? `<path d="M${X(r.b).toFixed(1)} ${Y(P[r.b][1]).toFixed(1)}L${X(r.after).toFixed(1)} ${Y(P[r.after][1]).toFixed(1)}" stroke="${c}" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="${X(r.after).toFixed(1)}" cy="${Y(P[r.after][1]).toFixed(1)}" r="2.6" fill="${c}"/>` : '';
+  return `<svg class="md-spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><line x1="${xm.toFixed(1)}" x2="${xm.toFixed(1)}" y1="0" y2="${H}" stroke="var(--muted)" stroke-dasharray="2 2" stroke-opacity=".6"/><path d="${line}" fill="none" stroke="var(--muted)" stroke-opacity=".75" stroke-width="1.3"/>${seg}</svg>`;
+}
+function mdPxHTML(P, I, iso, idxName = 'OMXS30') {
+  const r = mdReact(P, I, iso);
+  if (!r) return `<span class="md-pxt faint small">${EN ? 'Price missing' : 'Kurs saknas'}</span>`;
+  const txt = r.pct == null ? `<span class="faint small">${EN ? 'No trading since' : 'Ingen handel sedan dess'}</span>`
+    : `<b class="num ${tone(r.pct)}">${esc(pct(r.pct, 1))}</b><span class="small faint">${r.live ? (EN ? 'so far today' : 'hittills i dag') : (EN ? 'the stock' : 'aktien')}${r.idx != null ? ` · ${esc(idxName)} ${esc(pct(r.idx, 1))}` : ''}</span>`;
+  return `${mdSpark(P, r)}<span class="md-pxt">${txt}</span>`;
+}
+function mdRow(it, opt = {}) {
+  const g = mdGroup(it.kategori); const u = safeUrl(it.lank);
+  return `<article class="md-row" data-mdid="${esc(it.id)}"${opt.sym ? ` data-mdsym="${esc(opt.sym)}"` : ''} style="--c:${g[3]}">
+    <div class="md-main">
+      <div class="md-meta small"><span class="md-cat" data-noi18n>${esc(it.kategori || mdLbl(g))}</span>${opt.showCo ? (opt.sym ? `<a class="md-co" href="/bolag/${encodeURIComponent(opt.sym)}" data-link data-noi18n>${esc(ovName(opt.sym))}</a>` : `<span class="md-co" data-noi18n>${esc(it.bolag)}</span>`) : ''}<span class="faint num">${esc(mdWhen(it.tid))}</span></div>
+      ${u ? `<a class="md-title" href="${esc(u)}" target="_blank" rel="noopener noreferrer" data-noi18n>${esc(it.rubrik)}<span class="sr-only">${EN ? ' (opens in a new tab)' : ' (öppnas i ny flik)'}</span></a>` : `<span class="md-title" data-noi18n>${esc(it.rubrik)}</span>`}
+    </div>
+    <div class="md-px" aria-label="${EN ? 'Price reaction' : 'Kursreaktion'}">${opt.px ?? (opt.sym || opt.pending ? '<span class="md-skel"></span>' : '')}</div>
+  </article>`;
+}
+const MD_NOTE = () => `<p class="small faint md-note">${EN ? 'Source: company announcements via Nasdaq Nordic. The price shows the move from the close before the announcement to the close after. Other news the same day can also affect the price.' : 'Källa: bolagens meddelanden via Nasdaq Nordic. Kursen visar rörelsen från stängningen före meddelandet till stängningen efter. Andra nyheter samma dag kan också påverka kursen.'}</p>`;
+
+// Bolagssidan: meddelanden med kursreaktion
+async function bMeddelanden(ctx) {
+  const box = $('#b-md'); if (!box) return;
+  const d = await getMdd(ctx.s.namn).catch(() => null); if (!$('#b-md')) return;
+  const items = d && !d.error ? d.items || [] : null;
+  if (!items) { box.innerHTML = `<p class="b-note">${EN ? 'The announcements could not be fetched right now.' : 'Meddelandena kunde inte hämtas just nu.'}</p>`; return; }
+  if (!items.length) { box.innerHTML = `<p class="b-note">${EN ? 'No announcements from the company found in the last year.' : 'Inga meddelanden från bolaget hittades det senaste året.'}</p>`; return; }
+  let filt = 'alla'; const list = items;
+  const draw = (P, I) => {
+    const shown = list.filter((x) => (filt === 'alla' ? mdGroup(x.kategori)[0] !== 'rutin' : filt === 'allt' ? true : mdGroup(x.kategori)[0] === filt)).slice(0, 15);
+    const groups = MD_GROUPS.filter((g) => list.some((x) => mdGroup(x.kategori)[0] === g[0]));
+    box.innerHTML = `<div class="chips md-filt">${[['alla', EN ? 'Important' : 'Viktiga'], ...groups.filter((g) => g[0] !== 'rutin').map((g) => [g[0], mdLbl(g)]), ['allt', EN ? 'All' : 'Alla, även rutin']].map(([k, t]) => `<button type="button" class="chip-btn" data-noi18n data-mdf="${k}" aria-pressed="${k === filt}">${esc(t)}</button>`).join('')}</div>
+      <div class="md-list">${shown.map((it) => mdRow(it, { px: P ? mdPxHTML(P, I, it.tid, ctx.idxName) : undefined, pending: !P })).join('') || `<p class="b-note">${EN ? 'Nothing in this category.' : 'Inget i den här kategorin.'}</p>`}</div>${MD_NOTE()}`;
+  };
+  draw(null, null);
+  const [px, ix] = await Promise.all([ctx.get.px().catch(() => null), ctx.get.idx().catch(() => null)]);
+  const P = px?.punkter || null; const I = ix?.punkter || null;
+  draw(P, I);
+  box.addEventListener('click', (e) => { const b = e.target.closest('[data-mdf]'); if (!b) return; filt = b.dataset.mdf; draw(P, I); });
+}
+
+// Nyhetssidan: alla bolag. Bolagets namn hos Nasdaq kopplas till rätt aktie via listan med alla svenska aktier.
+const normCo = (n) => String(n || '').toLowerCase().replace(/\(publ\.?\)/g, ' ').replace(/[,.()"'&]/g, ' ').replace(/\b(ab|aktiebolag|aktiebolaget|publ|asa|oyj|a\/s|plc|inc|corp|ltd|sa|nv|ag|se|ser|class|series)\b/g, ' ').replace(/\b[ab]\b$/g, ' ').replace(/\s+/g, ' ').trim();
+let MD_MAP = null;
+async function mdSymMap() {
+  if (MD_MAP) return MD_MAP;
+  const d = await api('/api/aktier?m=se', 10 * 60e3).catch(() => null); const m = new Map();
+  for (const a of d?.aktier || []) { const k = normCo(String(a.namn).replace(/\s+ser\.?\s*[A-Z]$/i, '').replace(/,?\s*[A-Z]-aktie$/i, '')); if (!k) continue; const o = m.get(k); if (!o || (a.oms || 0) > (o.oms || 0)) m.set(k, a); }
+  MD_MAP = m; return m;
+}
+const MD_FILL = new Set(['h', 'm', 'lm', 'the', 'telefonaktiebolaget', 'holding', 'holdings', 'group', 'gruppen', 'koncernen', 'svenska', 'sverige', 'sweden', 'international', 'b', 'a']);
+// Exakt namn först, annars samma regel som för insyn: det kortare namnet ingår i det längre och resten är allmänna ord
+const mdSymOf = (map, co) => {
+  const k = normCo(co); if (!k) return null; const hit = map.get(k); if (hit) { rememberName(hit.sym, hit.namn); return hit.sym; }
+  const x = k.split(' ');
+  for (const [key, a] of map) { const y = key.split(' '); const [s, l] = x.length <= y.length ? [x, y] : [y, x]; if (s.some((w) => w.length >= 4) && s.every((w) => l.includes(w)) && l.filter((w) => !s.includes(w)).every((w) => MD_FILL.has(w))) { rememberName(a.sym, a.namn); return a.sym; } }
+  return null;
+};
+
+async function mdNyheter(state) {
+  const list = $('#newslist'); if (!list) return;
+  list.innerHTML = loading(EN ? 'Fetching announcements …' : 'Hämtar meddelanden …');
+  const [d, map] = await Promise.all([getMdd(null).catch(() => null), mdSymMap()]);
+  if (!$('#newslist') || state.region !== 'md') return;
+  if (!d || d.error) { list.innerHTML = `<div class="empty">${EN ? 'The announcements could not be fetched right now.' : 'Meddelandena kunde inte hämtas just nu.'}</div>`; return; }
+  const mine = new Set(mySyms().all);
+  const items = (d.items || []).map((it) => ({ ...it, sym: mdSymOf(map, it.bolag) }));
+  let filt = 'alla';
+  const draw = () => {
+    const shown = items.filter((x) => { const g = mdGroup(x.kategori)[0]; return filt === 'alla' ? g !== 'rutin' : filt === 'allt' ? true : filt === 'mina' ? mine.has(x.sym) : g === filt; });
+    $('#news-status').innerHTML = items.length ? liveTag(d.hamtad) : '';
+    $('#news-count').textContent = String(shown.length);
+    const times = items.map((n) => n.tid).sort(); $('#news-range').textContent = items.length ? `${EN ? 'Latest' : 'Senaste'} ${when(times[times.length - 1])}, ${EN ? 'oldest' : 'äldsta'} ${when(times[0])}` : '';
+    const chips = [['alla', EN ? 'Important' : 'Viktiga'], ...(mine.size ? [['mina', EN ? 'My stocks' : 'Mina aktier']] : []), ...MD_GROUPS.filter((g) => g[0] !== 'rutin').map((g) => [g[0], mdLbl(g)]), ['nyhet', EN ? 'News and orders' : 'Nyheter och ordrar'], ['allt', EN ? 'All, incl. routine' : 'Alla, även rutin']];
+    $('#newsfilter').innerHTML = chips.map(([k, t]) => `<button type="button" class="chip-btn" data-noi18n data-mdf="${k}" aria-pressed="${k === filt}">${esc(t)}</button>`).join('');
+    $('#news-help').innerHTML = EN ? 'Announcements from companies on the Stockholm Stock Exchange and First North. <b>Important</b> hides buybacks and other routine notices.' : 'Meddelanden från bolag på Stockholmsbörsen och First North. <b>Viktiga</b> döljer återköp och andra rutinmeddelanden.';
+    list.innerHTML = shown.length ? `<section class="card md-card">${shown.map((it) => mdRow(it, { sym: it.sym, showCo: true })).join('')}${MD_NOTE()}</section>` : `<div class="empty">${EN ? 'Nothing in this category right now.' : 'Inget i den här kategorin just nu.'}</div>`;
+    watchPx();
+  };
+  // Kurserna hämtas först när raden syns, och bara en gång per aktie
+  const cache = new Map(); let idxP = null;
+  const getIdx = () => (idxP ||= api('/api/chart?s=%5EOMX&r=1m', 15 * 60e3).then(bOnePerDay).catch(() => null));
+  const fill = async (row) => {
+    const sym = row.dataset.mdsym; const it = items.find((x) => x.id === row.dataset.mdid); if (!sym || !it) return;
+    if (!cache.has(sym)) cache.set(sym, api(`/api/chart?s=${encodeURIComponent(sym)}&r=1m`, 15 * 60e3).then(bOnePerDay).catch(() => null));
+    const [c, ix] = await Promise.all([cache.get(sym), getIdx()]);
+    const el = row.querySelector('.md-px'); if (el) el.innerHTML = c?.punkter ? mdPxHTML(c.punkter, ix?.punkter, it.tid) : `<span class="md-pxt faint small">${EN ? 'Price missing' : 'Kurs saknas'}</span>`;
+  };
+  let io = null;
+  const watchPx = () => {
+    io?.disconnect(); const rows = [...document.querySelectorAll('#newslist .md-row[data-mdsym]')];
+    if (!('IntersectionObserver' in window)) { rows.forEach(fill); return; }
+    io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { io.unobserve(e.target); fill(e.target); } }), { rootMargin: '200px 0px' });
+    rows.forEach((r) => io.observe(r));
+  };
+  $('#newsfilter').onclick = (e) => { const b = e.target.closest('[data-mdf]'); if (!b) return; filt = b.dataset.mdf; draw(); };
+  draw();
+}
+
 function bOm(panel, ctx) {
   const { s, sym } = ctx;
   panel.innerHTML = `<div class="b-grid">${bCard('c8', `${bLabel(ctx.isEq ? 'Affärsidé och historia' : (EN ? 'About' : 'Om'))}<div id="about-body">${loading('Hämtar affärsidé och historia …')}</div>`)}${bCard('c4', `${bLabel('Fakta')}${s.fakta?.length ? s.fakta.filter(([k]) => k !== 'Börs' || s.typ !== 'Fond').map(([k, v]) => `<div class="b-kv"><span>${esc(k)}${tip(k)}</span><b>${esc(v)}</b></div>`).join('') : '<p class="b-note">Saknas.</p>'}${safeUrl(s.webb) ? `<a class="b-more" href="${esc(safeUrl(s.webb))}" target="_blank" rel="noopener noreferrer">Bolagets webbplats ↗</a>` : ''}`)}</div>`;

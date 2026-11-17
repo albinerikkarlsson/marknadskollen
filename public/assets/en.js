@@ -332,6 +332,7 @@ const D = {
   'Region': 'Region',
   'Period': 'Period',
   'Sverige': 'Sweden',
+  'Bolagsmeddelanden': 'Company announcements',
   'Världen': 'World',
   'USA': 'USA',
   'Norge': 'Norway',
