@@ -65,6 +65,24 @@ function pick(items, sprak) {
   return out.filter((x) => x.tid).sort((a, z) => z.tid.localeCompare(a.tid));
 }
 
+// Nasdaq kräver bolagets exakta namn, t.ex. "Volvo, AB", "SAAB AB" eller "Ericsson, Telefonab. L M".
+// Först provas vanliga skrivsätt direkt, sedan fritextsökning på bolagets ord.
+const FILL = new Set(['h', 'm', 'l', 'lm', 'the', 'telefonaktiebolaget', 'telefonab', 'holding', 'holdings', 'group', 'gruppen', 'koncernen', 'b', 'a', 'abp', 'oyj']);
+const sig = (n) => normName(n).split(' ').filter((w) => w && !FILL.has(w)).sort().join(' ');
+const same = (a, b) => nameMatch(a, b) || (!!sig(a) && sig(a) === sig(b));
+async function findCompany(namn, sprak) {
+  const base = String(namn).replace(/\(publ\.?\)/gi, '').replace(/,?\s*(ser\.?\s*[A-Z]|[A-Z]-aktie)$/i, '').replace(/\s+/g, ' ').trim();
+  const core = base.replace(/^AB\s+/i, '').replace(/\s+(AB|Aktiebolag)$/i, '').trim();
+  const cands = [...new Set([base, `${core}, AB`, `${core} AB`, `${core.toUpperCase()} AB`, core, `AB ${core}`].filter(Boolean))];
+  const direct = await Promise.all(cands.map((c) => query({ company: c, limit: '1' }, sprak).catch(() => [])));
+  const hit = direct.flat().find((it) => it?.company);
+  if (hit) return hit.company;
+  const words = normName(base).split(' ').filter((w) => w.length >= 3 && !FILL.has(w)).sort((a, z) => z.length - a.length);
+  const terms = [...new Set([core, ...words.slice(0, 2)])].filter(Boolean);
+  const found = (await Promise.all(terms.flatMap((t) => [0, 50].map((start) => query({ freeText: t, start: String(start) }, sprak).catch(() => []))))).flat();
+  return found.find((it) => same(it.company, namn))?.company || null;
+}
+
 export default async (req) => {
   try {
     const q = new URL(req.url).searchParams;
@@ -73,15 +91,11 @@ export default async (req) => {
     if (namn) {
       const want = normName(namn);
       if (!want) throw new ApiError(400, 'namn saknas');
-      // Sök på bolagets mest utmärkande ord och behåll bara meddelanden från just det bolaget
-      const term = want.split(' ').filter((w) => w.length >= 2).sort((a, z) => z.length - a.length)[0];
       const from = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
-      // Fritextsökningen hittar också andra bolag som nämner ordet. Den används bara för att hitta bolagets exakta namn hos Nasdaq.
-      const found = (await Promise.all([0, 50, 100].map((start) => query({ freeText: term, fromDate: from, start: String(start) }, sprak).catch((e) => (start ? [] : Promise.reject(e)))))).flat();
-      const exact = found.find((it) => nameMatch(it.company, namn))?.company;
-      if (!exact) return cached({ kalla: 'Nasdaq Nordic', bolag: null, items: [], hamtad: new Date().toISOString() }, 3600);
+      const exact = await findCompany(namn, sprak);
+      if (!exact) return cached({ kalla: 'Nasdaq Nordic', bolag: null, items: [], hamtad: new Date().toISOString() }, 6 * 3600);
       const own = (await Promise.all([0, 50].map((start) => query({ company: exact, fromDate: from, start: String(start) }, sprak).catch(() => [])))).flat();
-      const items = pick([...own, ...found].filter((it) => it.company === exact), sprak).filter((x) => x.tid >= from);
+      const items = pick(own.filter((it) => it.company === exact), sprak).filter((x) => x.tid >= from);
       const seen = new Set(); const uniq = items.filter((x) => (seen.has(x.id) ? false : seen.add(x.id)));
       return cached({ kalla: 'Nasdaq Nordic', bolag: exact, items: uniq.slice(0, 40), hamtad: new Date().toISOString() }, 900);
     }

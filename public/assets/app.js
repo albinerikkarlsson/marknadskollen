@@ -2443,15 +2443,18 @@ let MD_MAP = null;
 async function mdSymMap() {
   if (MD_MAP) return MD_MAP;
   const d = await api('/api/aktier?m=se', 10 * 60e3).catch(() => null); const m = new Map();
-  for (const a of d?.aktier || []) { const k = normCo(String(a.namn).replace(/\s+ser\.?\s*[A-Z]$/i, '').replace(/,?\s*[A-Z]-aktie$/i, '')); if (!k) continue; const o = m.get(k); if (!o || (a.oms || 0) > (o.oms || 0)) m.set(k, a); }
+  const put = (k, a) => { if (!k) return; const o = m.get(k); if (!o || (a.oms || 0) > (o.oms || 0)) m.set(k, a); };
+  for (const a of d?.aktier || []) { const n = String(a.namn).replace(/\s+ser\.?\s*[A-Z]$/i, '').replace(/,?\s*[A-Z]-aktie$/i, ''); put(normCo(n), a); if (mdSig(n)) put('#' + mdSig(n), a); }
   MD_MAP = m; return m;
 }
+const MD_SIGFILL = new Set(['h', 'm', 'l', 'lm', 'the', 'telefonaktiebolaget', 'telefonab', 'holding', 'holdings', 'group', 'gruppen', 'koncernen', 'b', 'a', 'abp', 'oyj']);
+const mdSig = (n) => normCo(n).split(' ').filter((w) => w && !MD_SIGFILL.has(w)).sort().join(' ');
 const MD_FILL = new Set(['h', 'm', 'lm', 'the', 'telefonaktiebolaget', 'holding', 'holdings', 'group', 'gruppen', 'koncernen', 'svenska', 'sverige', 'sweden', 'international', 'b', 'a']);
 // Exakt namn först, annars samma regel som för insyn: det kortare namnet ingår i det längre och resten är allmänna ord
 const mdSymOf = (map, co) => {
-  const k = normCo(co); if (!k) return null; const hit = map.get(k); if (hit) { rememberName(hit.sym, hit.namn); return hit.sym; }
+  const k = normCo(co); if (!k) return null; const hit = map.get(k) || (mdSig(co) ? map.get('#' + mdSig(co)) : null); if (hit) { rememberName(hit.sym, hit.namn); return hit.sym; }
   const x = k.split(' ');
-  for (const [key, a] of map) { const y = key.split(' '); const [s, l] = x.length <= y.length ? [x, y] : [y, x]; if (s.some((w) => w.length >= 4) && s.every((w) => l.includes(w)) && l.filter((w) => !s.includes(w)).every((w) => MD_FILL.has(w))) { rememberName(a.sym, a.namn); return a.sym; } }
+  for (const [key, a] of map) { if (key[0] === '#') continue; const y = key.split(' '); const [s, l] = x.length <= y.length ? [x, y] : [y, x]; if (s.some((w) => w.length >= 4) && s.every((w) => l.includes(w)) && l.filter((w) => !s.includes(w)).every((w) => MD_FILL.has(w))) { rememberName(a.sym, a.namn); return a.sym; } }
   return null;
 };
 
