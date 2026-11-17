@@ -450,6 +450,130 @@ async function fillStartEx(quotes) {
   });
 }
 
+/* ================= Landningssidan ================= */
+// Startsidan för den som inte är inloggad och inte har någon portfölj. Egen meny, ingen sidomeny.
+// Alla siffror hämtas live. Saknas något står det Saknas.
+const LP_EX = ['VOLV-B.ST', 'SAAB-B.ST', 'AAPL'];
+const LP_DEMO = 'VOLV-B.ST';
+const lpT = (sv, en) => (EN ? en : sv);
+const lpSeg = (p) => { const c = p == null ? '' : p <= 3 ? 'up' : p <= 6 ? 'warn' : 'down'; return `<span class="lp-seg ${c}" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i class="${p != null && i < p ? 'on' : ''}"></i>`).join('')}</span>`; };
+const lpBg = () => `<div class="lp-bgw" aria-hidden="true"><svg class="lp-bg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice"><defs><filter id="lpc1" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="40"/></filter><filter id="lpc2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>
+<radialGradient id="lppl" cx="50%" cy="0%" r="75%"><stop offset="0" stop-color="#5A2207"/><stop offset=".35" stop-color="#2A1006"/><stop offset=".8" stop-color="#0D0806"/></radialGradient></defs>
+<g class="lp-ring"><circle cx="720" cy="1210" r="600" fill="none" stroke="#FF5A00" stroke-width="140" stroke-opacity=".55" filter="url(#lpc1)"/><circle cx="720" cy="1210" r="580" fill="none" stroke="#FF7A1A" stroke-width="30" stroke-opacity=".9" filter="url(#lpc2)"/></g>
+<circle cx="720" cy="1210" r="566" fill="url(#lppl)"/><circle cx="720" cy="1210" r="567" fill="none" stroke="#FFD2AE" stroke-opacity=".9" stroke-width="1.5"/></svg></div>`;
+
+function viewLanding() {
+  const faq = [
+    [lpT('Vad kostar det?', 'What does it cost?'), lpT('Inget. Ingen betalversion och ingen reklam.', 'Nothing. No paid version and no ads.')],
+    [lpT('Behöver jag ett konto?', 'Do I need an account?'), lpT('Nej, sök och bolagssidor är öppna för alla. Ett gratis konto behövs bara för portfölj, bevakning och notiser.', 'No, search and company pages are open to everyone. A free account is only needed for portfolio, watchlist and alerts.')],
+    [lpT('Får jag köptips?', 'Do I get buy tips?'), lpT('Nej. Du får risk och fakta. Besluten fattar du själv.', 'No. You get risk and facts. You make the decisions.')],
+    [lpT('Var kommer siffrorna ifrån?', 'Where do the numbers come from?'), lpT('Insyn och blankning från Finansinspektionen. Kurser, nyckeltal och rapportdagar från Yahoo Finance. Hur riskkollen räknas står öppet på sidan Så räknas riskkollen.', 'Insider trading and short selling from Finansinspektionen. Prices, key figures and report dates from Yahoo Finance. How the risk check is calculated is open on the page How the risk check works.')],
+    [lpT('Vad gör ni med mina uppgifter?', 'What do you do with my data?'), lpT('Sparar det som behövs för ditt konto. Vi säljer dem aldrig.', 'We store what your account needs. We never sell it.')]
+  ];
+  const step = (n, t, x, d = '') => `<div class="lp-step lp-rv ${d}"><span class="lp-n">${n}</span><b>${t}</b><span class="lp-k">${x}</span></div>`;
+  const small = (lbl, t, x, d = '') => `<div class="lp-card lp-rv ${d}"><span class="lp-lbl">${lbl}</span><p class="lp-p">${t}</p>${x ? `<span class="lp-k lp-sm">${x}</span>` : ''}</div>`;
+  return `<div class="lp" data-noi18n>
+  <section class="lp-hero">${lpBg()}<div class="lp-fade"></div>
+    <nav class="lp-w lp-nav lp-in" aria-label="${lpT('Huvudmeny', 'Main menu')}"><a class="lp-logo brand-word" href="/" data-link>FINANSKOLLEN<span>.</span></a>
+      <span class="lp-links"><a href="#lp-risk">${lpT('Riskkoll', 'Risk check')}</a><a href="/portfolj" data-link>${lpT('Portfölj', 'Portfolio')}</a><a href="/metod" data-link>${lpT('Så räknas den', 'How it works')}</a><a href="#lp-faq">${lpT('Frågor', 'Questions')}</a></span>
+      <span class="lp-acts"><a class="lp-pill lp-ghost" href="/konto" data-link>${lpT('Logga in', 'Log in')}</a><a class="lp-pill lp-white" href="/konto?ny=1" data-link>${lpT('Skapa konto', 'Sign up')}</a></span></nav>
+    <div class="lp-w lp-hc">
+      <h1 class="lp-in" style="animation-delay:.1s">${lpT('Se risken innan du köper', 'See the risk before you buy')}</h1>
+      <p class="lp-sub lp-in" style="animation-delay:.25s">${lpT('Riskkoll för varje aktie, med regler du kan läsa.', 'A risk check for every stock, with rules you can read.')}</p>
+      <div class="lp-tabs lp-in" style="animation-delay:.4s"><span class="lp-pill on">${lpT('Sök aktie', 'Search stock')}</span><a class="lp-pill" href="/portfolj?flik=kop" data-link>${lpT('Importera portfölj', 'Import portfolio')}</a></div>
+      <form class="lp-search lp-in" style="animation-delay:.5s" role="search" data-topsearch>${svg('search', 20, '#8D9097')}<label class="sr-only" for="lpq">${lpT('Sök bolag eller fond', 'Search company or fund')}</label><input id="lpq" name="q" type="search" autocomplete="off" placeholder="${lpT('Sök ett bolag, t.ex. Volvo eller Apple …', 'Search a company, e.g. Volvo or Apple …')}"><button type="submit" class="lp-pill lp-or">${lpT('Sök', 'Search')}</button></form>
+      <div class="lp-ex lp-in" style="animation-delay:.65s" aria-label="${lpT('Exempel', 'Examples')}">${LP_EX.map((x) => `<a class="lp-pill lp-chip" href="/bolag/${encodeURIComponent(x)}" data-link data-lpx="${esc(x)}">${esc(ovName(x))} ${lpSeg(null)}<b class="lp-m">…</b></a>`).join('')}</div>
+    </div>
+  </section>
+
+  <section class="lp-w lp-sec" id="lp-risk">
+    <div class="lp-h lp-rv"><span class="lp-lbl">${lpT('Det här får du', 'What you get')}</span><h2>${lpT('Allt om risken i en aktie, på en sida', 'Everything about the risk in a stock, on one page')}</h2><p>${lpT('Sök ett bolag och se direkt hur riskabelt det är, vad siffran bygger på och vad det kan betyda i kronor. Ingen inloggning behövs för att söka.', 'Search a company and see right away how risky it is, what the number is based on and what it can mean in money. No login needed to search.')}</p></div>
+    <div class="lp-g2 lp-g2a">
+      <a class="lp-card lp-rv lp-link" href="/bolag/${LP_DEMO}?flik=risk" data-link><span class="lp-lbl">${lpT('Riskkoll del för del', 'Risk check part by part')}</span><div class="lp-score"><b class="lp-m" id="lp-p">…</b><span class="lp-k">${lpT('av 10', 'of 10')} · ${esc(ovName(LP_DEMO))}</span><span id="lp-plv"></span></div><div id="lp-f"></div></a>
+      <div class="lp-col">
+        <div class="lp-card lp-rv d2"><span class="lp-lbl">${lpT('Risken i kronor', 'The risk in money')}</span><p class="lp-k" style="margin:6px 0 12px">${lpT('Per 10 000 kr i', 'Per 10,000 SEK in')} ${esc(ovName(LP_DEMO))}</p><div class="lp-kr" id="lp-kr">${[lpT('Dålig dag', 'Bad day'), lpT('Dålig månad', 'Bad month'), lpT('Börsen −20 %', 'Market −20 %'), lpT('Största fallet', 'Largest fall')].map((t, i) => `<div><span class="lp-k lp-xs">${t}</span><b class="lp-m" data-kr="${i}">…</b></div>`).join('')}</div></div>
+        <div class="lp-card lp-rv d3"><span class="lp-lbl">${lpT('Insyn och blankning', 'Insiders and short selling')}</span><p class="lp-p">${lpT('Vad ledningen köper och säljer, och hur mycket som är blankat. Från Finansinspektionen, på varje svensk aktie.', 'What the management buys and sells, and how much is shorted. From Finansinspektionen, on every Swedish stock.')}</p></div>
+      </div>
+    </div>
+    <div class="lp-g2 lp-g2b">
+      <div class="lp-card lp-rv"><span class="lp-lbl">${lpT('Notiser', 'Alerts')}</span><div class="lp-ntf">
+        <div style="--c:#FF5A00"><b>${lpT('Ledningen köpte aktier', 'The management bought shares')}</b><span class="lp-k">${lpT('Vem, hur många och för hur mycket, så fort det anmälts.', 'Who, how many and for how much, as soon as it is reported.')}</span></div>
+        <div style="--c:var(--warn)"><b>${lpT('Riskkollen ändrades', 'The risk check changed')}</b><span class="lp-k">${lpT('Från vilken nivå till vilken, och vilken del som ändrades.', 'From which level to which, and which part changed.')}</span></div>
+        <div style="--c:#60A5FA"><b>${lpT('Rapport i morgon', 'Report tomorrow')}</b><span class="lp-k">${lpT('Dagen före och samma dag för bolag du äger eller bevakar.', 'The day before and the same day for companies you own or watch.')}</span></div>
+      </div><p class="lp-k lp-xs" style="margin:10px 0 0">${lpT('Du väljer själv vilka notiser du vill ha, per bolag.', 'You choose which alerts you want, per company.')}</p></div>
+      <div class="lp-card lp-rv d2"><span class="lp-lbl">${lpT('Din portfölj', 'Your portfolio')}</span><p class="lp-p" style="font-size:19px">${lpT('Se hela portföljens risk, din dag i kronor, utdelningar och rapportdagar. Och hur du gått mot börsen.', "See your whole portfolio's risk, your day in money, dividends and report dates. And how you did against the market.")}</p>
+        <ul class="lp-ul"><li>${lpT('Importera dina affärer från Avanza och Nordnet', 'Import your trades from Avanza and Nordnet')}</li><li>${lpT('Filen läses bara i din webbläsare', 'The file is only read in your browser')}</li><li>${lpT('Testa utan konto, spara med ett gratis konto', 'Try without an account, save with a free account')}</li></ul>
+        <div class="lp-row"><button type="button" class="lp-pill lp-or" data-demo-load="/portfolj">${lpT('Se en exempelportfölj', 'See an example portfolio')}</button><a class="lp-pill lp-ghost" href="/portfolj?flik=kop" data-link>${lpT('Importera', 'Import')}</a></div></div>
+    </div>
+    <div class="lp-card lp-rv lp-rules"><div><span class="lp-lbl">${lpT('Öppna regler', 'Open rules')}</span><h3>${lpT('Samma regler för alla aktier. Ingen AI sätter siffran.', 'The same rules for every stock. No AI sets the number.')}</h3><p class="lp-k" style="margin:0">${lpT('Varje del blir Låg, Medel eller Hög. Snittet räknas om till 1–10, och har någon del Hög blir det minst 4.', 'Each part becomes Low, Medium or High. The average is converted to 1–10, and if any part is High it is at least 4.')}</p></div>
+      <div class="lp-f lp-m">(${lpT('snitt', 'avg')} − 1) ÷ 2 × 9 + 1<br><span class="lp-k" id="lp-calc">…</span></div></div>
+  </section>
+
+  <section class="lp-w lp-sec"><div class="lp-h lp-rv"><span class="lp-lbl">${lpT('Så funkar det', 'How it works')}</span><h2>${lpT('Tre steg, inget konto', 'Three steps, no account')}</h2></div>
+    <div class="lp-g3">${step('01', lpT('Sök ett bolag', 'Search a company'), lpT('Svenska och amerikanska aktier och fonder. Skriv namnet, inte tickern.', 'Swedish and US stocks and funds. Type the name, not the ticker.'))}${step('02', lpT('Se riskkollen', 'See the risk check'), lpT('En siffra 1–10, och under den varje del som drar upp eller ner.', 'A number 1–10, and under it every part that pulls it up or down.'), 'd2')}${step('03', lpT('Bevaka om du vill', 'Watch if you want'), lpT('Med ett gratis konto sparas portfölj och bevakning, och du får notiser.', 'With a free account your portfolio and watchlist are saved, and you get alerts.'), 'd3')}</div></section>
+
+  <section class="lp-w lp-sec"><div class="lp-h lp-rv"><span class="lp-lbl">${lpT('Mer på varje bolag', 'More on every company')}</span><h2>${lpT('Det som annars ligger utspritt', 'What is otherwise spread out')}</h2></div>
+    <div class="lp-g3 lp-gap">
+      ${small(lpT('Rapporter', 'Reports'), lpT('Nästa rapportdag och hur kursen rörde sig efter de senaste.', 'The next report date and how the price moved after the latest ones.'), lpT('Notis dagen före om du bevakar bolaget.', 'Alert the day before if you watch the company.'))}
+      ${small(lpT('Mot index', 'Against the index'), lpT('Hur aktien gått de senaste fem åren jämfört med börsen.', 'How the stock did over the last five years compared to the market.'), `<span class="lp-m" id="lp-5y">…</span>`, 'd2')}
+      ${small(lpT('Fonder', 'Funds'), lpT('Riskkoll, beta och utveckling för fonder, på samma sätt som för aktier.', 'Risk check, beta and returns for funds, the same way as for stocks.'), lpT('Sök på fondens namn.', "Search for the fund's name."), 'd3')}
+      ${small(lpT('Nyheter', 'News'), lpT('Rubriker om bolaget med länk till källan, märkta med språk.', 'Headlines about the company with a link to the source, marked with language.'), '')}
+      ${small(lpT('Varningslistan', 'Warning list'), lpT('Fått ett tips om en aktie i ett DM? Kolla avsändaren mot Finansinspektionens varningslista.', "Got a stock tip in a DM? Check the sender against Finansinspektionen's warning list."), '', 'd2')}
+      ${small(lpT('Dela', 'Share'), lpT('Gör en bild av riskkollen och dela den med en vän eller i en tråd.', 'Make an image of the risk check and share it with a friend or in a thread.'), '', 'd3')}
+    </div></section>
+
+  <section class="lp-w lp-promise lp-rv">${[lpT('Gratis', 'Free'), lpT('Inga köptips', 'No buy tips'), lpT('Ingen reklam', 'No ads'), lpT('Vi säljer aldrig din data', 'We never sell your data')].map((t) => `<div><b>${t}</b></div>`).join('')}</section>
+
+  <section class="lp-w lp-sec lp-rv" id="lp-faq"><h2 class="lp-h2">${lpT('Frågor', 'Questions')}</h2>${faq.map(([q, a]) => `<div class="lp-faq"><b>${q}</b><span class="lp-k">${a}</span></div>`).join('')}</section>
+
+  <section class="lp-w lp-cta lp-rv"><h2>${lpT('Se risken innan du köper', 'See the risk before you buy')}</h2><p>${lpT('Gratis, utan konto.', 'Free, no account.')}</p>
+    <div class="lp-row" style="justify-content:center"><a class="lp-pill lp-or lp-big" href="#lpq">${lpT('Sök en aktie', 'Search a stock')}</a><a class="lp-pill lp-ghost lp-big" href="/konto?ny=1" data-link>${lpT('Skapa gratis konto', 'Create free account')}</a></div></section>
+
+  <footer class="lp-w lp-foot"><div class="lp-fr"><span class="brand-word lp-flogo">FINANSKOLLEN<span>.</span></span><nav class="lp-fl" aria-label="${lpT('Om sidan', 'About')}"><a href="/metod" data-link>${lpT('Så räknas riskkollen', 'How the risk check works')}</a><a href="/om" data-link>${lpT('Om oss', 'About us')}</a><a href="/integritet" data-link>${lpT('Integritet', 'Privacy')}</a><a href="/ordlista" data-link>${lpT('Ordlista', 'Glossary')}</a>${langSwitch()}</nav></div>
+    <p class="lp-k lp-xs">${lpT('Finanskollen visar information, inte investeringsrådgivning. Historisk utveckling säger inget om framtiden.', 'Finanskollen shows information, not investment advice. Past performance says nothing about the future.')}</p></footer>
+</div>`;
+}
+
+async function mountLanding() {
+  const root = $('.lp'); if (!root) return;
+  // Korten glider in när de kommer i bild
+  const rv = root.querySelectorAll('.lp-rv');
+  if (REDUCED || !('IntersectionObserver' in window)) rv.forEach((x) => x.classList.add('is-in'));
+  else { const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px', threshold: 0.08 }); rv.forEach((x) => io.observe(x)); }
+  // Ankarlänkar på samma sida
+  root.addEventListener('click', (e) => { const a = e.target.closest('a[href^="#"]'); if (!a) return; e.preventDefault(); const t = document.getElementById(a.getAttribute('href').slice(1)); if (!t) return; t.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'center' }); if (t.id === 'lpq') t.focus({ preventScroll: true }); });
+  const miss = `<span class="lp-miss">${lpT('Saknas', 'Missing')}</span>`;
+  // Exempelbolagen i toppen
+  LP_EX.forEach((x) => getStock(x).catch(() => null).then((s) => {
+    const a = root.querySelector(`[data-lpx="${CSS.escape(x)}"]`); if (!a) return; const p = s && !s.error ? s.poang : null;
+    a.querySelector('.lp-seg').outerHTML = lpSeg(p); a.querySelector('b').textContent = p != null ? p : '–';
+  }));
+  // Riskkollen del för del och regeln, för exempelbolaget
+  getStock(LP_DEMO).catch(() => null).then((s) => {
+    if (!$('#lp-f')) return;
+    const ok = s && !s.error && s.poang != null && s.faktorer?.length;
+    $('#lp-p').textContent = ok ? s.poang : '–';
+    if (!ok) { $('#lp-f').innerHTML = `<p class="lp-k">${lpT('Riskkollen kunde inte hämtas just nu.', 'The risk check could not be fetched right now.')}</p>`; $('#lp-calc').innerHTML = miss; return; }
+    const l = lvlOf(s.poang); $('#lp-plv').innerHTML = `<span class="lp-lv ${LV[l].c}">${trS(LV[l].t)}</span>`;
+    $('#lp-f').innerHTML = s.faktorer.map(([n, lv, v]) => `<div class="lp-fr2"><span>${esc(trS(n))}</span><span class="lp-k lp-m">${esc(trS(String(v).split(' · ')[0]))}</span><span class="lp-lv ${LV[lv].c}">${trS(LV[lv].t)}</span></div>`).join('');
+    const avg = s.faktorer.reduce((a, f) => a + f[1], 0) / s.faktorer.length; const raw = (avg - 1) / 2 * 9 + 1; const hasHigh = s.faktorer.some((f) => f[1] === 3);
+    $('#lp-calc').innerHTML = `${esc(ovName(LP_DEMO))}: (${bn(avg, 2)} − 1) ÷ 2 × 9 + 1 = ${bn(raw, 1)} → <b class="lp-orange">${s.poang}</b>${hasHigh && Math.round(raw) < s.poang ? ` <span class="lp-xs">(${lpT('minst 4, en del är Hög', 'at least 4, one part is High')})</span>` : ''}`;
+  });
+  // Risken i kronor och fem år mot index, från stängningskurserna
+  const [px, idx, st] = await Promise.all([api(`/api/chart?s=${encodeURIComponent(LP_DEMO)}&r=5yd`, 30 * 60e3).then(bOnePerDay).catch(() => null), api('/api/chart?s=%5EOMX&r=5yd', 30 * 60e3).then(bOnePerDay).catch(() => null), getStock(LP_DEMO).catch(() => null)]);
+  if (!$('#lp-kr')) return;
+  const x = bStats(px?.punkter, null); const beta = st && !st.error ? st.beta : null;
+  const money = (p) => (p == null || !Number.isFinite(p) ? null : `${p < 0 ? '−' : p > 0 ? '+' : ''}${nf(Math.abs(p * 100), 0)} ${EN ? 'SEK' : 'kr'}`);
+  const vals = [money(x.var95), money(x.vol1 != null ? -1.2816 * (x.vol1 / Math.sqrt(12)) : null), money(beta != null ? -20 * beta : null), money(x.maxDd?.v)];
+  vals.forEach((v, i) => { const el = root.querySelector(`[data-kr="${i}"]`); if (el) el.innerHTML = v ? esc(v) : miss; });
+  const P = px?.punkter || []; const I = idx?.punkter || []; const el5 = $('#lp-5y');
+  if (P.length >= 200 && I.length >= 200) {
+    const t0 = Math.max(P[0][0], I[0][0]); const a0 = P.find((p) => p[0] >= t0)?.[1]; const b0 = I.find((p) => p[0] >= t0)?.[1];
+    if (a0 && b0) { const ra = (P[P.length - 1][1] / a0 - 1) * 100; const rb = (I[I.length - 1][1] / b0 - 1) * 100; el5.textContent = `${ovName(LP_DEMO)} ${pct(ra, 0)} · OMXS30 ${pct(rb, 0)}`; return; }
+  }
+  el5.innerHTML = miss;
+}
+
 const minOversikt = () => getPort().length > 0;
 function viewOversikt() {
   if (minOversikt()) return viewOversiktMin();
@@ -4898,6 +5022,7 @@ function route() {
   }
   const path = location.pathname.replace(/\/+$/, '') || '/';
   const params = new URLSearchParams(location.search);
+  if (path === '/' && !ACC.user && !minOversikt()) return { active: 'landing', title: 'Översikt', html: viewLanding(), mount: mountLanding };
   if (path === '/') return { active: 'oversikt', title: 'Översikt', html: viewOversikt(), mount: mountOversikt };
   if (path === '/sok' && params.get('s')) { history.replaceState(null, '', '/bolag/' + encodeURIComponent(params.get('s'))); return route(); }
   if (path === '/sok') return { active: 'sok', title: 'Bolag', html: viewSok(params), mount: () => mountSok(params) };
@@ -5022,6 +5147,7 @@ function render() {
   // Inloggningssidan visas utan meny. Allt annat har menyn, även för besökare.
   document.body.classList.toggle('locked', locked() && r.active === 'konto');
   document.body.classList.remove('nosidebar');
+  document.body.classList.toggle('landing', r.active === 'landing');
   setMeta(r);
   document.title = location.pathname === '/' ? (EN ? 'Finanskollen – risk check for Swedish stocks' : 'Finanskollen – riskkoll för svenska aktier') : `${trS(r.title)} · Finanskollen`;
   refreshNav(r.active);
