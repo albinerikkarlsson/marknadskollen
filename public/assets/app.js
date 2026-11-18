@@ -3006,26 +3006,29 @@ function viewMetod() {
 /* ================= Om oss ================= */
 // Fylls i med Albins svar. Tomma fält visas inte.
 const OM = {
-  namn: 'Albin',
+  // Texten på sidan Om oss. Ändra fritt, men behåll citattecknen ' runt varje text.
+  namn: 'Albin Karlsson',
   ansvarig: 'Albin Karlsson',
   roll: 'Grundare av Finanskollen',
   stad: '',
-  bild: '',
+  bild: '/assets/albin-karlsson.jpg',
   mejl: 'kontakt.finanskollen@gmail.com',
   orgnr: '',
-  ingress: 'Vi vill att alla ska kunna känna sig trygga i sina affärer inom finans. Finanskollen visar risken i ett bolag på enkel svenska, med fakta från öppna källor, så att du kan förstå innan du sätter in pengar.',
+  ingress: 'Jag vill att alla ska kunna känna sig trygga när de sparar i aktier. Finanskollen visar risken i ett bolag på enkel svenska, med fakta från öppna källor, så att du kan förstå innan du sätter in pengar.',
   historia: [
-    'Finanskollen startades av Albin, som pluggar till försäljare och själv handlar med aktier och Solana-tokens. Han har sett hur otrygg finansvärlden kan kännas: svåra ord, tips från okända i chattar och sociala medier, och bolag som är svåra att genomskåda.',
-    'Därför samlar vi det viktigaste på ett ställe: risken i varje bolag, vad ledningen själv köper och säljer, hur många som satsar på att kursen ska falla och vad nyheterna säger. Allt förklarat så att vem som helst kan förstå.'
+    'Jag heter Albin Karlsson. Jag pluggar fortfarande och bygger Finanskollen på fritiden.',
+    'Jag har sett hur otrygg finansvärlden kan kännas. Det som syns mest är folk som säljer tips, bedragare skriver i DM och köper annonser, och den som vill kolla själv får leta på fem olika ställen.',
+    'Därför byggde jag Finanskollen. Här samlas det viktigaste på ett ställe: risken i varje bolag, vad ledningen själv köper och säljer, hur många som satsar på att kursen ska falla och hur kursen reagerat på bolagens rapporter. Allt med öppna regler, så att du kan se exakt varför en aktie får sin siffra.',
+    'Jag lägger till det användarna ber om, så hör gärna av dig med feedback. Jag läser allt.'
   ],
   forVem: 'Finanskollen är till för alla, oavsett om du aldrig har ägt en aktie eller har handlat i många år.',
   loften: [
-    'Vi ger aldrig köp- eller säljtips. Vi visar fakta och förklarar risken, du bestämmer själv.',
-    'Vi säljer aldrig dina uppgifter, och vi visar ingen reklam som spårar dig.',
-    'Vi visar alltid varifrån informationen kommer och när den hämtades.',
-    'Saknas det data säger vi det, i stället för att gissa.'
+    'Jag ger aldrig köp- eller säljtips. Sidan visar fakta och förklarar risken, du bestämmer själv.',
+    'Jag säljer aldrig dina uppgifter, och sidan visar ingen reklam som spårar dig.',
+    'Sidan visar alltid varifrån informationen kommer och när den hämtades.',
+    'Saknas det data står det det, i stället för en gissning.'
   ],
-  vi: 'vi'
+  vi: 'jag'
 };
 
 function viewOm() {
@@ -3051,6 +3054,7 @@ function viewOm() {
         <ul class="om-list">
           <li><b>Kurser, nyckeltal och nyheter:</b> Yahoo Finance, med Finnhub som reserv.</li>
           <li><b>Insynshandel och blankning:</b> Finansinspektionens öppna register.</li>
+          <li><b>Bolagsmeddelanden:</b> Nasdaq Nordic.</li>
           <li><b>Bolagsbeskrivningar och historia:</b> Wikipedia och Wikidata.</li>
           <li><b>AI-sammanfattningar:</b> skrivs av Claude utifrån nyhetsrubrikerna och märks alltid som AI.</li>
           <li><b>Riskkollen:</b> räknas med fasta regler som förklaras på varje bolagssida. Den är en förenkling och inte ett råd.</li>
