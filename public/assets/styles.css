@@ -1865,3 +1865,38 @@ a.md-title:hover { text-decoration: underline; }
   .hz-sh { display: none; }
   .bs-row, .lp-bjs { grid-template-columns: 1fr; gap: 10px; }
 }
+
+/* ================= Anteckningar ================= */
+.nt-n:not(:empty) { margin-left: 6px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent, #FF5A00); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+.nd { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); background: #121418; border-left: 1px solid var(--line-soft); z-index: 80; display: flex; flex-direction: column; transform: translateX(100%); transition: transform .2s ease; box-shadow: -20px 0 40px rgba(0,0,0,.35); }
+.nd.on { transform: none; }
+.nd-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px 14px; border-bottom: 1px solid var(--line-soft); }
+.nd-h b { display: block; font-size: 17px; font-weight: 600; }
+.nd-x { background: none; border: 0; color: var(--muted); font-size: 26px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.nd-x:hover { color: var(--ink); }
+.nd-f { padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line-soft); }
+.nd-f textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 90px; background: #0C0D10; color: var(--ink); border: 1px solid var(--line-soft); border-radius: 4px; padding: 10px 12px; font: inherit; font-size: 14.5px; }
+.nd-f textarea:focus { outline: none; border-color: rgba(255,90,0,.6); }
+.nd-fr { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.nd-l { flex: 1; overflow-y: auto; padding: 6px 20px 20px; }
+.nd-n { border-left: 2px solid #FF5A00; padding: 2px 0 2px 12px; margin-top: 16px; }
+.nd-n p { margin: 4px 0 0; font-size: 14.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.nd-m { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.nd-del { background: none; border: 0; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; padding: 0; }
+.nd-del:hover, .nd-del[data-sure="1"] { color: var(--down); }
+.nd-e { margin-top: 16px; }
+
+/* ================= Rita i kursdiagrammet ================= */
+.dr-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 4px 0 10px; }
+.dr-b { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 1px solid var(--line-soft); color: var(--muted); font: inherit; font-size: 12.5px; padding: 6px 10px; border-radius: 3px; cursor: pointer; }
+.dr-b:hover { color: var(--ink); border-color: rgba(255,255,255,.18); }
+.dr-b[aria-pressed="true"] { color: var(--ink); border-color: #FF5A00; background: rgba(255,90,0,.1); }
+.dr-sep { width: 1px; height: 20px; background: var(--line-soft); margin: 0 4px; }
+.b-chart { position: relative; }
+.dr-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.dr-svg line, .dr-svg polyline { stroke: #FF5A00; stroke-width: 2; fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.b-chart.dr-on .dr-svg { pointer-events: auto; cursor: crosshair; touch-action: none; }
+.b-chart.dr-on .chart-tip, .b-chart.dr-on .chart-cross, .b-chart.dr-on .chart-dot { display: none; }
+.dr-labs { position: absolute; inset: 0; pointer-events: none; }
+.dr-lab { position: absolute; right: 0; transform: translateY(-50%); background: #FF5A00; color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 2px; }
+@media (max-width: 720px) { .dr-b span { display: none; } .dr-b { padding: 7px 9px; } }

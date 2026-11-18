@@ -91,6 +91,7 @@ function newsLand(n, region, sym) {
 }
 
 const ICON = {
+  note: 'M6 4h9l4 4v12H6zM14 4v5h5M9 13h7M9 16h5',
   home: 'M4 11l8-7 8 7v9H4z',
   search: 'M11 5a6 6 0 1 0 0.01 0M20 20l-4.5-4.5',
   news: 'M5 5h11v14H6a1 1 0 0 1-1-1zM16 9h3v9a1 1 0 0 1-2 0V9M8 9h5M8 12h5M8 15h3',
@@ -198,7 +199,7 @@ const DEFAULT_NAMES = { AAPL: 'Apple', MSFT: 'Microsoft', NVDA: 'Nvidia', TSLA: 
 const readLS = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fb; } catch { return fb; } };
 const KKEY = 'mk-koll'; // val för insyns- och blankningslarm och vad man redan sett
 // Varje del sparas för sig. Bara det som ändrats i just den här fliken skickas, så en äldre flik eller enhet kan aldrig skriva över något den inte själv ändrat.
-const FIELD = { [WKEY]: 'bevakning', 'mk-larm': 'larm', 'mk-portfolj': 'portfolj', 'mk-ova': 'ova', 'mk-koll': 'koll' };
+const FIELD = { [WKEY]: 'bevakning', 'mk-larm': 'larm', 'mk-portfolj': 'portfolj', 'mk-ova': 'ova', 'mk-koll': 'koll', 'mk-anteckningar': 'anteckningar', 'mk-ritningar': 'ritningar' };
 const DIRTY = new Set();
 // Senaste version av varje del som den här fliken vet att kontot har. Används för att räkna ut vad man själv ändrat.
 const SNAP = {};
@@ -214,7 +215,7 @@ function mergeField(f, cloud, local, snap) {
     const out = cloud.filter((x) => !(sm.has(key(x)) && !lm.has(key(x)))).map((x) => (lm.has(key(x)) && JSON.stringify(lm.get(key(x))) !== sm.get(key(x)) ? lm.get(key(x)) : x));
     for (const x of local) if (!sm.has(key(x)) && !out.some((y) => key(y) === key(x))) out.push(x); return out;
   }
-  if (f === 'larm' && cloud && local && snap && typeof cloud === 'object') {
+  if ((f === 'larm' || f === 'anteckningar' || f === 'ritningar') && cloud && local && snap && typeof cloud === 'object') {
     const out = { ...cloud }; for (const k of Object.keys(snap)) if (!(k in local)) delete out[k];
     for (const [k, v] of Object.entries(local)) if (JSON.stringify(v) !== JSON.stringify(snap[k])) out[k] = v; return out;
   }
@@ -1640,7 +1641,7 @@ function bPriceChart(box, pts, { per = '1y', ma50 = true, ma200 = true, from = n
   };
   plot.addEventListener('pointermove', (e) => { lx = e.clientX; if (!fr) fr = requestAnimationFrame(move); });
   plot.addEventListener('pointerleave', () => { tipEl.hidden = true; cross.hidden = true; dot.hidden = true; });
-  return { chg, from: P[0][0], to: P[P.length - 1][0], ma50: A[A.length - 1], ma200: Bm[Bm.length - 1] };
+  return { chg, from: P[0][0], to: P[P.length - 1][0], ma50: A[A.length - 1], ma200: Bm[Bm.length - 1], t0, t1, lo, hi, W, H };
 }
 
 /* ---------- Små diagram ---------- */
@@ -1745,6 +1746,7 @@ function bHead(s, tabs, active) {
       <div class="b-acts">
         <button class="btn small ${watched ? 'ghost' : ''}" type="button" data-watch="${esc(s.sym)}" data-namn="${esc(s.namn)}" aria-pressed="${watched}">${watched ? 'Bevakas ✓' : 'Bevaka'}</button>
         <span class="kp-host"><button type="button" class="btn small ghost" data-kollbtn="${esc(s.sym)}" data-namn="${esc(s.namn)}" aria-label="${EN ? 'Notifications' : 'Notiser'}" title="${EN ? 'Notifications' : 'Notiser'}">${svg('bell', 14)}</button></span>
+        <button type="button" class="btn small ghost" data-notes="${esc(s.sym)}" data-namn="${esc(ovName(s.sym))}" data-kurs="${s.kurs ?? ''}" data-valuta="${esc(s.valuta || '')}" aria-expanded="false">${svg('note', 14)} ${EN ? 'Notes' : 'Anteckningar'}<span class="nt-n num">${ACC.user && noteCount(s.sym) ? noteCount(s.sym) : ''}</span></button>
         <a class="btn small ghost" href="/jamfor?a=${encodeURIComponent(s.sym)}" data-link>${svg('compare', 14)} Jämför</a>
         <button type="button" class="btn small ghost" data-share>${svg('share', 14)} Dela</button>
       </div>
@@ -1951,7 +1953,7 @@ function bKurs(panel, ctx) {
   const { s, st, get } = ctx;
   const max = Math.max(...(s.perf || []).map((p) => Math.abs(p[1])), 1);
   panel.innerHTML = `<div class="b-grid">
-    ${bCard('c12', `<div class="b-ch"><div class="b-chl">${bLabel(ctx.isEq ? 'Aktiekurs' : (EN ? 'Price' : 'Kurs'))}<span class="small num" id="k-chg"></span></div>${bChartControls(st, { dates: true })}</div><div id="k-chart">${loading('Hämtar kurser …')}</div><p class="b-src" id="k-src"></p>`)}
+    ${bCard('c12', `<div class="b-ch"><div class="b-chl">${bLabel(ctx.isEq ? 'Aktiekurs' : (EN ? 'Price' : 'Kurs'))}<span class="small num" id="k-chg"></span></div>${bChartControls(st, { dates: true })}</div>${drBar()}<div id="k-chart">${loading('Hämtar kurser …')}</div><p class="b-src" id="k-src"></p>`)}
     ${bCard('c4', `${bLabel('Utveckling')}<div class="stack" style="gap:10px;margin-top:6px">${(s.perf || []).map(([label, v]) => { const w = (Math.abs(v) / max) * 50; return `<div class="perf-row"><span class="muted">${esc(label)}</span><div class="perf-track" role="img" aria-label="${esc(label)} ${pct(v)}"><span class="zero"></span><span class="perf-bar ${v < 0 ? 'neg' : ''}" style="${v < 0 ? `right:50%;width:${w}%` : `left:50%;width:${w}%`}"></span></div><span class="num ${tone(v)}" style="text-align:right">${pct(v)}</span></div>`; }).join('') || '<p class="b-note">Datakällan har ingen kursutveckling för det här värdepappret.</p>'}</div><p class="b-src">Historisk utveckling säger inget om framtiden.</p>`)}
     ${bCard('c4', `${bLabel('Medelvärden just nu', 'MA200')}<div id="k-ma">${loading()}</div>`)}
     ${bCard('c4', `${bLabel('Välj ett datum')}<label class="b-dl">Datum <input type="date" id="k-date"></label><div id="k-dres"><p class="b-note">Välj ett datum för att se kursen då, och hur 10 000 ${esc(cur(s.valuta))} hade utvecklats sedan dess.</p></div>`)}
@@ -1962,6 +1964,7 @@ function bKurs(panel, ctx) {
     if (!d || d.error || !d.punkter?.length) { box.innerHTML = bErr(d, 'Det finns inget kursdiagram för det här värdepappret.'); return; }
     pts = d.punkter;
     const r = bPriceChart(box, d.punkter, { per: st.per, ma50: st.ma50, ma200: st.ma200, from: st.from, to: st.to, valuta: d.valuta, h: 360 });
+    drawLayer(box, s.sym, r);
     const c = $('#k-chg'); if (c && r) { c.textContent = `${pct(r.chg)} ${EN ? 'from' : 'från'} ${bDate(bKey(r.from))} ${EN ? 'to' : 'till'} ${bDate(bKey(r.to))}`; c.className = `small num ${tone(r.chg)}`; }
     const first = bKey(d.punkter[0][0]); const lastK = bKey(d.punkter[d.punkter.length - 1][0]);
     panel.querySelectorAll('[data-from],[data-to],#k-date').forEach((i) => { i.min = first; i.max = lastK; });
@@ -2607,6 +2610,101 @@ async function borsenFill(sel, variant) {
 }
 const borsenCard = (cls = 'card') => `<section class="${cls} bs-card" aria-labelledby="bs-h"><div class="b-ch"><h2 class="b-lbl" id="bs-h">${EN ? 'The market right now' : 'Börsen just nu'}</h2><span class="small faint">${EN ? 'Stockholm' : 'Stockholm'}</span></div><div id="bs-box">${loading()}</div></section>`;
 
+/* ================= Anteckningar per bolag ================= */
+// Sparas på kontot. Bara den inloggade ser dem. Kursen sparas med varje anteckning så att man ser hur det gått sedan.
+const NOTE_KEY = 'mk-anteckningar';
+const getNotes = (sym) => { const all = readLS(NOTE_KEY, {}); return Array.isArray(all?.[sym]) ? all[sym] : []; };
+function setNotes(sym, list) { const all = { ...readLS(NOTE_KEY, {}) }; if (list.length) all[sym] = list.slice(0, 200); else delete all[sym]; writeLS(NOTE_KEY, all); }
+const noteCount = (sym) => getNotes(sym).length;
+function closeNotes() { const d = $('#nd'); if (!d) return; d.classList.remove('on'); setTimeout(() => d.remove(), 200); document.removeEventListener('keydown', notesKey); const b = document.querySelector('[data-notes][aria-expanded="true"]'); b?.setAttribute('aria-expanded', 'false'); b?.focus(); }
+function notesKey(e) { if (e.key === 'Escape') closeNotes(); }
+function openNotes(btn) {
+  const sym = btn.dataset.notes; const namn = btn.dataset.namn || ovName(sym); const kurs = Number(btn.dataset.kurs) || null; const valuta = btn.dataset.valuta || '';
+  if ($('#nd')) { closeNotes(); return; }
+  const d = document.createElement('aside'); d.id = 'nd'; d.className = 'nd'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', EN ? 'My notes' : 'Mina anteckningar');
+  const draw = () => {
+    const list = getNotes(sym);
+    d.innerHTML = `<div class="nd-h"><div><b>${EN ? 'My notes' : 'Mina anteckningar'}</b><span class="small faint" data-noi18n>${esc(namn)}</span></div><button type="button" class="nd-x" data-ndclose aria-label="${EN ? 'Close' : 'Stäng'}">×</button></div>
+      <form class="nd-f" data-ndform><label class="sr-only" for="nd-t">${EN ? 'New note' : 'Ny anteckning'}</label><textarea id="nd-t" maxlength="2000" rows="4" placeholder="${EN ? 'Write a note about' : 'Skriv en anteckning om'} ${esc(namn)} …"></textarea>
+        <div class="nd-fr"><span class="small faint">${EN ? 'Only you can see your notes.' : 'Bara du ser dina anteckningar.'}</span><button class="btn small" type="submit">${EN ? 'Save' : 'Spara'}</button></div></form>
+      <div class="nd-l">${list.length ? list.map((n) => { const since = kurs && n.kurs ? (kurs / n.kurs - 1) * 100 : null;
+        return `<article class="nd-n"><div class="nd-m small faint"><span>${esc(bDate(n.t.slice(0, 10)))}${n.kurs ? ` · ${EN ? 'price' : 'kurs'} ${kr(n.kurs)} ${esc(cur(n.valuta || valuta))}` : ''}${since != null ? ` · <span class="${tone(since)}">${esc(pct(since))} ${EN ? 'since' : 'sedan'}</span>` : ''}</span><button type="button" class="nd-del" data-nddel="${esc(n.id)}" aria-label="${EN ? 'Delete note' : 'Ta bort anteckningen'}">${EN ? 'Delete' : 'Ta bort'}</button></div><p data-noi18n>${esc(n.text)}</p></article>`; }).join('')
+        : `<p class="small faint nd-e">${EN ? 'No notes yet. Write down why you bought, what you are waiting for or what to check in the next report.' : 'Inga anteckningar än. Skriv varför du köpte, vad du väntar på eller vad du ska kolla i nästa rapport.'}</p>`}</div>`;
+    const c = document.querySelector(`[data-notes="${CSS.escape(sym)}"] .nt-n`); if (c) c.textContent = list.length ? String(list.length) : '';
+  };
+  draw(); document.body.appendChild(d); requestAnimationFrame(() => d.classList.add('on'));
+  btn.setAttribute('aria-expanded', 'true'); setTimeout(() => d.querySelector('textarea')?.focus(), 60);
+  document.addEventListener('keydown', notesKey);
+  d.addEventListener('click', (e) => {
+    if (e.target.closest('[data-ndclose]')) { closeNotes(); return; }
+    const del = e.target.closest('[data-nddel]');
+    if (del) { if (del.dataset.sure !== '1') { del.dataset.sure = '1'; del.textContent = EN ? 'Delete?' : 'Ta bort?'; return; } setNotes(sym, getNotes(sym).filter((n) => n.id !== del.dataset.nddel)); draw(); }
+  });
+  d.addEventListener('submit', (e) => {
+    e.preventDefault(); const ta = d.querySelector('textarea'); const text = ta.value.trim(); if (!text) { ta.focus(); return; }
+    setNotes(sym, [{ id: uid(), t: new Date().toISOString(), text: text.slice(0, 2000), kurs, valuta }, ...getNotes(sym)]); draw(); d.querySelector('textarea')?.focus();
+  });
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest?.('[data-notes]'); if (!b) return;
+  e.preventDefault(); if (askLogin(EN ? 'save notes' : 'spara anteckningar')) return; openNotes(b);
+});
+window.addEventListener('popstate', () => closeNotes());
+
+/* ================= Rita i kursdiagrammet ================= */
+// Linjer sparas i kursens egna enheter (tid och pris), så de ligger kvar på rätt ställe när man byter period.
+const DRAW_KEY = 'mk-ritningar';
+const getDraw = (sym) => { const all = readLS(DRAW_KEY, {}); return Array.isArray(all?.[sym]) ? all[sym] : []; };
+function setDraw(sym, list) { const all = { ...readLS(DRAW_KEY, {}) }; if (list.length) all[sym] = list.slice(-100); else delete all[sym]; writeLS(DRAW_KEY, all); }
+const DR_TOOLS = [['peka', 'Peka', 'Point', 'M5 3l13 7-6 1.5L9 18z'], ['linje', 'Trendlinje', 'Trend line', 'M4 19L20 5M4 19h0M20 5h0'], ['h', 'Horisontell linje', 'Horizontal line', 'M3 12h18'], ['fri', 'Rita fritt', 'Free draw', 'M4 16c3-6 5 2 8-3s5 1 8-4']];
+const drBar = () => `<div class="dr-bar" role="toolbar" aria-label="${EN ? 'Drawing tools' : 'Ritverktyg'}">${DR_TOOLS.map(([k, sv, en, d], i) => `<button type="button" class="dr-b" data-dr="${k}" aria-pressed="${i === 0}" title="${EN ? en : sv}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="${d}"/></svg><span>${EN ? en : sv}</span></button>`).join('')}<span class="dr-sep"></span><button type="button" class="dr-b" data-drundo>${EN ? 'Undo' : 'Ångra'}</button><button type="button" class="dr-b" data-drclear>${EN ? 'Clear all' : 'Rensa'}</button></div>`;
+function drawLayer(box, sym, geo) {
+  const plot = box.querySelector('.b-chart'); if (!plot || !geo) return;
+  plot.querySelector('.dr-svg')?.remove();
+  const { t0, t1, lo, hi, W, H } = geo;
+  const X = (t) => ((t - t0) / (t1 - t0 || 1)) * W; const Y = (v) => (1 - (v - lo) / (hi - lo)) * H;
+  const T = (x) => t0 + (x / W) * (t1 - t0); const V = (y) => lo + (1 - y / H) * (hi - lo);
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('class', 'dr-svg'); s.setAttribute('viewBox', `0 0 ${W} ${H}`); s.setAttribute('preserveAspectRatio', 'none');
+  plot.appendChild(s);
+  const lab = document.createElement('div'); lab.className = 'dr-labs'; plot.querySelector('.dr-labs')?.remove(); plot.appendChild(lab);
+  const shape = (o) => {
+    if (o.typ === 'linje') return `<line x1="${X(o.a[0]).toFixed(1)}" y1="${Y(o.a[1]).toFixed(1)}" x2="${X(o.b[0]).toFixed(1)}" y2="${Y(o.b[1]).toFixed(1)}"/>`;
+    if (o.typ === 'h') return `<line x1="0" x2="${W}" y1="${Y(o.v).toFixed(1)}" y2="${Y(o.v).toFixed(1)}" stroke-dasharray="6 5"/>`;
+    if (o.typ === 'fri' && o.p?.length > 1) return `<polyline points="${o.p.map((q) => `${X(q[0]).toFixed(1)},${Y(q[1]).toFixed(1)}`).join(' ')}"/>`;
+    return '';
+  };
+  const render = (tmp) => {
+    const list = getDraw(sym); s.innerHTML = [...list, ...(tmp ? [tmp] : [])].map(shape).join('');
+    lab.innerHTML = list.filter((o) => o.typ === 'h' && o.v > lo && o.v < hi).map((o) => `<span class="dr-lab num" style="top:${((Y(o.v) / H) * 100).toFixed(2)}%">${kr(o.v)}</span>`).join('');
+  };
+  render();
+  let tool = 'peka'; let cur = null;
+  const pt = (e) => { const r = s.getBoundingClientRect(); return [T(((e.clientX - r.left) / r.width) * W), V(((e.clientY - r.top) / r.height) * H)]; };
+  const setTool = (k) => { tool = k; plot.classList.toggle('dr-on', k !== 'peka'); box.closest('.b-card')?.querySelectorAll('[data-dr]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.dr === k))); };
+  s.addEventListener('pointerdown', (e) => {
+    if (tool === 'peka') return; e.preventDefault(); s.setPointerCapture(e.pointerId); const p = pt(e);
+    if (tool === 'h') { setDraw(sym, [...getDraw(sym), { typ: 'h', v: p[1] }]); render(); return; }
+    cur = tool === 'linje' ? { typ: 'linje', a: p, b: p } : { typ: 'fri', p: [p] }; render(cur);
+  });
+  s.addEventListener('pointermove', (e) => {
+    if (!cur) return; const p = pt(e);
+    if (cur.typ === 'linje') cur.b = p; else { const q = cur.p[cur.p.length - 1]; if (Math.abs(X(p[0]) - X(q[0])) + Math.abs(Y(p[1]) - Y(q[1])) > 4) cur.p.push(p); }
+    render(cur);
+  });
+  const end = () => { if (!cur) return; const ok = cur.typ === 'linje' ? Math.abs(X(cur.a[0]) - X(cur.b[0])) + Math.abs(Y(cur.a[1]) - Y(cur.b[1])) > 6 : cur.p.length > 2; if (ok) setDraw(sym, [...getDraw(sym), cur]); cur = null; render(); };
+  s.addEventListener('pointerup', end); s.addEventListener('pointercancel', end);
+  const card = box.closest('.b-card'); if (!card) return;
+  card._drRender = render; card._drSet = setTool; if (card._drTool) setTool(card._drTool);
+  if (card.dataset.drwired) return; card.dataset.drwired = '1';
+  card.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-dr]'); if (b) { card._drTool = b.dataset.dr; card._drSet(b.dataset.dr); return; }
+    if (e.target.closest('[data-drundo]')) { setDraw(sym, getDraw(sym).slice(0, -1)); card._drRender(); return; }
+    const c = e.target.closest('[data-drclear]');
+    if (c) { if (!getDraw(sym).length) return; if (c.dataset.sure !== '1') { c.dataset.sure = '1'; c.textContent = EN ? 'Clear all?' : 'Rensa alla?'; setTimeout(() => { c.dataset.sure = ''; c.textContent = EN ? 'Clear all' : 'Rensa'; }, 3000); return; } c.dataset.sure = ''; c.textContent = EN ? 'Clear all' : 'Rensa'; setDraw(sym, []); card._drRender(); }
+  });
+}
+
 function bOm(panel, ctx) {
   const { s, sym } = ctx;
   panel.innerHTML = `<div class="b-grid">${bCard('c8', `${bLabel(ctx.isEq ? 'Affärsidé och historia' : (EN ? 'About' : 'Om'))}<div id="about-body">${loading('Hämtar affärsidé och historia …')}</div>`)}${bCard('c4', `${bLabel('Fakta')}${s.fakta?.length ? s.fakta.filter(([k]) => k !== 'Börs' || s.typ !== 'Fond').map(([k, v]) => `<div class="b-kv"><span>${esc(k)}${tip(k)}</span><b>${esc(v)}</b></div>`).join('') : '<p class="b-note">Saknas.</p>'}${safeUrl(s.webb) ? `<a class="b-more" href="${esc(safeUrl(s.webb))}" target="_blank" rel="noopener noreferrer">Bolagets webbplats ↗</a>` : ''}`)}</div>`;
@@ -3130,7 +3228,7 @@ async function deleteAccount() {
   const res = await fetch(c.url + '/rest/v1/rpc/delete_my_account', { method: 'POST', headers: { apikey: c.anon, authorization: 'Bearer ' + t, 'content-type': 'application/json' }, body: '{}' });
   if (res.status === 404) throw Object.assign(new Error('saknas'), { code: 'missing' });
   if (!res.ok) throw new Error('Radering misslyckades (' + res.status + ')');
-  for (const k of ['mk-session', 'mk-sync-user', WKEY, LKEY, 'mk-larm-skickat', 'mk-onboarded', NKEY, 'mk-portfolj', 'mk-ova', KKEY, 'mk-kalender']) { try { localStorage.removeItem(k); } catch { /* privat läge */ } }
+  for (const k of ['mk-session', 'mk-sync-user', WKEY, LKEY, 'mk-larm-skickat', 'mk-onboarded', NKEY, 'mk-portfolj', 'mk-ova', KKEY, 'mk-kalender', 'mk-anteckningar', 'mk-ritningar']) { try { localStorage.removeItem(k); } catch { /* privat läge */ } }
   ACC.session = null; ACC.user = null; writeLS('mk-user', null);
 }
 /* ================= Delbild per bolag ================= */
@@ -4639,6 +4737,7 @@ function applyCloud(d) {
     if (cloud) writeLS(WKEY, first && Array.isArray(own) ? [...new Set([...cloud, ...own])].slice(0, 60) : cloud);
     if (!skip('larm') && d.larm && typeof d.larm === 'object') writeLS(LKEY, first ? { ...d.larm, ...getLarm() } : d.larm);
     if (!skip('koll') && d.koll && typeof d.koll === 'object') writeLS(KKEY, d.koll);
+    for (const [k, f] of [['mk-anteckningar', 'anteckningar'], ['mk-ritningar', 'ritningar']]) if (!skip(f) && d[f] && typeof d[f] === 'object') writeLS(k, first ? { ...d[f], ...readLS(k, {}) } : d[f]);
     if (first && getPort().some((b) => b.demo)) writeLS(PKEY, getPort().filter((b) => !b.demo));
     if (!skip('portfolj') && Array.isArray(d.portfolj)) {
       const own = getPort();
@@ -4664,7 +4763,7 @@ const cloudData = () => {
   const syms = [...new Set([...watch, ...port.map((x) => x.sym), ...Object.keys(ova?.innehav || {})])];
   // Tabellen rymmer hela historiken. Kontots metadata hålls liten, därför bara de senaste 40 affärerna där.
   const hist = (ova?.historik || []).slice(ACC.table ? -1000 : -40);
-  return { bevakning: watch, larm: getLarm(), koll: readLS(KKEY, {}), portfolj: port, ...(ova ? { ova: { ...ova, historik: hist } } : {}), namn: Object.fromEntries(syms.map((x) => [x, nameOf(x)])) };
+  return { bevakning: watch, larm: getLarm(), koll: readLS(KKEY, {}), anteckningar: readLS('mk-anteckningar', {}), ritningar: readLS('mk-ritningar', {}), portfolj: port, ...(ova ? { ova: { ...ova, historik: hist } } : {}), namn: Object.fromEntries(syms.map((x) => [x, nameOf(x)])) };
 };
 async function saveNow() {
   if (!ACC.user) return;
@@ -4836,6 +4935,8 @@ async function mountKonto() {
     });
     box.querySelector('[data-logout]').addEventListener('click', async () => {
       const t = ACC.session?.access; setSession(null); writeLS('mk-sync-user', null);
+      // Anteckningarna är privata: de ska inte ligga kvar på enheten eller följa med till ett annat konto
+      try { localStorage.removeItem('mk-anteckningar'); } catch { /* privat läge */ }
       if (t) auth('/logout', null, 'POST', t).catch(() => {});
       toast('Du är utloggad', ''); navigate('/konto');
     });
