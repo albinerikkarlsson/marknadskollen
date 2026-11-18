@@ -486,6 +486,8 @@ function viewLanding() {
     </div>
   </section>
 
+  <section class="lp-w lp-bors" aria-label="${lpT('Börsen just nu', 'The market right now')}"><div class="lp-bh"><span class="lp-lbl">${lpT('Börsen just nu', 'The market right now')}</span><span class="lp-k lp-xs">${lpT('Beskriver läget, säger inget om vad som händer härnäst.', 'Describes the situation, says nothing about what happens next.')}</span></div><div class="lp-bjs" id="lp-bj">${[0, 1, 2].map(() => '<div class="lp-bj"><span class="lp-skel"></span></div>').join('')}</div></section>
+
   <section class="lp-w lp-sec" id="lp-risk">
     <div class="lp-h lp-rv"><span class="lp-lbl">${lpT('Det här får du', 'What you get')}</span><h2>${lpT('Allt om risken i en aktie, på en sida', 'Everything about the risk in a stock, on one page')}</h2><p>${lpT('Sök ett bolag och se direkt hur riskabelt det är, vad siffran bygger på och vad det kan betyda i kronor. Ingen inloggning behövs för att söka.', 'Search a company and see right away how risky it is, what the number is based on and what it can mean in money. No login needed to search.')}</p></div>
     <div class="lp-g2 lp-g2a">
@@ -536,6 +538,7 @@ function viewLanding() {
 
 async function mountLanding() {
   const root = $('.lp'); if (!root) return;
+  borsenFill('#lp-bj', 'lp');
   // Korten glider in när de kommer i bild
   const rv = root.querySelectorAll('.lp-rv');
   if (REDUCED || !('IntersectionObserver' in window)) rv.forEach((x) => x.classList.add('is-in'));
@@ -590,6 +593,8 @@ function viewOversikt() {
   </div>
 
   ${locked() ? '' : `<div id="koll"></div>`}
+
+  ${borsenCard('card')}
 
   <section class="watch-strip" aria-labelledby="mina-h">
     <div class="watch-head"><h2 class="label-up" id="mina-h" style="margin:0">${locked() ? 'Populära aktier' : 'Din bevakning'}</h2><a class="more small" href="${locked() ? '/aktier' : '/bevakning'}" data-link>Visa alla →</a></div>
@@ -652,6 +657,7 @@ function viewOversikt() {
 
 async function mountOversikt() {
   if (minOversikt()) return mountOversiktMin();
+  borsenFill('#bs-box');
   // Nyheter: Sverige först, och finns inga svenska nyheter växlar vi till Världen
   let region = 'se';
   const tabs = $('[aria-labelledby="nyh-h"] .tabs');
@@ -781,11 +787,13 @@ function viewOversiktMin() {
     <section class="b-card c4"><div class="b-ch"><h2 class="b-lbl">Att hålla koll på</h2><a class="b-more" href="/portfolj?flik=kalender" data-link>Kalender →</a></div><div id="n-todo">${loading()}</div></section>
     <section class="b-card c4"><div class="b-ch"><h2 class="b-lbl">Viktigast för dig</h2><a class="b-more" href="/nyheter" data-link>Alla nyheter →</a></div><div id="n-news">${loading('Hämtar nyheter …')}</div></section>
     <section class="b-card c4"><div class="b-ch"><h2 class="b-lbl">Riskläge${tip('Riskkoll')}</h2><a class="b-more" href="/portfolj" data-link>Detaljer →</a></div><div id="n-risk">${loading()}</div></section>
+    ${borsenCard('b-card c12')}
   </div>
   ${footer()}`;
 }
 
 async function mountOversiktMin() {
+  borsenFill('#bs-box');
   const port = getPort(); const watch = getWatch().slice(0, 8);
   const { all } = mySyms();
   const quotes = await getQuotes([...new Set([...N_TICK.map((m) => m.sym), ...watch, ...all.slice(0, 30)])]);
@@ -1866,6 +1874,8 @@ function bOversikt(panel, ctx) {
     </div>
     ${isEq ? bCard('c7', `<div class="b-ch">${bLabel('Rapporter, per år')}${bLink('rapporter', 'Alla rapporter och nyckeltal')}</div><div id="ov-rep">${loading('Hämtar rapportsiffror …')}</div>`) : bCard('c7', `<div class="b-ch">${bLabel(EN ? 'Performance' : 'Utveckling')}<span class="small faint">${EN ? 'price change per period' : 'kursens förändring per period'}</span></div>${s.perf?.length ? `<div class="b-mini4 b-perf">${s.perf.map(([k, v]) => `<div><span class="b-mini-k">${esc(k)}</span><b class="num ${tone(v)}">${v == null ? '–' : esc(pct(v))}</b></div>`).join('')}</div><p class="b-src">${EN ? 'Historical performance says nothing certain about the future. Fees are not included in the price change shown here.' : 'Historisk utveckling säger inget om framtiden. Här visas kursens förändring.'}</p>` : `<p class="b-note">${EN ? 'Performance is missing in the data source.' : 'Utvecklingen saknas i datakällan.'}</p>`}`)}
     ${bCard('c5', seq ? `<div class="b-ch">${bLabel('Insyn och blankning', 'Insynshandel')}${bLink('insyn', 'Alla affärer')}</div><div id="ov-insyn">${loading('Hämtar insynsaffärer …')}</div>` : isEq ? `<div class="b-ch">${bLabel('Nyckeltal')}${bLink('rapporter', 'Alla nyckeltal')}</div>${bKeyMini(s)}` : `<div class="b-ch">${bLabel(s.typ === 'Index' ? (EN ? 'About the index' : 'Om indexet') : (EN ? 'About the fund' : 'Om fonden'))}${bLink('om', EN ? 'More' : 'Mer')}</div>${s.beskrivning ? `<p class="small co-desc" style="margin:0;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden">${esc(s.beskrivning)}</p>` : `<p class="b-note">${EN ? 'The data source has no description.' : 'Datakällan har ingen beskrivning.'}</p>`}${(s.fakta || []).filter(([k]) => k !== 'Börs' || s.typ !== 'Fond').map(([k, v]) => `<div class="b-kv"><span>${esc(k)}</span><b class="num">${esc(v)}</b></div>`).join('')}`)}
+    ${bCard('c6', `<div class="b-ch">${bLabel(EN ? 'Price position' : 'Kursläge')}<span class="small faint">${EN ? 'facts, not signals' : 'fakta, inga signaler'}</span></div><div id="ov-kl">${loading()}</div>`)}
+    ${bCard('c6', `<div class="b-ch">${bLabel(EN ? 'Time horizon' : 'Tidshorisont')}<button type="button" class="b-more" data-bgo="risk">${EN ? 'See all' : 'Se hela'} →</button></div><div id="ov-hz">${loading()}</div>`)}
     ${seq ? bCard('c12', `<div class="b-ch">${bLabel('Nyckeltal')}${bLink('rapporter', 'Alla nyckeltal')}</div>${bKeyMini(s)}`) : ''}
     <aside class="b-card c12 b-scam"><span class="b-scam-i" aria-hidden="true">!</span><span class="b-scam-t"><b>${EN ? 'Is this a scam?' : 'Är det här bluff?'}</b> ${EN ? `Has someone contacted you about ${isEq ? 'this stock' : 'this'} with promises of quick profit? No serious company promises quick profit without risk. Check` : `Har någon kontaktat dig om ${isEq ? 'den här aktien' : 'det här'} med löften om snabb vinst? Ingen seriös aktör lovar snabb vinst utan risk. Kolla`} <a href="https://www.fi.se/sv/vara-register/varningslistan/" target="_blank" rel="noopener noreferrer">${EN ? 'Finansinspektionen\'s warning list' : 'Finansinspektionens varningslista'}</a> ${EN ? 'before you do anything.' : 'innan du gör något.'}</span></aside>
   </div>`;
@@ -1876,6 +1886,7 @@ function bOversikt(panel, ctx) {
     const c = $('#ov-chg'); if (c && r) { c.textContent = `${pct(r.chg)} ${EN ? 'in the period' : 'under perioden'}`; c.className = `small num ${tone(r.chg)}`; }
   };
   bWireChart(panel.querySelector('.c7'), ctx, draw); draw();
+  klFill(ctx); hzMini(ctx);
   // Fem år mot index: första och sista stängningskursen i samma period
   Promise.all([get.px(), get.idx()]).then(([p, i]) => {
     const el = $('#ov-5y'); const P = p?.punkter || []; const I = i?.punkter || []; if (!el || P.length < 200 || I.length < 200) return;
@@ -2115,6 +2126,7 @@ function bRisk(panel, ctx) {
   </div>
   <div class="r-krh"><b>${EN ? 'The risk in money' : 'Risken i kronor'}</b><span>${EN ? 'calculated on' : 'räknat på'} 10 000 ${esc(U)} ${EN ? (ctx.isEq ? 'in the stock' : 'in the fund') : (ctx.isEq ? 'i aktien' : 'i fonden')}</span><span class="r-src" id="r-src"></span></div>
   <div class="r-kr" id="r-kr">${loading('Räknar …')}</div>
+  <div class="b-grid">${bCard('c12', `<div class="b-ch">${bLabel(EN ? 'Time horizon' : 'Tidshorisont')}</div><h3 class="hz-t">${EN ? 'The risk depends on how long you own it' : (ctx.isEq ? 'Risken beror på hur länge du äger aktien' : 'Risken beror på hur länge du äger fonden')}</h3><div id="r-hz">${loading('Hämtar kurshistorik …')}</div>`)}</div>
   ${bH('01', 'Kursrisk', EN ? 'How much and how hard the price moves' : 'Hur mycket och hur hårt kursen rör sig', 'r3')}
   <div class="b-grid">
     ${bCard('c4', `<div class="b-ch">${bLabel('Fall från toppen', 'Fall från toppen')}<span class="small faint" id="r-ddyrs"></span></div><div id="r-dd">${loading('Hämtar kurser …')}</div><div class="r-kv2" id="r-ddkv"></div>`)}
@@ -2132,6 +2144,7 @@ function bRisk(panel, ctx) {
   </div>` : ''}
   <p class="b-src" style="margin-top:6px">Riskkollen är vår egen förenkling räknad med fasta regler från siffrorna ovan. Ett högt tal betyder mer risk, inte att aktien är dålig. Inget råd. <a href="/metod" data-link>Så räknas riskkollen →</a></p>`;
 
+  hzRisk(ctx);
   const kv = (k, v, t) => `<div class="b-kv"><span>${esc(k)}${t ? tip(t) : ''}</span><b class="num">${v ?? miss}</b></div>`;
   const sim = () => {
     const box = $('#r-sim'); if (!box) return;
@@ -2497,6 +2510,102 @@ async function mdNyheter(state) {
   $('#newsfilter').onclick = (e) => { const b = e.target.closest('[data-mdf]'); if (!b) return; filt = b.dataset.mdf; draw(); };
   draw();
 }
+
+/* ================= Tidshorisont, kursläge och börsen just nu ================= */
+// Tidshorisont: varje månad i kurshistoriken räknas som en tänkt köpdag. Sedan: hur hade det gått efter 1, 3, 5 och 10 år?
+// Bygger på månadskurser utan utdelningar. Beskriver historiken, inte framtiden.
+const HZ_Y = [1, 3, 5, 10];
+const hzMed = (a) => (a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2);
+function hzCalc(P) {
+  const pts = (P || []).filter((p) => Number.isFinite(p[1]) && p[1] > 0);
+  return HZ_Y.map((y) => {
+    const m = y * 12; const rs = [];
+    for (let i = 0; i + m < pts.length; i++) rs.push((pts[i + m][1] / pts[i][1] - 1) * 100);
+    if (rs.length < 12) return { y, n: rs.length };
+    rs.sort((a, b) => a - b);
+    return { y, n: rs.length, neg: (rs.filter((x) => x < 0).length / rs.length) * 100, worst: rs[0], med: hzMed(rs), best: rs[rs.length - 1] };
+  });
+}
+const hzNeg = (p) => (p === 0 ? '0 %' : p < 1 ? (EN ? 'under 1 %' : 'under 1 %') : `${bn(p, 0)} %`);
+const hzNegShort = (p) => (p > 0 && p < 1 ? '<1 %' : hzNeg(p));
+const hzYr = (y) => (EN ? `${y} year${y > 1 ? 's' : ''}` : `${y} år`);
+const getHz = (sym) => api(`/api/chart?s=${encodeURIComponent(sym)}&r=max`, 6 * 3600e3);
+const hzMonth = (t) => new Date(t * 1000).toLocaleDateString(EN ? 'en-GB' : 'sv-SE', { month: 'long', year: 'numeric', timeZone: 'Europe/Stockholm' });
+
+// Riskfliken: hela tidshorisonten
+async function hzRisk(ctx) {
+  const box = $('#r-hz'); if (!box) return;
+  const isF = /^0P/.test(ctx.s.sym) || !ctx.isEq; const who = isF ? (EN ? 'the fund' : 'fonden') : esc(ovName(ctx.s.sym));
+  const d = await getHz(ctx.s.sym).catch(() => null); if (!$('#r-hz')) return;
+  const P = (d?.punkter || []).filter((p) => p[1] > 0);
+  const rows = hzCalc(P); const ok = rows.filter((r) => r.neg != null);
+  if (!ok.length) { box.innerHTML = `<p class="b-note">${EN ? 'Too short price history. At least two years of monthly prices are needed.' : 'För kort kurshistorik. Det behövs minst två års månadskurser.'}</p>`; return; }
+  const lo = Math.min(-10, ...ok.map((r) => r.worst)); const hi = Math.max(10, ...ok.map((r) => r.best)); const W = 240;
+  const X = (v) => ((v - lo) / (hi - lo)) * W;
+  const span = (r) => `<svg class="hz-spn" width="${W}" height="22" viewBox="0 0 ${W} 22" aria-hidden="true"><line x1="${X(0).toFixed(1)}" x2="${X(0).toFixed(1)}" y1="0" y2="22" stroke="var(--muted)" stroke-opacity=".6" stroke-dasharray="2 3"/><line x1="${X(r.worst).toFixed(1)}" x2="${X(r.best).toFixed(1)}" y1="11" y2="11" stroke="var(--muted)" stroke-width="2"/><circle cx="${X(r.worst).toFixed(1)}" cy="11" r="3" fill="var(--down)"/><circle cx="${X(r.best).toFixed(1)}" cy="11" r="3" fill="var(--up)"/><circle cx="${X(r.med).toFixed(1)}" cy="11" r="5.5" fill="var(--text, #F4F4F2)"/></svg>`;
+  const miss = `<span class="faint">${EN ? 'Missing' : 'Saknas'}</span>`;
+  box.innerHTML = `<p class="hz-lead muted">${EN ? `If you had bought ${who} in a random month since ${hzMonth(P[0][0])} and owned it for …` : `Om du köpt ${who} en slumpmässig månad sedan ${hzMonth(P[0][0])} och ägt ${isF ? 'den' : 'aktien'} i …`}</p>
+    <div class="hz-tbl" role="table" aria-label="${EN ? 'Time horizon' : 'Tidshorisont'}">
+      <div class="hz-r hz-h" role="row"><span role="columnheader"></span><span role="columnheader">${EN ? 'Lost money' : 'Gått back'}</span><span role="columnheader">${EN ? 'Worst' : 'Sämsta'}</span><span role="columnheader">${EN ? 'Middle' : 'Mitten'}</span><span role="columnheader" class="hz-sh">${EN ? 'From worst to best (dashed line = 0 %)' : 'Från sämsta till bästa (streckad linje = 0 %)'}</span></div>
+      ${rows.map((r) => r.neg == null ? `<div class="hz-r" role="row"><b role="cell">${hzYr(r.y)}</b><span role="cell">${miss}</span><span role="cell"></span><span role="cell"></span><span role="cell" class="hz-sh small faint">${EN ? 'Too short history' : 'För kort historik'}</span></div>`
+        : `<div class="hz-r" role="row"><b role="cell">${hzYr(r.y)}</b><span role="cell" class="hz-neg"><span class="hz-nb"><i style="width:${Math.max(r.neg, r.neg > 0 ? 1.5 : 0)}%"></i></span><span class="num">${hzNeg(r.neg)}</span></span><span role="cell" class="num ${tone(r.worst)}">${esc(pct(r.worst, 0))}</span><span role="cell" class="num">${esc(pct(r.med, 0))}</span><span role="cell" class="hz-sh">${span(r)}</span></div>`).join('')}
+    </div>
+    <p class="b-src">${EN ? `Calculated on ${P.length} monthly prices, ${hzMonth(P[0][0])}–${hzMonth(P[P.length - 1][0])}. Dividends are not included, so the outcomes are lower than what an owner received. Past performance says nothing about the future.` : `Räknat på ${P.length} månadskurser, ${hzMonth(P[0][0])}–${hzMonth(P[P.length - 1][0])}. Utdelningar ingår inte, så utfallen är lägre än vad en ägare fått. Historisk utveckling säger inget om framtiden.`} <a href="/metod#hz" data-link>${EN ? 'How it is calculated' : 'Så räknas den'}</a></p>`;
+}
+
+// Översiktsfliken: kort version
+async function hzMini(ctx) {
+  const box = $('#ov-hz'); if (!box) return;
+  const d = await getHz(ctx.s.sym).catch(() => null); if (!$('#ov-hz')) return;
+  const ok = hzCalc(d?.punkter).filter((r) => r.neg != null);
+  if (!ok.length) { box.innerHTML = `<p class="b-note">${EN ? 'Too short price history.' : 'För kort kurshistorik.'}</p>`; return; }
+  const pick = ok.length > 3 ? ok.filter((r) => r.y !== 3) : ok;
+  box.innerHTML = `<div class="hz-mini">${pick.map((r) => `<div><b class="num">${hzNegShort(r.neg)}</b><span class="small faint">${EN ? `lost money, ${hzYr(r.y)}` : `gick back, ${hzYr(r.y)}`}</span></div>`).join('')}</div>
+    <p class="b-src">${EN ? 'Share of all start months since' : 'Andel av alla startmånader sedan'} ${hzMonth(d.punkter.find((p) => p[1] > 0)[0])}. ${EN ? 'Excl. dividends.' : 'Utan utdelningar.'}</p>`;
+}
+
+// Kursläge: avstånd till årets högsta och lägsta, och läget mot snitten. Fakta, inga signaler.
+async function klFill(ctx) {
+  const box = $('#ov-kl'); if (!box) return;
+  const d = await ctx.get.px().catch(() => null); if (!$('#ov-kl')) return;
+  const P = (d?.punkter || []).filter((p) => p[1] > 0);
+  if (P.length < 60) { box.innerHTML = `<p class="b-note">${EN ? 'Too short price history.' : 'För kort kurshistorik.'}</p>`; return; }
+  const last = P[P.length - 1]; const yr = P.filter((p) => p[0] >= last[0] - 365 * 86400).map((p) => p[1]);
+  const hi = Math.max(...yr); const lo = Math.min(...yr); const pos = hi > lo ? ((last[1] - lo) / (hi - lo)) * 100 : 50;
+  const ma = (n) => (P.length >= n ? P.slice(-n).reduce((a, p) => a + p[1], 0) / n : null);
+  const U = cur(d.valuta || ctx.s.valuta);
+  const rel = (m) => { const x = (last[1] / m - 1) * 100; return `${bn(Math.abs(x), 1)} % ${x >= 0 ? (EN ? 'above' : 'över') : (EN ? 'below' : 'under')}`; };
+  const row = (k, v) => `<div class="b-kv"><span>${k}</span><b class="num">${v}</b></div>`;
+  const m50 = ma(50); const m200 = ma(200);
+  box.innerHTML = `<div class="small faint" style="margin:2px 0 8px">${EN ? 'Last 52 weeks' : 'Senaste 52 veckorna'}</div>
+    <div class="kl-rng" aria-hidden="true"><i style="left:${pos.toFixed(1)}%"></i></div><div class="kl-rl num"><span>${kr(lo)}</span><b>${kr(last[1])} ${esc(U)}</b><span>${kr(hi)}</span></div>
+    ${row(EN ? 'Below the year\'s high' : 'Under årets högsta', `${bn(Math.abs((last[1] / hi - 1) * 100), 1)} %`)}
+    ${row(EN ? 'Above the year\'s low' : 'Över årets lägsta', `${bn((last[1] / lo - 1) * 100, 1)} %`)}
+    ${row(`${EN ? '50-day average' : 'Snitt 50 dagar'} · ${kr(m50)}`, rel(m50))}
+    ${m200 ? row(`${EN ? '200-day average' : 'Snitt 200 dagar'} · ${kr(m200)}`, rel(m200)) : row(EN ? '200-day average' : 'Snitt 200 dagar', `<span class="faint">${EN ? 'Missing' : 'Saknas'}</span>`)}`;
+}
+
+// Börsen just nu: trend, svängningar och bredd. Beskriver läget, säger inget om vad som händer härnäst.
+const getBorsen = () => api('/api/borsen', 20 * 60e3);
+const BS_NIVA = { lugn: ['Lugnare än vanligt', 'Calmer than usual'], normal: ['Normala', 'Normal'], orolig: ['Oroligare än vanligt', 'More turbulent than usual'] };
+function borsenItems(d) {
+  const i = d.index; const s = d.svang; const b = d.bredd;
+  return [
+    [EN ? 'Trend' : 'Trend', i.diff >= 0 ? (EN ? 'Above the average' : 'Över snittet') : (EN ? 'Below the average' : 'Under snittet'), EN ? `OMXS30 ${bn(i.kurs, 0)}, ${bn(Math.abs(i.diff), 1)} % ${i.diff >= 0 ? 'above' : 'below'} the 200-day average` : `OMXS30 ${bn(i.kurs, 0)}, ${bn(Math.abs(i.diff), 1)} % ${i.diff >= 0 ? 'över' : 'under'} 200-dagarssnittet`],
+    [EN ? 'Swings' : 'Svängningar', BS_NIVA[s.niva][EN ? 1 : 0], EN ? `${bn(s.nu, 1)} % yearly rate the last 20 days, usually ${bn(s.normal, 1)} %` : `${bn(s.nu, 1)} % i årstakt senaste 20 dagarna, normalt ${bn(s.normal, 1)} %`],
+    [EN ? 'Breadth' : 'Bredd', EN ? `${b.over} of ${b.antal}` : `${b.over} av ${b.antal}`, EN ? 'of the most traded stocks are above their 200-day average' : 'av de mest omsatta aktierna ligger över sitt 200-dagarssnitt']
+  ];
+}
+const BS_NOTE = () => (EN ? 'Describes the situation, says nothing about what happens next.' : 'Beskriver läget, säger inget om vad som händer härnäst.');
+async function borsenFill(sel, variant) {
+  const box = $(sel); if (!box) return;
+  const d = await getBorsen().catch(() => null); if (!$(sel)) return;
+  if (!d || d.error || !d.index) { box.innerHTML = variant === 'lp' ? '' : `<p class="b-note">${EN ? 'The market data could not be fetched right now.' : 'Börsläget kunde inte hämtas just nu.'}</p>`; if (variant === 'lp') box.closest('section')?.remove(); return; }
+  const it = borsenItems(d);
+  if (variant === 'lp') { box.innerHTML = it.map(([k, v, x]) => `<div class="lp-bj"><span class="lp-k lp-xs">${k}</span><b>${esc(v)}</b><span class="lp-k lp-xs">${esc(x)}</span></div>`).join(''); return; }
+  box.innerHTML = `<div class="bs-row">${it.map(([k, v, x]) => `<div class="bs-it"><span class="small faint">${k}</span><b>${esc(v)}</b><span class="small faint">${esc(x)}</span></div>`).join('')}</div><p class="b-src">${BS_NOTE()} <a href="/metod#hz" data-link>${EN ? 'How it is calculated' : 'Så räknas det'}</a></p>`;
+}
+const borsenCard = (cls = 'card') => `<section class="${cls} bs-card" aria-labelledby="bs-h"><div class="b-ch"><h2 class="b-lbl" id="bs-h">${EN ? 'The market right now' : 'Börsen just nu'}</h2><span class="small faint">${EN ? 'Stockholm' : 'Stockholm'}</span></div><div id="bs-box">${loading()}</div></section>`;
 
 function bOm(panel, ctx) {
   const { s, sym } = ctx;
@@ -2875,7 +2984,14 @@ function viewMetod() {
     <p class="muted" style="margin:0">${L2('Under Riskanalys visar vi också sex mått på bolagets finanser. De ingår inte i riskkollen. Nivåerna är våra egna enkla gränser:', 'Under Risk analysis we also show six measures of the company\'s finances. They are not part of the risk check. The levels are our own simple limits:')}</p>
     <div class="table-wrap"><table class="m-tbl"><tbody>${Object.values(B_FIN).map((c) => `<tr><th scope="row">${esc(c.k)}</th><td>${esc(ORD[c.k] || '')}</td><td>${esc(c.rule)}</td></tr>`).join('')}</tbody></table></div>
     <p class="b-src">${L2('Banker och bolag med egen finansverksamhet har ofta högre skulder av naturliga skäl, så jämför hellre med liknande bolag.', 'Banks and companies with their own finance business often have higher debt for natural reasons, so compare with similar companies instead.')}</p></section>
-  <section class="card m-sec"><h2 class="m-h"><span>5</span>${L2('Vad riskkollen inte säger', 'What the risk check does not say')}</h2>
+  <section class="card m-sec" id="hz"><h2 class="m-h"><span>5</span>${L2('Tidshorisont, kursläge och börsen just nu', 'Time horizon, price position and the market right now')}</h2>
+    <ul class="m-ul">
+      <li>${L2('<b>Tidshorisont:</b> varje månad i aktiens kurshistorik räknas som en tänkt köpdag. Sedan räknar vi hur det hade gått efter 1, 3, 5 och 10 år. Gått back är andelen startmånader där kursen var lägre efteråt. Mitten är medianen. Vi använder månadskurser utan utdelningar, så utfallen blir lägre än vad en ägare faktiskt fått.', '<b>Time horizon:</b> every month in the price history counts as an imagined day of purchase. Then we calculate how it would have gone after 1, 3, 5 and 10 years. Lost money is the share of start months where the price was lower afterwards. Middle is the median. We use monthly prices without dividends, so the outcomes are lower than what an owner actually received.')}</li>
+      <li>${L2('<b>Kursläge:</b> senaste stängningskursen jämfört med högsta och lägsta stängningskurs de senaste 52 veckorna, och med snittet av de senaste 50 och 200 börsdagarnas stängningskurser.', '<b>Price position:</b> the latest closing price compared with the highest and lowest closing price over the last 52 weeks, and with the average of the last 50 and 200 trading days\' closing prices.')}</li>
+      <li>${L2('<b>Börsen just nu:</b> trenden är OMXS30 mot sitt snitt för 200 börsdagar. Svängningarna är de senaste 20 dagarnas svängningar i årstakt jämfört med alla 20-dagarsperioder de senaste fem åren: under den lägsta fjärdedelen är lugnare än vanligt, över den högsta är oroligare än vanligt. Bredden är hur många av de 30 mest omsatta aktierna på Stockholmsbörsen som ligger över sitt eget 200-dagarssnitt. Räknas om varje timme.', '<b>The market right now:</b> the trend is OMXS30 against its 200-day average. The swings are the last 20 days\' swings at a yearly rate compared with all 20-day periods over the last five years: below the lowest quarter is calmer than usual, above the highest is more turbulent than usual. The breadth is how many of the 30 most traded stocks on the Stockholm Stock Exchange are above their own 200-day average. Recalculated every hour.')}</li>
+      <li>${L2('Inget av det här är signaler att köpa eller sälja. Det beskriver hur det har sett ut.', 'None of this is a signal to buy or sell. It describes how things have looked.')}</li>
+    </ul></section>
+  <section class="card m-sec"><h2 class="m-h"><span>6</span>${L2('Vad riskkollen inte säger', 'What the risk check does not say')}</h2>
     <ul class="m-ul">
       <li>${L2('Den säger inte om en aktie är ett bra eller dåligt köp. Låg risk kan också betyda låg tillväxt.', 'It does not say whether a stock is a good or bad buy. Low risk can also mean low growth.')}</li>
       <li>${L2('Den bygger på hur det har sett ut, inte på vad som kommer att hända.', 'It is based on how things have looked, not on what will happen.')}</li>
@@ -2883,7 +2999,7 @@ function viewMetod() {
       <li>${L2('Fonder och ETF:er saknar ofta nyckeltal och får därför oftast För lite data.', 'Funds and ETFs often lack key figures and therefore usually get Too little data.')}</li>
       <li>${L2('Det är ingen investeringsrådgivning. Fatta egna beslut och sprid gärna riskerna.', 'It is not investment advice. Make your own decisions and spread your risks.')}</li>
     </ul>
-    <p class="b-src">${L2('Ändrar vi reglerna skriver vi det här. Senast ändrad 16 november 2026.', 'If we change the rules we write it here. Last changed 16 November 2026.')}</p></section>
+    <p class="b-src">${L2('Ändrar vi reglerna skriver vi det här. Senast ändrad 18 november 2026.', 'If we change the rules we write it here. Last changed 18 November 2026.')}</p></section>
   ${footer()}`;
 }
 
@@ -5310,6 +5426,8 @@ function render() {
   fresh.innerHTML = r.html;
   main.replaceWith(fresh);
   r.mount?.();
+  // Länk till ett avsnitt, t.ex. /metod#hz
+  if (/^#[\w-]+$/.test(location.hash)) setTimeout(() => document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: 'start' }), 60);
   trackVisit();
 }
 
