@@ -2043,3 +2043,10 @@ a.md-title:hover { text-decoration: underline; }
 .ut-table td:first-child { width: 100%; max-width: 0; }
 .ut-table .ak-name b { white-space: normal; max-width: none; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
 .ut-table .ak-name > span:last-child > .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ut-table th { letter-spacing: .06em; font-size: 10.5px; }
+.ut-table td, .ut-table th { padding-left: 8px; padding-right: 8px; }
+.ut-table .ak-name { gap: 10px; }
+.ut-table .avatar { width: 34px; height: 34px; font-size: 10px; flex: none; }
+.ut-spc { width: 84px; }
+.ut-spark { width: 76px; height: 22px; }
+@media (max-width: 1400px) { .ut-table .avatar { display: none; } }

@@ -243,11 +243,11 @@ export function yearAgoClose(points) {
   if (!v || (jumpT && v[0] < jumpT)) return null;
   return v[1];
 }
-// Kursen för fem år sedan: sista stängningen fem år (1 826 dagar) före den senaste. Börjar historiken
+// Kursen för fem år sedan: sista stängningen fem år (1 826 dagar) före den senaste. Med days = 1 096 blir det tre år. Börjar historiken
 // högst en vecka senare än så används första kursen. Samma regel som diagrammets 5 år på sidan för varje värdepapper.
-export function fiveYearAgoClose(points) {
+export function fiveYearAgoClose(points, days = 1826) {
   if (!points?.length) return null;
-  const lastT = points[points.length - 1][0]; const lim = lastT - 1826 * 86400;
+  const lastT = points[points.length - 1][0]; const lim = lastT - days * 86400;
   let v = null; for (const p of points) { if (p[0] <= lim) v = p; else break; }
   if (v == null && points[0][0] <= lim + 7 * 86400) v = points[0];
   const jumpT = splitJumpT(points);

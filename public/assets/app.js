@@ -3039,7 +3039,7 @@ function utGroups(typ, m, items) {
 }
 const SORTS_T = {
   aktier: [['mcap', 'Börsvärde'], ['d1', 'I dag'], ['ar', '1 år'], ['ar5', '5 år'], ['vol', 'Lägst svängning'], ['pe', 'P/E'], ['utd', 'Utdelning'], ['namn', 'Namn']],
-  fonder: [['storlek', 'Fondförmögenhet'], ['avgift', 'Lägst avgift'], ['ar', '1 år'], ['ar5', '5 år'], ['vol', 'Lägst svängning'], ['namn', 'Namn']],
+  fonder: [['storlek', 'Fondförmögenhet'], ['avgift', 'Lägst avgift'], ['ar', '1 år'], ['ar3', '3 år'], ['vol', 'Lägst svängning'], ['namn', 'Namn']],
   etf: [['storlek', 'Storlek'], ['d1', 'I dag'], ['ar', '1 år'], ['ar5', '5 år'], ['vol', 'Lägst svängning'], ['namn', 'Namn']],
   etp: [['ar', '1 år'], ['d1', 'I dag'], ['vol', 'Lägst svängning'], ['namn', 'Namn']],
   krypto: [['mcap', 'Börsvärde'], ['d1', 'I dag'], ['ar', '1 år'], ['ar5', '5 år'], ['vol', 'Lägst svängning'], ['namn', 'Namn']]
@@ -3055,7 +3055,7 @@ const UT_NOTE = {
   etp: 'ETP:er följer till exempel en kryptovaluta eller ett index. Hävstångsprodukter som bull, bear och minifutures rör sig flera gånger mer än det de följer och kan bli värdelösa.',
   krypto: 'De 100 största kryptovalutorna efter börsvärde. Kursen är i dollar och räknas om till kronor med dagens växelkurs. Stablecoins följer en valuta, oftast dollarn.'
 };
-const UT_NOTE_ALL = 'Svängning är hur mycket kursen har rört sig det senaste året, räknat som årlig standardavvikelse: under 12 % är Låg, 12–20 % Medel och över 20 % Hög. Det är inte samma sak som Riskkollen på sidan för varje värdepapper. 1 år och 5 år räknas som där: senaste kurs mot stängningskursen ett och fem år tidigare, utan utdelningar.';
+const UT_NOTE_ALL = 'Svängning är hur mycket kursen har rört sig det senaste året, räknat som årlig standardavvikelse: under 12 % är Låg, 12–20 % Medel och över 20 % Hög. Det är inte samma sak som Riskkollen på sidan för varje värdepapper. 1, 3 och 5 år räknas som där: senaste kurs mot stängningskursen så många år tidigare, utan utdelningar. För fonder visas 3 år, eftersom datakällan ofta bara har fondkurser sedan 2022.';
 
 function viewAktier() {
   return `
@@ -3165,7 +3165,7 @@ function mountAktier(params) {
     const v = a.sp; if (!v?.length) return `<td class="hide-xs ut-spc faint">${ar.klar ? '' : '…'}</td>`;
     const lo = Math.min(...v); const hi = Math.max(...v); const sp = hi - lo || 1;
     const d = v.map((y, i) => `${i ? 'L' : 'M'}${(1 + (i * 88) / (v.length - 1)).toFixed(1)} ${(2 + (1 - (y - lo) / sp) * 20).toFixed(1)}`).join(' ');
-    return `<td class="hide-xs ut-spc"><svg class="ut-spark" width="90" height="24" viewBox="0 0 90 24" aria-hidden="true"><path d="${d}" fill="none" stroke="var(--${v[v.length - 1] >= v[0] ? 'up' : 'down'})" stroke-width="1.6" stroke-linejoin="round"/></svg></td>`;
+    return `<td class="hide-xs ut-spc"><svg class="ut-spark" width="76" height="22" viewBox="0 0 90 24" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" fill="none" stroke="var(--${v[v.length - 1] >= v[0] ? 'up' : 'down'})" stroke-width="1.6" stroke-linejoin="round"/></svg></td>`;
   };
   const volCell = (a) => {
     const n = volDots(a.vol); if (n == null) return `<td class="r hide-xs faint">${wait()}</td>`;
@@ -3179,8 +3179,8 @@ function mountAktier(params) {
   const ROWS = {
     aktier: { head: () => `${th('namn', 'Bolag')}${th('d1', 'I dag', 'r')}${thp('Utveckling', 'hide-xs')}${th('ar', '1 år', 'r')}${th('ar5', '5 år', 'r hide-xs')}${th('pe', 'P/E', 'r hide-md')}${th('utd', 'Utdelning', 'r hide-md')}${th('mcap', 'Börsvärde', 'r hide-md')}${th('vol', 'Svängning', 'r hide-xs')}`,
       row: (a) => `${nameCell(a, `${symFlag(a.sym, 'mob-ak')}${esc(a.sym)} · ${pxTxt(a)}${a.bransch ? ` · ${esc(a.bransch)}` : ''}`)}${d1Cell(a)}${spark(a)}${pctCell(a.ar, '')}${pctCell(a.ar5, 'hide-xs')}<td class="r num hide-md">${a.pe === -1 ? '<span class="small muted">Förlust</span>' : a.pe != null ? esc(nf(a.pe, 1)) : '–'}</td><td class="r num hide-md">${a.utd ? esc(nf(a.utd, 1)) + ' %' : a.utd === 0 ? '0 %' : '–'}</td><td class="r num hide-md">${a.mcap ? esc(mny(a.mcap, a.valuta)) : '–'}</td>${volCell(a)}` },
-    fonder: { head: () => `${th('namn', 'Fond')}${th('avgift', 'Avgift', 'r')}${thp('Utveckling', 'hide-xs')}${th('ar', '1 år', 'r')}${th('ar5', '5 år', 'r hide-xs')}${th('vol', 'Svängning', 'r hide-xs')}`,
-      row: (a) => `${nameCell(a, `${esc([a.region !== 'ovrig' ? (EN ? REGION_EN : REGION)[a.region] : null, a.index ? 'Index' : a.ftyp !== 'ovrig' ? (EN ? FTYP_EN : FTYP)[a.ftyp] : null].filter(Boolean).join(' · ') || (EN ? 'Fund' : 'Fond'))} · ${pxTxt(a)}${a.klasser > 1 ? ` · ${a.klasser} ${EN ? 'share classes' : 'andelsklasser'}` : ''}`)}<td class="r num">${a.avgift ? esc(feeTxt(a.avgift)) : '<span class="small faint">Saknas</span>'}</td>${spark(a)}${pctCell(a.ar, '')}${pctCell(a.ar5, 'hide-xs')}${volCell(a)}` },
+    fonder: { head: () => `${th('namn', 'Fond')}${th('avgift', 'Avgift', 'r')}${thp('Utveckling', 'hide-xs')}${th('ar', '1 år', 'r')}${th('ar3', '3 år', 'r hide-xs')}${th('vol', 'Svängning', 'r hide-xs')}`,
+      row: (a) => `${nameCell(a, `${esc([a.region !== 'ovrig' ? (EN ? REGION_EN : REGION)[a.region] : null, a.index ? 'Index' : a.ftyp !== 'ovrig' ? (EN ? FTYP_EN : FTYP)[a.ftyp] : null].filter(Boolean).join(' · ') || (EN ? 'Fund' : 'Fond'))} · ${pxTxt(a)}${a.klasser > 1 ? ` · ${a.klasser} ${EN ? 'share classes' : 'andelsklasser'}` : ''}`)}<td class="r num">${a.avgift ? esc(feeTxt(a.avgift)) : '<span class="small faint">Saknas</span>'}</td>${spark(a)}${pctCell(a.ar, '')}${pctCell(a.ar3, 'hide-xs')}${volCell(a)}` },
     etf: { head: () => `${th('namn', 'ETF')}${th('d1', 'I dag', 'r')}${thp('Utveckling', 'hide-xs')}${th('ar', '1 år', 'r')}${th('ar5', '5 år', 'r hide-xs')}${th('storlek', 'Fondförmögenhet', 'r hide-md')}${th('vol', 'Svängning', 'r hide-xs')}`,
       row: (a) => `${nameCell(a, `${symFlag(a.sym, 'mob-ak')}${esc(a.sym)} · ${pxTxt(a)}`)}${d1Cell(a)}${spark(a)}${pctCell(a.ar, '')}${pctCell(a.ar5, 'hide-xs')}<td class="r num hide-md">${a.storlek ? esc(mny(a.storlek, a.valuta)) : '–'}</td>${volCell(a)}` },
     etp: { head: () => `${th('namn', 'Produkt')}<th scope="col" class="hide-md">Typ</th>${th('d1', 'I dag', 'r')}${thp('Utveckling', 'hide-xs')}${th('ar', '1 år', 'r')}${th('vol', 'Svängning', 'r hide-xs')}`,
@@ -3196,7 +3196,7 @@ function mountAktier(params) {
     if (!list.length) { $('#ak-list').innerHTML = '<div class="empty">Inget matchar filtren. Prova att ta bort något filter.</div>'; return; }
     const watch = new Set(getWatch());
     const show = list.slice(0, st.n); const R = ROWS[st.typ];
-    const waitSort = ['ar', 'ar5', 'vol'].includes(st.s) && !ar.klar;
+    const waitSort = ['ar', 'ar3', 'ar5', 'vol'].includes(st.s) && !ar.klar;
     $('#ak-list').innerHTML = `${waitSort ? '<p class="small faint" style="margin:6px 0">Räknar fortfarande. Listan sorteras om när det är klart.</p>' : ''}<div class="table-wrap ut-tw"><table class="ak-table ut-table">
       <thead><tr>${R.head()}<th scope="col" class="r"><span class="sr-only">Bevaka</span></th></tr></thead>
       <tbody>${show.map((a) => `<tr>${R.row(a)}${star(a, watch)}</tr>`).join('')}</tbody></table></div>
@@ -3209,12 +3209,13 @@ function mountAktier(params) {
   const loadAr = async (key, items) => {
     ar = { klar: false, lista: key };
     const parts = Math.ceil(items.length / 250); let redraw = 0;
-    const one = (i) => api(`/api/ar?lista=${key}&del=${i}&v=3`, 3 * 3600e3).then((r) => {
+    const one = (i) => api(`/api/ar?lista=${key}&del=${i}&v=4`, 3 * 3600e3).then((r) => {
       if (ar.lista !== key || !r?.ref) return;
       for (const a of items) {
         const k = a.sym; const r1 = r.ref[k]; const r5 = r.ref5?.[k];
         if (r1 && a.kurs) a.ar = Math.round((a.kurs / r1 - 1) * 10000) / 100;
         if (r5 && a.kurs) a.ar5 = Math.round((a.kurs / r5 - 1) * 10000) / 100;
+        const r3 = r.ref3?.[k]; if (r3 && a.kurs) a.ar3 = Math.round((a.kurs / r3 - 1) * 10000) / 100;
         if (r.vol?.[k] != null) a.vol = r.vol[k];
         if (r.sp?.[k]) a.sp = r.sp[k];
       }
@@ -3239,7 +3240,7 @@ function mountAktier(params) {
       $('#ak-list').innerHTML = `<div class="empty">${esc(d?.error ? errText(d) : 'Datakällan svarade inte.')} Prova igen om en stund.</div>`;
       return;
     }
-    items.forEach((a) => { a.ar = null; a.ar5 = null; a.vol = null; a.sp = null; });
+    items.forEach((a) => { a.ar = null; a.ar3 = null; a.ar5 = null; a.vol = null; a.sp = null; });
     data = { ...d, items };
     groups = utGroups(typ, m, items);
     // Val som inte finns i den här listan tas bort
@@ -3302,6 +3303,7 @@ const ORD = {
   'Insynshandel': 'Köp och försäljningar av personer i bolagets ledning och styrelse, och deras närstående. De måste anmäla affärerna till Finansinspektionen.',
   '1 år': 'Hur mycket kursen har gått upp eller ner det senaste året.',
   '5 år': 'Hur mycket kursen har gått upp eller ner de senaste fem åren, utan utdelningar.',
+  '3 år': 'Hur mycket kursen har gått upp eller ner de senaste tre åren, utan utdelningar.',
   'Svängning': 'Hur mycket kursen har rört sig upp och ner det senaste året, räknat som årlig standardavvikelse. Under 12 % är Låg, 12–20 % Medel och över 20 % Hög. Fler prickar betyder större svängningar.',
   'Utveckling': 'Kursen det senaste året. Grön om den är högre nu än för ett år sedan.',
   'Avgift': 'Fondens årliga förvaltningsavgift enligt Finansinspektionen. Den dras från fondens värde lite varje dag. 0,20 % betyder ungefär 20 kr per år för varje 10 000 kr.',

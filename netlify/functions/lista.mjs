@@ -67,8 +67,12 @@ async function fonder() {
     if (!g) grupper.set(k, { a, n: 1 });
     else { g.n++; if (isUtd(g.a.namn) && !isUtd(a.namn)) g.a = a; }
   }
+  // Finansinspektionens namn har ibland ett ord till, som "Handelsbanken Sverige Index Criteria".
+  // Börjar precis ett namn där med fondens namn räknas det som samma fond.
+  const fiKeys = fi ? [...fi.map.keys()] : [];
+  const fiOf = (k) => { if (!fi) return null; const x = fi.map.get(k); if (x) return x; const c = fiKeys.filter((f) => f.startsWith(k + ' ')); return c.length === 1 && k.split(' ').length >= 2 ? fi.map.get(c[0]) : null; };
   const items = [...grupper.entries()].map(([k, { a, n }]) => {
-    const f = fi?.map.get(k) || null;
+    const f = fiOf(k);
     const { typ, index } = fundKind(a.namn, f?.index);
     return { ...a, klasser: n, avgift: f?.avgift || null, ftyp: typ, index, region: fundRegion(a.namn, f?.index) };
   });
