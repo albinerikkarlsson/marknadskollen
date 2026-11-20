@@ -5,9 +5,10 @@ import { ySearch, newsFromSearch, yChart } from '../lib/yahoo.mjs';
 // world: Finnhubs allmänna marknadsnyheter. se: nyheter om stora svenska bolag.
 // s: nyheter om ett bolag. Vi visar rubrik, kort ingress och länk till källan.
 // Finnhubs gratisplan saknar svenska bolag, så då hämtas rubrikerna från Yahoo Finance i stället.
-const SE = ['VOLV-B.ST', 'ERIC-B.ST', 'SAAB-B.ST', 'EVO.ST', 'INVE-B.ST', 'ATCO-A.ST', 'HM-B.ST', 'SEB-A.ST'];
+// De största bolagen på Stockholmsbörsen, så att Sverige-fliken får många nyheter
+const SE = ['VOLV-B.ST', 'ERIC-B.ST', 'SAAB-B.ST', 'EVO.ST', 'INVE-B.ST', 'ATCO-A.ST', 'HM-B.ST', 'SEB-A.ST', 'AZN.ST', 'ABB.ST', 'NDA-SE.ST', 'SHB-A.ST', 'SWED-A.ST', 'SAND.ST', 'ASSA-B.ST', 'ESSITY-B.ST', 'EQT.ST', 'ALFA.ST', 'HEXA-B.ST', 'EPI-A.ST', 'TELIA.ST', 'SKF-B.ST', 'BOL.ST', 'SCA-B.ST', 'NIBE-B.ST', 'SINCH.ST', 'GETI-B.ST', 'KINV-B.ST', 'TEL2-B.ST', 'SBB-B.ST'];
 
-const SE_NAMN = { 'VOLV-B.ST': 'Volvo', 'ERIC-B.ST': 'Ericsson', 'SAAB-B.ST': 'Saab', 'EVO.ST': 'Evolution Gaming', 'INVE-B.ST': 'Investor AB', 'ATCO-A.ST': 'Atlas Copco', 'HM-B.ST': 'H&M', 'SEB-A.ST': 'SEB' };
+const SE_NAMN = { 'VOLV-B.ST': 'Volvo', 'ERIC-B.ST': 'Ericsson', 'SAAB-B.ST': 'Saab', 'EVO.ST': 'Evolution Gaming', 'INVE-B.ST': 'Investor AB', 'ATCO-A.ST': 'Atlas Copco', 'HM-B.ST': 'H&M', 'SEB-A.ST': 'SEB' , 'AZN.ST': 'AstraZeneca', 'ABB.ST': 'ABB', 'NDA-SE.ST': 'Nordea', 'SHB-A.ST': 'Handelsbanken', 'SWED-A.ST': 'Swedbank', 'SAND.ST': 'Sandvik', 'ASSA-B.ST': 'Assa Abloy', 'ESSITY-B.ST': 'Essity', 'EQT.ST': 'EQT', 'ALFA.ST': 'Alfa Laval', 'HEXA-B.ST': 'Hexagon', 'EPI-A.ST': 'Epiroc', 'TELIA.ST': 'Telia', 'SKF-B.ST': 'SKF', 'BOL.ST': 'Boliden', 'SCA-B.ST': 'Svenska Cellulosa', 'NIBE-B.ST': 'Nibe', 'SINCH.ST': 'Sinch', 'GETI-B.ST': 'Getinge', 'KINV-B.ST': 'Kinnevik', 'TEL2-B.ST': 'Tele2', 'SBB-B.ST': 'Samhällsbyggnadsbolaget' };
 
 // Bolag med liknande namn som lätt blandas ihop
 const NOT = { 'VOLV-B.ST': /Volvo Cars?\b|Volvo Car's/i, 'VOLV-A.ST': /Volvo Cars?\b|Volvo Car's/i };
@@ -20,14 +21,15 @@ export default async (req) => {
     const to = new Date(); const from = new Date(Date.now() - (one ? 14 : 5) * 864e5);
     let raw = [];
     let err = null;
-    if (one || region === 'se') {
-      const syms = one ? [one] : SE;
+    // Finnhubs gratisplan har inga svenska bolag, så Sverige-fliken går direkt till Yahoo
+    if (one) {
+      const syms = [one];
       const res = await Promise.allSettled(syms.map((s) => finnhub('/company-news', { symbol: s, from: dayIso(from), to: dayIso(to) })));
       for (const [i, r] of res.entries()) {
         if (r.status === 'fulfilled' && Array.isArray(r.value)) raw.push(...r.value.slice(0, one ? 15 : 4).map((n) => ({ ...n, _sym: syms[i] })));
         else if (r.status === 'rejected') err = r.reason;
       }
-    } else {
+    } else if (region === 'world') {
       raw = await finnhub('/news', { category: 'general' });
     }
     if (!raw.length && (one || region === 'se')) {
@@ -40,9 +42,11 @@ export default async (req) => {
         const nm = SE_NAMN[s] || (one ? await yChart(s, '5d', '1d').then((c) => cleanCo(c.meta?.longName || c.meta?.shortName)).catch(() => '') : '');
         if (nm) terms.push([nm, s, kwOf(nm)]);
         if (!kw && nm) terms[terms.length - 2][2] = kwOf(nm);
-        if (!one && terms.length >= 16) break;
+        if (!one && terms.length >= 60) break;
       }
-      const res = await Promise.allSettled(terms.map(([q]) => ySearch(q, { quotes: 1, news: one ? 10 : 5 })));
+      // Femton sökningar åt gången, så att Yahoo inte stryper oss
+      const res = [];
+      for (let i = 0; i < terms.length; i += 15) res.push(...(await Promise.allSettled(terms.slice(i, i + 15).map(([q]) => ySearch(q, { quotes: 1, news: one ? 10 : 8 })))));
       const oldest = from.getTime() - (one ? 45 : 9) * 864e5;
       for (const [i, r] of res.entries()) {
         if (r.status === 'fulfilled') raw.push(...newsFromSearch(r.value, terms[i][1], terms[i][2]).filter((n) => (!n.datetime || n.datetime * 1000 >= oldest) && !(NOT[terms[i][1]]?.test(n.headline))));
@@ -64,16 +68,19 @@ export default async (req) => {
       seen.add(key);
       items.push({
         rubrik: n.headline.trim(),
-        text: clip(String(n.summary || '').replace(/\s+/g, ' ').trim(), 260),
+        text: clip(String(n.summary || '').replace(/\s+/g, ' ').trim(), 600),
         lank: n.url,
+        // Bilden som källan skickar med nyheten. Visas med länk till källan.
+        bild: /^https:\/\/\S+$/.test(String(n.image || '')) ? String(n.image) : null,
         kalla: n.source || hostOf(n.url),
         datum: n.datetime ? new Date(n.datetime * 1000).toISOString() : null,
         bolag: n._sym ? [n._sym.split('.')[0]] : String(n.related || '').split(',').filter(Boolean).slice(0, 3),
+        sym: n._sym || null,
         kategori: n.category || ''
       });
     }
     items.sort((a, z) => String(z.datum).localeCompare(String(a.datum)));
-    return cached({ region: one ? null : region, items: items.slice(0, 20), hamtad: new Date().toISOString() }, 900);
+    return cached({ region: one ? null : region, items: items.slice(0, one ? 30 : 80), hamtad: new Date().toISOString() }, 900);
   } catch (e) { return fail(e); }
 };
 

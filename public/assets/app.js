@@ -1343,52 +1343,39 @@ async function getStock(sym) {
 }
 
 /* ================= Nyheter ================= */
+// En spalt som en tidning: stor bild överst, sedan listan med små bilder. Trycker man på en nyhet öppnas den i en panel.
+// Tidningarnas text får vi inte visa i sin helhet, så där visas källans bild och ingress och en knapp till artikeln.
+// Bolagens egna meddelanden visas i sin helhet.
+const NW_TABS = [['allt', 'Allt'], ['mina', 'Mina aktier'], ['se', 'Sverige'], ['world', 'Världen'], ['md', 'Bolagen själva'], ['insyn', 'Insyn']];
 function viewNyheter() {
+  const tabs = NW_TABS.filter(([k]) => k !== 'mina' || newsMine());
   return `
   ${topbar([['Översikt', '/oversikt'], ['Nyheter', '/nyheter']])}
-  <div class="section-head" style="align-items:flex-end">
+  <div class="nw">
     <div class="stack" style="gap:6px">
-      <span class="eyebrow" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">Börsnyheter från hela världen <span id="news-status"></span></span>
+      <span class="eyebrow" id="news-status">Hämtar nyheter …</span>
       <h1 class="title">Nyheter</h1>
     </div>
-    <div class="tabs" role="tablist" aria-label="Nyheter">
-      ${newsMine() ? '<button role="tab" data-region="mina" aria-selected="true">Mina aktier</button>' : ''}
-      <button role="tab" data-region="world" aria-selected="${!newsMine()}">Världen</button>
-      <button role="tab" data-region="se" aria-selected="false">Sverige</button>
-      <button role="tab" data-region="md" aria-selected="false">Bolagsmeddelanden</button>
-      <button role="tab" data-region="insyn" aria-selected="false">Insyn</button>
-    </div>
+    <div class="ut-pills nw-tabs" role="tablist" aria-label="Nyheter">${tabs.map(([k, t]) => `<button type="button" role="tab" data-region="${k}">${esc(t)}</button>`).join('')}</div>
+    <div class="nw-sub" id="nw-sub"></div>
+    <div id="nw-lead"></div>
+    <section aria-label="Nyhetslista" id="newslist">${loading('Hämtar nyheter …')}</section>
+    <p class="small faint nw-help" id="news-help"></p>
   </div>
-  <div class="split">
-    <div class="wide stack" style="gap:16px">
-      <section class="card nd-day" id="news-dagens" aria-labelledby="nd-h" hidden></section>
-      <div class="nf-bar">
-        <div class="chips" id="newsfilter"></div>
-        <span class="small faint num"><span id="news-count">–</span> <span id="news-range"></span></span>
-      </div>
-      <p class="small faint" style="margin:-6px 0 0" id="news-help"></p>
-      <section class="stack" aria-label="Nyhetslista" id="newslist">${loading('Hämtar nyheter …')}</section>
-    </div>
-    <aside class="narrow stack" style="gap:16px">
-      <section class="card stack nq" id="news-quiz" aria-labelledby="nq-h" style="gap:10px"><h2 class="label-up" id="nq-h" style="margin:0">Gissa reaktionen</h2>${loading('Hämtar …')}</section>
-      <section class="card stack" aria-labelledby="ni-h" style="gap:8px"><h2 class="label-up" id="ni-h" style="margin:0">Ledningen köper och säljer</h2><div id="news-insyn">${loading('Hämtar …')}</div></section>
-      <section class="card stack" aria-labelledby="nk-h" style="gap:8px"><h2 class="label-up" id="nk-h" style="margin:0">Dina bolag rapporterar</h2><div id="news-kal">${loading('Hämtar …')}</div></section>
-      <div class="empty">Vi visar rubrik, en kort ingress och länk till källan. Läs alltid hela artikeln innan du gör något med dina pengar.</div>
-    </aside>
-  </div>
+  <div class="nw-back" id="nw-back" hidden></div>
+  <aside class="nw-panel" id="nw-panel" role="dialog" aria-modal="true" aria-labelledby="nw-ph" hidden></aside>
   ${footer()}`;
 }
 
 // Fliken "Mina aktier" visas för den som har köp eller en egen bevakningslista
 const newsMine = () => (ACC.user || getPort().length > 0) && mySyms().all.length > 0;
 async function getMyNews() {
-  const { port, all } = mySyms(); const syms = [...port, ...all.filter((x) => !port.includes(x))].slice(0, 12);
+  const { port, all } = mySyms(); const syms = [...port, ...all.filter((x) => !port.includes(x))].slice(0, 20);
   const res = await Promise.all(syms.map((sym) => api('/api/news?s=' + encodeURIComponent(sym), 10 * 60e3).then((n) => (n?.error ? null : (n?.items || []).map((x) => ({ ...prepNews(x, null, sym), min: sym, agd: port.includes(sym) })))).catch(() => null)));
   if (res.every((x) => x == null)) return { ok: false, error: { error: 'upstream' }, items: [] };
   const seen = new Set(); const now = Date.now();
   const items = res.flat().filter(Boolean).filter((n) => { const k = n.lank || n.rubrik; if (seen.has(k)) return false; seen.add(k); return true; })
-    .filter((n) => now - new Date(n.datum).getTime() < 14 * dayMs)
-    .map((n) => { const h = (now - new Date(n.datum).getTime()) / 3600e3; return { ...n, poang: n.vikt * 6 + (n.agd ? 4 : 2) - h / 6 }; });
+    .filter((n) => now - new Date(n.datum).getTime() < 14 * dayMs);
   return { ok: true, hamtad: new Date().toISOString(), items, mina: true };
 }
 
@@ -1400,174 +1387,175 @@ const heldQty = (sym, iso) => { const t = iso ? Date.parse(iso) : NaN; return ge
 function forDigHTML(sym, P, I, iso, fx) {
   const m = mktOf(sym); if (!m) return '';
   const r = mdReact(P, I, iso, m.close);
-  const px = r ? `<span class="nx-px"><b class="num ${tone(r.pct)}">${r.pct != null ? esc(pct(r.pct, 1)) : '–'}</b> <span class="faint">${r.pct == null ? (EN ? 'no trading since' : 'ingen handel sedan dess') : r.live ? (EN ? 'so far today' : 'hittills i dag') : (EN ? 'the stock' : 'aktien')}${r.idx != null ? ` · ${esc(m.idxNamn)} ${esc(pct(r.idx, 1))}` : ''}</span></span>` : `<span class="faint">${EN ? 'Price reaction missing' : 'Kursreaktion saknas'}</span>`;
   const q = heldQty(sym, iso);
   const kr = r && r.after != null && q > 0 && fx ? (P[r.after][1] - P[r.b][1]) * q * fx : null;
-  const me = kr != null ? `<div class="nx-me"><span><b>${EN ? 'What it means for you' : 'Det här betyder för dig'}</b> · ${EN ? `your ${nfAntal(q)} shares` : `dina ${nfAntal(q)} aktier`}${r.live ? (EN ? ', so far today' : ', hittills i dag') : ''}</span><b class="num ${tone(kr)}">${kr >= 0 ? '+' : '−'}${esc(sek(Math.abs(kr)))}</b></div>` : '';
-  return `<div class="nx-re small"><span class="faint">${EN ? 'How the market reacted' : 'Så tog marknaden emot den'}</span>${px}</div>${me}`;
+  return kr != null ? `<div class="nx-me"><span><b>${EN ? 'What it means for you' : 'Det här betyder för dig'}</b> · ${EN ? `your ${nfAntal(q)} shares` : `dina ${nfAntal(q)} aktier`}${r.live ? (EN ? ', so far today' : ', hittills i dag') : ''}</span><b class="num ${tone(kr)}">${kr >= 0 ? '+' : '−'}${esc(sek(Math.abs(kr)))}</b></div>` : '';
 }
 
-/* ---------- Dagens tre ---------- */
-async function newsDagens() {
-  const box = $('#news-dagens'); if (!box) return;
-  const d = await api('/api/summary?dagens=1' + (EN ? '&lang=en' : ''), 30 * 60e3).catch(() => null);
-  if (!$('#news-dagens')) return;
-  if (!d?.punkter?.length) { box.hidden = true; return; }
-  const { port, all } = mySyms(); const own = new Set(port); const mine = new Set(all);
-  const map = await mdSymMap().catch(() => null);
-  const symsOf = (p) => { const out = new Set(); for (const k of p.kallor) { for (const b of k.bolag || []) { const hit = all.find((s) => s.split('.')[0] === String(b).toUpperCase()); if (hit) out.add(hit); } if (k.bolagNamn && map) { const s = mdSymOf(map, k.bolagNamn); if (s && mine.has(s)) out.add(s); } } return [...out]; };
-  box.hidden = false;
-  box.innerHTML = `<div class="nd-head"><h2 class="label-up or" id="nd-h" style="margin:0">${d.punkter.length === 3 ? (EN ? 'Today’s three in 60 seconds' : 'Dagens tre på 60 sekunder') : (EN ? 'Today’s most important in 60 seconds' : 'Dagens viktigaste på 60 sekunder')}</h2><span class="small faint">${EN ? 'Summarised by AI from the headlines' : 'Sammanfattat av AI från rubrikerna'} · ${esc(clock(d.hamtad))}</span></div>
-    <ol class="nd-list">${d.punkter.map((p) => { const s = symsOf(p); return `<li><div class="nd-t">${esc(p.rubrik)}${s.map((x) => `<a class="pill outline nd-mine" href="/bolag/${encodeURIComponent(x)}" data-link>${esc(ovName(x))} · ${own.has(x) ? (EN ? 'you own' : 'du äger') : (EN ? 'watched' : 'bevakad')}</a>`).join('')}</div><p class="nd-why"><b>${EN ? 'Why it matters:' : 'Varför det spelar roll:'}</b> ${esc(p.varfor)}</p><div class="nd-src small faint">${p.kallor.map((k) => { const u = safeUrl(k.lank); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" data-noi18n>${esc(k.kalla || (EN ? 'Source' : 'Källa'))} ↗</a>` : ''; }).join(' · ')}</div></li>`; }).join('')}</ol>
-    <p class="small faint" style="margin:6px 0 0">${EN ? 'The summary only uses the headlines. Read the source before you do anything with your money.' : 'Sammanfattningen bygger bara på rubrikerna. Läs källan innan du gör något med dina pengar.'}</p>`;
+// En nyhet, ett bolagsmeddelande eller en insynsaffär i samma form
+const nwNews = (n) => { const sym = n.min || n.sym || null; return { k: 'nyhet', id: 'n:' + (n.lank || n.rubrik), tid: n.datum, rubrik: n.rubrik, text: n.text || '', kalla: n.kalla, lank: n.lank, bild: n.bild || null, sym, agd: !!n.agd, bolag: sym ? ovName(sym) : n.bolagTxt || '', n }; };
+const nwMd = (it) => ({ k: 'md', id: 'm:' + it.id, mid: it.id, tid: it.tid, rubrik: it.rubrik, kalla: 'Nasdaq Nordic', lank: it.lank, sym: it.sym || null, bolag: it.sym ? ovName(it.sym) : it.bolag, bolagNamn: it.bolag, kat: it.kategori, g: mdGroup(it.kategori) });
+const nwInsyn = (a, i) => ({ k: 'insyn', id: 'i:' + i + ':' + a.person + a.datum, tid: a.datum ? a.datum + 'T12:00:00Z' : null, dagOnly: true, rubrik: `${a.person}${a.roll ? `, ${a.roll.toLowerCase()}` : ''}${a.narstaende ? (EN ? ' (related party)' : ' (närstående)') : ''}: ${a.typ === 'Köp' ? (EN ? 'buys' : 'köper') : a.typ === 'Sälj' ? (EN ? 'sells' : 'säljer') : a.typ.toLowerCase()}${a.varde != null ? ` ${EN ? 'for' : 'för'} ${mny(a.varde, a.valuta)}` : ''}`, kalla: 'Finansinspektionen', bolag: a.bolag, a });
+
+// Liten ruta till vänster: källans bild, eller typen i färg när bild saknas
+function nwThumb(it, big = false) {
+  const lbl = it.k === 'md' ? (it.g[0] === 'nyhet' ? (EN ? 'Announcement' : 'Meddelande') : { rapport: EN ? 'Report' : 'Rapport', insider: 'Insider', ledning: EN ? 'Management' : 'Ledning', rutin: EN ? 'Routine' : 'Rutin' }[it.g[0]])
+    : it.k === 'insyn' ? it.a.typ : it.kalla || (EN ? 'News' : 'Nyhet');
+  const col = it.k === 'md' ? it.g[3] : it.k === 'insyn' ? (it.a.typ === 'Köp' ? 'var(--up)' : it.a.typ === 'Sälj' ? 'var(--down)' : 'var(--muted)') : 'var(--muted)';
+  const fb = `<span class="nw-tl" style="--c:${col}" data-noi18n>${esc(lbl)}</span>`;
+  const u = it.bild ? safeUrl(it.bild) : null;
+  return `<span class="nw-th${big ? ' big' : ''}${u ? ' has' : ''}">${u ? `<img class="nw-img" src="${esc(u)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : ''}${fb}</span>`;
+}
+const nwWhen = (it) => (it.dagOnly ? dag(it.tid.slice(0, 10)) : mdWhen(it.tid));
+const nwChip = (it) => (it.agd ? `<span class="pill outline small or-pill">${EN ? 'You own' : 'Du äger'}</span>` : it.sym && mySyms().all.includes(it.sym) ? `<span class="pill outline small">${EN ? 'Watched' : 'Bevakad'}</span>` : '');
+function nwRow(it, i) {
+  const ex = it.k === 'nyhet' ? it.text : it.k === 'md' ? (EN ? 'Company announcement · the full text is here' : 'Bolagsmeddelande · hela texten finns här') : (EN ? 'Insider trade reported to Finansinspektionen' : 'Insynsaffär anmäld till Finansinspektionen');
+  return `<button type="button" class="nw-row" data-nw="${i}"${it.sym && it.tid && !it.dagOnly ? ` data-rsym="${esc(it.sym)}" data-rtid="${esc(it.tid)}"` : ''}>${nwThumb(it)}<span class="nw-c">
+    <span class="nw-meta">${it.bolag ? `<b data-noi18n>${esc(it.bolag)}</b>` : ''}<span class="faint num">${esc(nwWhen(it))} · ${esc(it.kalla)}</span><span class="nw-re"></span>${nwChip(it)}</span>
+    <span class="nw-h" data-noi18n>${esc(it.rubrik)}</span>${ex ? `<span class="nw-x"${it.k === 'nyhet' ? ' data-noi18n' : ''}>${esc(ex)}</span>` : ''}</span></button>`;
+}
+function nwLeadHTML(it, i) {
+  return `<button type="button" class="nw-lead" data-nw="${i}"${it.sym && it.tid ? ` data-rsym="${esc(it.sym)}" data-rtid="${esc(it.tid)}"` : ''}>${nwThumb(it, true)}
+    <span class="nw-meta">${it.bolag ? `<b data-noi18n>${esc(it.bolag)}</b>` : ''}<span class="faint num">${esc(nwWhen(it))} · ${esc(it.kalla)}</span><span class="nw-re"></span>${nwChip(it)}</span>
+    <span class="nw-lh" data-noi18n>${esc(it.rubrik)}</span>${it.text ? `<span class="nw-lx" data-noi18n>${esc(it.text)}</span>` : ''}</button>`;
 }
 
-/* ---------- Gissa reaktionen ---------- */
-const GKEY = 'mk-gissa';
-const getGissa = () => { try { const v = JSON.parse(localStorage.getItem(GKEY)); return v && typeof v === 'object' ? { svar: v.svar || {}, rad: v.rad || 0 } : { svar: {}, rad: 0 }; } catch { return { svar: {}, rad: 0 }; } };
-const setGissa = (v) => { try { localStorage.setItem(GKEY, JSON.stringify(v)); } catch { /* privat läge */ } };
-async function newsQuiz() {
-  const box = $('#news-quiz'); if (!box) return;
-  const d = await api('/api/meddelanden?gissa=1&sprak=' + (EN ? 'en' : 'sv'), 60 * 60e3).catch(() => null);
-  if (!$('#news-quiz')) return;
-  const head = `<h2 class="label-up" id="nq-h" style="margin:0">${EN ? 'Guess the reaction' : 'Gissa reaktionen'}</h2>`;
-  const all = (d?.items || []).filter((x) => new Date(x.tid).getTime() < Date.now() - 2 * dayMs);
-  if (!all.length) { box.innerHTML = `${head}<p class="small muted" style="margin:0">${EN ? 'No questions right now. Come back later.' : 'Inga frågor just nu. Titta in senare.'}</p>`; return; }
-  const g = getGissa();
-  const left = all.filter((x) => g.svar[x.id] == null);
-  const score = () => { const v = Object.values(getGissa().svar); return { ratt: v.filter(Boolean).length, antal: v.length }; };
-  const foot = () => { const s = score(); const r = getGissa().rad; return s.antal ? `<p class="small faint nq-score" style="margin:0">${EN ? 'Your score' : 'Din träffsäkerhet'}: <b class="num">${s.ratt} ${EN ? 'of' : 'av'} ${s.antal}</b>${r > 1 ? ` · ${EN ? 'correct in a row' : 'rätt i rad'}: <b class="num or">${r}</b>` : ''}</p>` : ''; };
-  let cur = left[0] || null;
-  const ask = () => {
-    if (!cur) { box.innerHTML = `${head}<p class="small muted" style="margin:0">${EN ? 'You have answered all questions for now. New ones come when companies publish reports.' : 'Du har svarat på alla frågor just nu. Nya kommer när bolagen släpper rapporter.'}</p>${foot()}`; return; }
-    box.innerHTML = `${head}<div class="small faint">${esc(ovName(cur.sym))} · ${esc(mdWhen(cur.tid))}</div><p class="nq-q" data-noi18n>”${esc(cur.rubrik)}”</p><p class="small muted" style="margin:0">${EN ? 'Did the stock rise or fall the day after?' : 'Steg eller föll aktien dagen efter?'}</p><div class="nq-btns"><button type="button" class="btn ghost" data-g="1">▲ ${EN ? 'Rose' : 'Steg'}</button><button type="button" class="btn ghost" data-g="0">▼ ${EN ? 'Fell' : 'Föll'}</button></div>${foot()}`;
-  };
-  const reveal = (guessUp) => {
-    const up = cur.pct >= 0; const ok = guessUp === up;
-    const v = getGissa(); v.svar[cur.id] = ok; v.rad = ok ? v.rad + 1 : 0; setGissa(v);
-    const prev = (cur.tidigare || []).filter((x) => x.pct != null).slice(0, 3);
-    box.innerHTML = `${head}<div class="nq-res ${ok ? 'up' : 'down'}"><b>${ok ? (EN ? 'Correct!' : 'Rätt!') : (EN ? 'Not this time.' : 'Inte den här gången.')}</b> ${esc(ovName(cur.sym))} ${up ? (EN ? 'rose' : 'steg') : (EN ? 'fell' : 'föll')} <b class="num ${tone(cur.pct)}">${esc(pct(cur.pct, 1))}</b>${cur.idx != null ? `<span class="small faint"> · OMXS30 ${esc(pct(cur.idx, 1))}</span>` : ''}</div>
-      ${prev.length ? `<div class="small"><span class="label-up or" style="font-size:10.5px">${EN ? 'Last times' : 'Senast det hände'}</span>${prev.map((x) => `<div class="nq-prev"><span class="faint">${esc(mdWhen(x.tid))}</span><b class="num ${tone(x.pct)}">${esc(pct(x.pct, 1))}</b></div>`).join('')}</div>` : ''}
-      <p class="small faint" style="margin:0">${EN ? 'From the close before the announcement to the close after. The stock market is hard to predict, even for professionals.' : 'Från stängningen före meddelandet till stängningen efter. Börsen är svår att förutse, även för proffs.'}</p>
-      <div class="nq-btns">${safeUrl(cur.lank) ? `<a class="btn ghost small" href="${esc(safeUrl(cur.lank))}" target="_blank" rel="noopener noreferrer">${EN ? 'Read it' : 'Läs den'} ↗</a>` : ''}<button type="button" class="btn small" data-next>${EN ? 'Next' : 'Nästa'}</button></div>${foot()}`;
-  };
-  box.onclick = (e) => {
-    const b = e.target.closest('[data-g]'); if (b && cur) { reveal(b.dataset.g === '1'); return; }
-    if (e.target.closest('[data-next]')) { const g2 = getGissa(); cur = all.find((x) => g2.svar[x.id] == null) || null; ask(); }
-  };
-  ask();
-}
-
-/* ---------- Ledningen köper och säljer ---------- */
-async function newsInsyn() {
-  const box = $('#news-insyn'); if (!box) return;
-  const d = await api('/api/insyn', 30 * 60e3).catch(() => null);
-  if ($('#news-insyn')) box.innerHTML = insynOverviewHTML(d);
-}
-
-/* ---------- Dina bolag rapporterar ---------- */
-async function newsKal() {
-  const box = $('#news-kal'); if (!box) return;
-  const { port, all } = mySyms();
-  if (!all.length) { box.innerHTML = `<p class="small muted" style="margin:0">${EN ? 'Watch or buy stocks and you will see here when they report.' : 'Bevaka eller köp aktier så ser du här när de rapporterar.'}</p>`; return; }
-  const syms = all.filter((s) => !s.startsWith('^')).slice(0, 15);
-  const kal = await Promise.all(syms.map((s) => api('/api/kalender?s=' + encodeURIComponent(s), 6 * 3600e3).catch(() => null)));
-  if (!$('#news-kal')) return;
-  const today = dayKey(new Date()); const end = dayKey(new Date(Date.now() + 14 * dayMs));
-  const up = syms.map((s, i) => ({ sym: s, k: kal[i] })).filter((x) => x.k?.rapport && x.k.rapport >= today && x.k.rapport <= end).sort((a, b) => a.k.rapport.localeCompare(b.k.rapport));
-  if (!up.length) { box.innerHTML = `<p class="small muted" style="margin:0">${EN ? 'None of your companies report in the next two weeks.' : 'Inget av dina bolag rapporterar de närmaste två veckorna.'}</p>`; return; }
-  const dagTxt = (iso) => new Date(iso + 'T12:00:00Z').toLocaleDateString(L, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Stockholm' });
-  box.innerHTML = up.map((x) => `<div class="nk-row" data-ksym="${esc(x.sym)}"><div class="nk-l"><a href="/bolag/${encodeURIComponent(x.sym)}" data-link><b>${esc(ovName(x.sym))}</b></a><span class="small faint">${esc(dagTxt(x.k.rapport))}${x.k.rapportUppskattad ? (EN ? ' · preliminary' : ' · preliminärt') : ''}</span></div><span class="pill outline small">${port.includes(x.sym) ? (EN ? 'You own' : 'Du äger') : (EN ? 'Watched' : 'Bevakad')}</span><div class="nk-last small faint" data-klast></div></div>`).join('') + `<p class="small faint" style="margin:6px 0 0">${EN ? 'Dates from Yahoo Finance. Last time: the move from the close before the latest report to the close after.' : 'Datum från Yahoo Finance. Förra gången: rörelsen från stängningen före senaste rapporten till stängningen efter.'}</p>`;
-  // Förra gången, för bolag på Stockholmsbörsen (rapporterna kommer från Nasdaq Nordic)
-  const idx = api('/api/chart?s=%5EOMX&r=1y', 60 * 60e3).then(bOnePerDay).catch(() => null);
-  for (const x of up.filter((y) => y.sym.endsWith('.ST')).slice(0, 4)) {
-    (async () => {
-      const md = await getMdd(x.k.namn || nameOf(x.sym)).catch(() => null);
-      const rep = (md?.items || []).find((it) => mdGroup(it.kategori)[0] === 'rapport' && new Date(it.tid).getTime() < Date.now() - dayMs);
-      if (!rep) return;
-      const [c, I] = await Promise.all([api(`/api/chart?s=${encodeURIComponent(x.sym)}&r=1y`, 60 * 60e3).then(bOnePerDay).catch(() => null), idx]);
-      const r = mdReact(c?.punkter, I?.punkter, rep.tid);
-      const el = document.querySelector(`[data-ksym="${CSS.escape(x.sym)}"] [data-klast]`);
-      if (el && r?.pct != null) el.innerHTML = `${EN ? 'Last time' : 'Förra gången'}: <b class="num ${tone(r.pct)}">${esc(pct(r.pct, 1))}</b> ${EN ? 'the day after' : 'dagen efter'} (${esc(mdWhen(rep.tid))})`;
-    })();
+// Panelen: allt om en nyhet
+async function nwOpen(it, back) {
+  const p = $('#nw-panel'); if (!p) return;
+  const u = safeUrl(it.lank);
+  const head = `<div class="nw-ph"><span class="nw-meta">${it.k === 'md' ? `<span class="nw-tl small" style="--c:${it.g[3]}" data-noi18n>${esc(it.kat && it.kat.length <= 32 ? it.kat : mdLbl(it.g))}</span>` : ''}${it.sym ? `<a href="/bolag/${encodeURIComponent(it.sym)}" data-link data-noi18n><b>${esc(it.bolag)}</b></a>` : it.bolag ? `<b data-noi18n>${esc(it.bolag)}</b>` : ''}<span class="faint num">${esc(nwWhen(it))} · ${esc(it.kalla)}</span></span><button type="button" class="btn ghost small" data-nwclose>${EN ? 'Close' : 'Stäng'} ✕</button></div>`;
+  const img = it.bild && safeUrl(it.bild) ? `<img class="nw-pimg" src="${esc(safeUrl(it.bild))}" alt="" referrerpolicy="no-referrer">` : '';
+  let body = '';
+  if (it.k === 'nyhet') {
+    body = `${it.text ? `<p class="nw-ing" data-noi18n>${esc(it.text)}</p>` : `<p class="small muted">${EN ? 'The source does not send a summary with this news item.' : 'Källan skickar ingen ingress med den här nyheten.'}</p>`}
+      ${u ? `<a class="btn nw-cta" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${EN ? `Read the full article at ${esc(it.kalla)}` : `Läs hela artikeln hos ${esc(it.kalla)}`} ${svg('ext', 15)}</a>` : ''}
+      <p class="small faint" style="margin:8px 0 0">${EN ? 'The newspaper’s text belongs to them, so the whole article is read at the source.' : 'Tidningens text är deras, så hela artikeln läser man hos källan.'}</p>`;
+  } else if (it.k === 'md') {
+    body = `<div id="nw-mdtext">${loading(EN ? 'Fetching the announcement …' : 'Hämtar meddelandet …')}</div>`;
+  } else {
+    const a = it.a;
+    const rows = [[EN ? 'Person' : 'Person', a.person], [EN ? 'Position' : 'Befattning', a.roll], [EN ? 'Related party' : 'Närstående', a.narstaende ? (EN ? 'Yes' : 'Ja') : null], [EN ? 'Transaction' : 'Affär', a.typ], [EN ? 'Shares' : 'Antal', a.volym != null ? nf(a.volym, 0) : null], [EN ? 'Price' : 'Pris', a.pris != null ? `${nf(a.pris, 2)} ${cur(a.valuta)}` : null], [EN ? 'Value' : 'Värde', a.varde != null ? mny(a.varde, a.valuta) : null], [EN ? 'Share programme' : 'Aktieprogram', a.program ? (EN ? 'Yes' : 'Ja') : null], [EN ? 'Date' : 'Datum', a.datum]].filter((r) => r[1] != null && r[1] !== '');
+    body = `<div class="nw-kv">${rows.map(([k, v]) => `<div><span>${esc(k)}</span><b data-noi18n>${esc(v)}</b></div>`).join('')}</div><p class="small faint" style="margin:10px 0 0">${EN ? 'Insider trades are not a buy or sell signal. Source: Finansinspektionen’s insider register.' : 'Insynsaffärer är ingen köp- eller säljsignal. Källa: Finansinspektionens insynsregister.'}</p>`;
+  }
+  p.innerHTML = `${head}${img}<h2 class="nw-pt" id="nw-ph" data-noi18n>${esc(it.rubrik)}</h2>${it.sym && it.tid && !it.dagOnly ? `<div class="nw-me" id="nw-me"></div>` : ''}${body}<div id="nw-mer"></div>`;
+  p.hidden = false; $('#nw-back').hidden = false; p.scrollTop = 0;
+  p.querySelector('[data-nwclose]')?.focus({ preventScroll: true });
+  // Kursreaktion, ord och "Senast det hände"
+  if (it.sym && it.tid && !it.dagOnly) {
+    merHTML({ sym: it.sym, tid: it.tid, rubrik: it.rubrik, grupp: it.k === 'md' ? it.g[0] : '', bolag: it.bolagNamn || '', id: it.mid || '' }).then((h) => { const el = $('#nw-mer'); if (el && $('#nw-panel') === p && !p.hidden) el.innerHTML = `<div class="nw-sec">${h}</div>`; }).catch(() => null);
+    if (getPort().some((b) => b.sym === it.sym)) {
+      const m = mktOf(it.sym);
+      if (m) Promise.all([api(`/api/chart?s=${encodeURIComponent(it.sym)}&r=1m`, 15 * 60e3).then(bOnePerDay).catch(() => null), api(`/api/chart?s=${encodeURIComponent(m.idx)}&r=1m`, 15 * 60e3).then(bOnePerDay).catch(() => null), fxToSek(['USD', 'EUR', 'DKK', 'NOK']).catch(() => ({ SEK: 1 }))])
+        .then(([c, I, fx]) => { const el = $('#nw-me'); if (el && c?.punkter) el.innerHTML = forDigHTML(it.sym, c.punkter, I?.punkter, it.tid, fx[c.valuta || 'SEK'] ?? (c.valuta === 'SEK' ? 1 : null)); });
+    }
+  } else if (it.k !== 'insyn') {
+    const words = newsWords(it.rubrik);
+    if (words.length) $('#nw-mer').innerHTML = `<div class="nw-sec"><div class="nm-sec"><span class="label-up">${EN ? 'Words in the headline' : 'Ord i rubriken'}</span>${words.map(([n, d]) => `<p class="nm-ord"><b>${esc(n)}</b> ${esc(d)}</p>`).join('')}</div></div>`;
+  }
+  if (it.k === 'md') {
+    const d = u ? await api('/api/meddelande?u=' + encodeURIComponent(u), 24 * 3600e3).catch(() => null) : null;
+    const el = $('#nw-mdtext'); if (!el || p.hidden) return;
+    el.innerHTML = d?.stycken?.length
+      ? `<div class="nw-text" data-noi18n>${d.stycken.map((x) => `<p>${esc(x)}</p>`).join('')}</div>${d.helt ? '' : `<p class="small muted">${EN ? 'The announcement is long. The rest is in the original.' : 'Meddelandet är långt. Resten finns i originalet.'}</p>`}
+        ${d.bilagor?.length ? `<div class="nw-att">${d.bilagor.map((b) => `<a class="pill outline small" href="${esc(safeUrl(b.lank) || '#')}" target="_blank" rel="noopener noreferrer" data-noi18n>${esc(b.namn)} ↗</a>`).join('')}</div>` : ''}
+        ${u ? `<a class="btn ghost small" href="${esc(u)}" target="_blank" rel="noopener noreferrer" style="margin-top:12px">${EN ? 'Open the original at Nasdaq' : 'Öppna originalet hos Nasdaq'} ${svg('ext', 14)}</a>` : ''}`
+      : `<p class="small muted">${EN ? 'The text could not be fetched right now.' : 'Texten kunde inte hämtas just nu.'}</p>${u ? `<a class="btn ghost small" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${EN ? 'Open the original at Nasdaq' : 'Öppna originalet hos Nasdaq'} ${svg('ext', 14)}</a>` : ''}`;
   }
 }
-
-/* ---------- Insyn som egen flik ---------- */
-async function newsInsynTab(state) {
-  const list = $('#newslist'); if (!list) return;
-  list.innerHTML = loading(EN ? 'Fetching insider trades …' : 'Hämtar insynsaffärer …');
-  const d = await api('/api/insyn', 30 * 60e3).catch(() => null);
-  if (!$('#newslist') || state.region !== 'insyn') return;
-  $('#newsfilter').innerHTML = ''; $('#news-status').innerHTML = d?.hamtad ? liveTag(d.hamtad) : '';
-  $('#news-help').innerHTML = EN ? 'Purchases and sales by people in senior positions, reported to Finansinspektionen in the last seven days. Insider trades are not a buy or sell signal.' : 'Köp och försäljningar som personer i ledande ställning har anmält till Finansinspektionen de senaste sju dagarna. Insynsaffärer är ingen köp- eller säljsignal.';
-  if (!d || d.error) { list.innerHTML = `<div class="empty">${FI_DOWN}</div>`; $('#news-count').textContent = '–'; $('#news-range').textContent = ''; return; }
-  $('#news-count').textContent = String(d.antal ?? (d.senaste || []).length); $('#news-range').textContent = EN ? 'trades in 7 days' : 'affärer på 7 dagar';
-  list.innerHTML = `${d.storsta?.length ? `<section class="card"><h2 class="label-up" style="margin:0 0 6px">${EN ? 'Largest in SEK' : 'Störst i kronor'}</h2>${insynRows(d.storsta.slice(0, 10), true)}</section>` : ''}${d.senaste?.length ? `<section class="card"><h2 class="label-up" style="margin:0 0 6px">${EN ? 'Latest' : 'Senaste'}</h2>${insynRows(d.senaste.slice(0, 15), true)}</section>` : ''}<p class="small faint">${EN ? 'Source: Finansinspektionen’s insider register.' : 'Källa: Finansinspektionens insynsregister.'}</p>`;
+// Esc stänger panelen. Lyssnaren läggs bara till en gång.
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#nw-panel') && !$('#nw-panel').hidden) nwClose(); });
+function nwClose() {
+  const p = $('#nw-panel'); if (!p || p.hidden) return;
+  p.hidden = true; $('#nw-back').hidden = true; p.innerHTML = '';
 }
 
 function mountNyheter() {
-  let region = new URLSearchParams(location.search).get('flik') === 'meddelanden' ? 'md' : new URLSearchParams(location.search).get('flik') === 'insyn' ? 'insyn' : newsMine() ? 'mina' : 'world'; let filt = 'Alla';
-  document.querySelectorAll('[data-region]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.region === region))); let sort = 'viktigt'; let data = null;
-  const mdState = { get region() { return region; }, marknad: 'se' };
-  // Kursreaktion och "för dig" fylls i när nyheten syns
-  const pxCache = new Map(); const idxCache = new Map(); let fxP = null; let io = null;
-  const fill = async (el) => {
-    const sym = el.dataset.nsym; const iso = el.dataset.ntid; const m = mktOf(sym); if (!m) { el.remove(); return; }
-    if (!pxCache.has(sym)) pxCache.set(sym, api(`/api/chart?s=${encodeURIComponent(sym)}&r=1m`, 15 * 60e3).then(bOnePerDay).catch(() => null));
-    if (!idxCache.has(m.idx)) idxCache.set(m.idx, api(`/api/chart?s=${encodeURIComponent(m.idx)}&r=1m`, 15 * 60e3).then(bOnePerDay).catch(() => null));
-    const [c, I] = await Promise.all([pxCache.get(sym), idxCache.get(m.idx)]);
-    if (!c?.punkter) { el.innerHTML = `<span class="small faint">${EN ? 'Price reaction missing' : 'Kursreaktion saknas'}</span>`; return; }
-    fxP ||= fxToSek(getPort().map((b) => b.kursValuta || b.valuta).concat(['USD', 'EUR', 'DKK', 'NOK']));
-    const fx = await fxP.catch(() => ({ SEK: 1 }));
-    el.innerHTML = forDigHTML(sym, c.punkter, I?.punkter, iso, fx[c.valuta || 'SEK'] ?? (c.valuta === 'SEK' ? 1 : null));
+  const q = new URLSearchParams(location.search);
+  const tabs = NW_TABS.map((t) => t[0]).filter((k) => k !== 'mina' || newsMine());
+  let region = q.get('flik') === 'meddelanden' ? 'md' : tabs.includes(q.get('flik')) ? q.get('flik') : 'allt';
+  let mk = 'se'; let mdFilt = 'viktiga'; let items = []; let shown = 30; let hamtad = null; let leadIdx = -1;
+  const sel = () => document.querySelectorAll('[data-region]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.region === region)));
+  sel();
+  const HELP = {
+    allt: EN ? 'Everything in one list: world news, news about Swedish companies and the companies’ own announcements.' : 'Allt i en lista: världsnyheter, nyheter om svenska bolag och bolagens egna meddelanden.',
+    mina: EN ? 'News about the stocks you own and watch.' : 'Nyheter om aktierna du äger och bevakar.',
+    se: EN ? 'News about the largest Swedish companies.' : 'Nyheter om de största svenska bolagen.',
+    world: EN ? 'Market news from around the world.' : 'Börsnyheter från hela världen.',
+    md: EN ? 'The companies’ own announcements via Nasdaq Nordic. The full text is shown when you open one.' : 'Bolagens egna meddelanden via Nasdaq Nordic. Hela texten visas när du öppnar ett.',
+    insyn: EN ? 'Purchases and sales by people in senior positions, reported to Finansinspektionen in the last seven days.' : 'Köp och försäljningar som personer i ledande ställning har anmält till Finansinspektionen de senaste sju dagarna.'
   };
-  const watchPx = () => {
-    io?.disconnect(); const els = [...document.querySelectorAll('#newslist [data-nsym]')];
-    if (!('IntersectionObserver' in window)) { els.forEach(fill); return; }
+  // Kursreaktionen i listan fylls i när raden syns
+  const pxC = new Map(); const ixC = new Map(); let io = null;
+  const chart = (s) => { if (!pxC.has(s)) pxC.set(s, api(`/api/chart?s=${encodeURIComponent(s)}&r=1m`, 15 * 60e3).then(bOnePerDay).catch(() => null)); return pxC.get(s); };
+  const ixChart = (s) => { if (!ixC.has(s)) ixC.set(s, api(`/api/chart?s=${encodeURIComponent(s)}&r=1m`, 15 * 60e3).then(bOnePerDay).catch(() => null)); return ixC.get(s); };
+  const fill = async (row) => {
+    const sym = row.dataset.rsym; const tid = row.dataset.rtid; const m = mktOf(sym); const el = row.querySelector('.nw-re'); if (!m || !el) return;
+    const [c, I] = await Promise.all([chart(sym), ixChart(m.idx)]);
+    const r = c?.punkter ? mdReact(c.punkter, I?.punkter, tid, m.close) : null;
+    if (!r) return;
+    el.innerHTML = r.pct == null ? `<span class="faint">${EN ? 'no trading since' : 'ingen handel sedan dess'}</span>` : `<b class="num ${tone(r.pct)}" title="${esc(EN ? 'From the close before the news to the close after' : 'Från stängningen före nyheten till stängningen efter')}">${esc(pct(r.pct, 1))}</b>${r.live ? `<span class="faint"> ${EN ? 'today' : 'i dag'}</span>` : ''}`;
+  };
+  const watch = () => {
+    io?.disconnect(); const rows = [...document.querySelectorAll('.nw [data-rsym]')];
+    if (!('IntersectionObserver' in window)) { rows.forEach(fill); return; }
     io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { io.unobserve(e.target); fill(e.target); } }), { rootMargin: '200px 0px' });
-    els.forEach((x) => io.observe(x));
+    rows.forEach((x) => io.observe(x));
   };
+  const subHTML = () => region === 'md' ? `<div class="chips">${[['se', EN ? 'Sweden' : 'Sverige'], ['nord', EN ? 'Copenhagen and Helsinki' : 'Köpenhamn och Helsingfors']].map(([k, t]) => `<button type="button" class="chip-btn" data-mdm="${k}" aria-pressed="${k === mk}">${esc(t)}</button>`).join('')}<span class="nw-sep"></span>${[['viktiga', EN ? 'Important' : 'Viktiga'], ['rapport', EN ? 'Reports' : 'Rapporter'], ['insider', 'Insider'], ['allt', EN ? 'All, incl. routine' : 'Alla, även rutin']].map(([k, t]) => `<button type="button" class="chip-btn" data-mdf="${k}" aria-pressed="${k === mdFilt}">${esc(t)}</button>`).join('')}</div>` : '';
+  const visible = () => (region === 'md' ? items.filter((it) => (mdFilt === 'allt' ? true : mdFilt === 'viktiga' ? it.g[0] !== 'rutin' : it.g[0] === mdFilt)) : items);
   const draw = () => {
-    if (region === 'md' || region === 'insyn' || !data || !$('#newslist')) return;
-    if (!data.ok) { $('#newslist').innerHTML = `<div class="empty">${esc(errText(data.error))}</div>`; $('#newsfilter').innerHTML = ''; $('#news-status').innerHTML = ''; return; }
-    const byTime = (a, b) => String(b.datum).localeCompare(String(a.datum));
-    const all = data.items.slice().sort(data.mina && sort === 'viktigt' ? (a, b) => b.poang - a.poang || byTime(a, b) : byTime);
-    const cats = ['Alla', ...TOPICS.map((t) => t[0]).filter((k) => all.some((n) => n.amne === k))];
-    if (!cats.includes(filt)) filt = 'Alla';
-    const list = filt === 'Alla' ? all : all.filter((n) => n.amne === filt);
-    $('#news-status').innerHTML = all.length ? liveTag(data.hamtad) : '';
-    $('#news-count').textContent = String(all.length);
-    const times = all.map((n) => n.datum).sort();
-    $('#news-range').textContent = all.length ? `${EN ? 'news' : 'nyheter'} · ${EN ? 'latest' : 'senaste'} ${when(times[times.length - 1])}` : '';
-    $('#newsfilter').innerHTML = cats.map((c) => `<button type="button" class="chip-btn" data-filt="${esc(c)}" aria-pressed="${c === filt}">${esc(c)}</button>`).join('')
-      + (data.mina ? `<span class="news-sort"><button type="button" class="chip-btn" data-sort="viktigt" aria-pressed="${sort === 'viktigt'}">Viktigast först</button><button type="button" class="chip-btn" data-sort="tid" aria-pressed="${sort === 'tid'}">Senaste först</button></span>` : '');
-    $('#news-help').innerHTML = data.mina ? (EN ? 'News about the stocks you own and watch, with how the price reacted. <b>What it means for you</b> is the move times your number of shares.' : 'Nyheter om aktierna du äger och bevakar, med hur kursen reagerade. <b>Det här betyder för dig</b> är rörelsen gånger ditt antal aktier.') : 'Ämnet sätts utifrån orden i rubriken.';
-    $('#newslist').innerHTML = list.map((n) => `
-      <article class="card news-item">
-        <div class="stack" style="gap:8px;flex:1;min-width:0">
-          <div class="meta">${n.amne ? `<span class="pill news-topic t-${esc(n.amne)}">${esc(n.amne)}</span>` : ''}${n.min ? `<a class="pill outline" href="/bolag/${encodeURIComponent(n.min)}" data-link>${esc(ovName(n.min))}${n.agd ? '<span>&nbsp;· du äger</span>' : ''}</a>` : ''}<span class="pill outline src">${flag(n.land)}${esc(n.kalla)}</span><span class="num">${esc(n.tidTxt)}</span>${!n.min && n.bolagTxt ? `<span>${esc(n.bolagTxt)}</span>` : ''}</div>
-          <h3>${newsTitle(n)}</h3>
-          ${n.text ? `<p class="news-text">${esc(n.text)}</p>` : ''}
-          ${n.min && n.datum ? `<div class="nx" data-nsym="${esc(n.min)}" data-ntid="${esc(n.datum)}"><span class="md-skel"></span></div>` : ''}
-          <div class="meta">${n.min && n.datum ? merBtn({ sym: n.min, tid: n.datum, rubrik: n.rubrik, grupp: '', bolag: '' }) : ''}${sourceLink(n)}</div>
-        </div>
-      </article>`).join('') || `<div class="empty">${filt !== 'Alla' ? `Inga nyheter om ${esc(filt.toLowerCase())} just nu.` : region === 'mina' ? 'Inga nyheter om dina aktier de senaste två veckorna.' : region === 'se' ? 'Inga nyheter om svenska bolag just nu.' : 'Inga nyheter just nu.'}</div>`;
-    watchPx();
+    if (!$('#newslist')) return;
+    $('#nw-sub').innerHTML = subHTML();
+    $('#news-help').textContent = HELP[region];
+    const list = visible();
+    $('#news-status').innerHTML = hamtad ? `${list.length.toLocaleString(L)} ${list.length === 1 ? (EN ? 'item' : 'nyhet') : (EN ? 'items' : 'nyheter')} · ${liveTag(hamtad)}` : '';
+    // Överst: den senaste nyheten med bild (inte för meddelanden och insyn)
+    leadIdx = region === 'md' || region === 'insyn' ? -1 : list.slice(0, 10).findIndex((it) => it.bild);
+    $('#nw-lead').innerHTML = leadIdx >= 0 ? nwLeadHTML(list[leadIdx], leadIdx) : '';
+    const rest = list.map((it, i) => [it, i]).filter(([, i]) => i !== leadIdx);
+    $('#newslist').innerHTML = rest.length ? `${rest.slice(0, shown).map(([it, i]) => nwRow(it, i)).join('')}${rest.length > shown ? `<div class="nw-more"><button type="button" class="btn ghost" data-nwmore>${EN ? 'Show more' : 'Visa fler'} (${(rest.length - shown).toLocaleString(L)})</button></div>` : ''}` : (leadIdx >= 0 ? '' : `<div class="empty">${region === 'mina' ? (EN ? 'No news about your stocks in the last two weeks.' : 'Inga nyheter om dina aktier de senaste två veckorna.') : (EN ? 'Nothing here right now.' : 'Inget här just nu.')}</div>`);
+    watch();
   };
+  const fail = (txt) => { $('#nw-lead').innerHTML = ''; $('#newslist').innerHTML = `<div class="empty">${esc(txt)}</div>`; $('#news-status').textContent = ''; };
+  const byTime = (a, b) => String(b.tid || '').localeCompare(String(a.tid || ''));
+  const mdItems = async (m) => { const [d, map] = await Promise.all([getMdd(null, m).catch(() => null), mdSymMap(m)]); if (!d || d.error) return null; return { items: (d.items || []).map((it) => nwMd({ ...it, sym: mdSymOf(map, it.bolag) })), hamtad: d.hamtad }; };
+  const markOwn = (list) => { const own = new Set(mySyms().port); for (const it of list) if (it.sym && own.has(it.sym)) it.agd = true; return list; };
   const load = async () => {
-    const r = region; if (r === 'md') return mdNyheter(mdState); if (r === 'insyn') return newsInsynTab(mdState);
-    $('#newslist').innerHTML = loading('Hämtar nyheter …');
-    const d = r === 'mina' ? await getMyNews() : await getNews(r); if (r !== region) return; data = d; draw();
+    const r = region; const m = mk;
+    nwClose(); shown = 30; $('#nw-lead').innerHTML = ''; $('#nw-sub').innerHTML = subHTML(); $('#newslist').innerHTML = loading(EN ? 'Fetching news …' : 'Hämtar nyheter …');
+    let list = null; let t = null; let err = null;
+    if (r === 'allt') {
+      const [w, s, md] = await Promise.all([getNews('world').catch(() => null), getNews('se').catch(() => null), mdItems('se').catch(() => null)]);
+      list = [...(w?.ok ? w.items.map(nwNews) : []), ...(s?.ok ? s.items.map(nwNews) : []), ...(md ? md.items.filter((it) => it.g[0] !== 'rutin') : [])];
+      const seen = new Set(); list = list.filter((it) => { const k = it.lank || it.rubrik; if (seen.has(k)) return false; seen.add(k); return true; });
+      t = [w?.hamtad, s?.hamtad, md?.hamtad].filter(Boolean).sort().pop(); if (!list.length) err = EN ? 'The news could not be fetched right now. Try again in a while.' : 'Nyheterna kunde inte hämtas just nu. Prova igen om en stund.';
+    } else if (r === 'md') {
+      const md = await mdItems(m); if (md) { list = md.items; t = md.hamtad; } else err = EN ? 'The announcements could not be fetched right now.' : 'Meddelandena kunde inte hämtas just nu.';
+    } else if (r === 'insyn') {
+      const d = await api('/api/insyn', 30 * 60e3).catch(() => null);
+      if (d && !d.error) { const seen = new Set(); list = [...(d.senaste || []), ...(d.storsta || [])].filter((a) => { const k = a.person + a.datum + a.varde; if (seen.has(k)) return false; seen.add(k); return true; }).map(nwInsyn); t = d.hamtad; } else err = FI_DOWN;
+    } else {
+      const d = r === 'mina' ? await getMyNews() : await getNews(r);
+      if (d?.ok) { list = d.items.map(nwNews); t = d.hamtad; } else err = errText(d?.error);
+    }
+    if (r !== region || m !== mk) return;
+    if (!list) { fail(err); return; }
+    items = markOwn(list.sort(byTime)); hamtad = t || new Date().toISOString();
+    if (!items.length && err) { fail(err); return; }
+    draw();
   };
-  $('.tabs').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-region]'); if (!b) return;
-    region = b.dataset.region; filt = 'Alla';
-    document.querySelectorAll('[data-region]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
-    load();
-  });
-  $('#newsfilter').addEventListener('click', (e) => { if (region === 'md' || region === 'insyn') return; const b = e.target.closest('[data-filt]'); if (b) { filt = b.dataset.filt; draw(); } const so = e.target.closest('[data-sort]'); if (so) { sort = so.dataset.sort; draw(); } });
-  load(); newsDagens(); newsQuiz(); newsInsyn(); newsKal();
+  const tabsEl = $('.nw-tabs');
+  tabsEl.addEventListener('click', (e) => { const b = e.target.closest('[data-region]'); if (!b || b.dataset.region === region) return; region = b.dataset.region; sel(); history.replaceState(null, '', '/nyheter' + (region === 'allt' ? '' : '?flik=' + region)); load(); });
+  $('#nw-sub').addEventListener('click', (e) => { const mm = e.target.closest('[data-mdm]'); if (mm && mm.dataset.mdm !== mk) { mk = mm.dataset.mdm; load(); return; } const f = e.target.closest('[data-mdf]'); if (f) { mdFilt = f.dataset.mdf; shown = 30; draw(); } });
+  const openFrom = (e) => { const b = e.target.closest('[data-nw]'); if (!b) return false; const it = visible()[Number(b.dataset.nw)]; if (it) { nwOpen(it); } return true; };
+  $('#nw-lead').addEventListener('click', openFrom);
+  $('#newslist').addEventListener('click', (e) => { if (e.target.closest('[data-nwmore]')) { shown += 40; draw(); return; } openFrom(e); });
+  $('#nw-back').addEventListener('click', nwClose);
+  $('#nw-panel').addEventListener('click', (e) => { if (e.target.closest('[data-nwclose]')) nwClose(); else if (e.target.closest('a[data-link]')) nwClose(); });
+  // Bilder som inte går att ladda ersätts av typrutan
+  $('.nw').addEventListener('error', (e) => { if (e.target.classList?.contains('nw-img')) e.target.closest('.nw-th')?.classList.remove('has'), e.target.remove(); }, true);
+  load();
 }
 
 /* ================= Bevakning ================= */
@@ -2670,12 +2658,17 @@ async function merFill(btn) {
   if (panel) { const open = panel.hidden; panel.hidden = !open; btn.setAttribute('aria-expanded', String(open)); btn.textContent = open ? (EN ? 'Show less' : 'Visa mindre') : (EN ? 'Show more' : 'Visa mer'); return; }
   panel = document.createElement('div'); panel.className = 'nm-panel'; panel.innerHTML = loading(EN ? 'Loading …' : 'Hämtar …');
   ((host.classList.contains('news-item') && btn.closest('.news-item > *')) || host).appendChild(panel); btn.setAttribute('aria-expanded', 'true'); btn.textContent = EN ? 'Show less' : 'Visa mindre';
-  const { sym, tid, rubrik, grupp, bolag, id } = btn.dataset; const m = mktOf(sym) || { close: CLOSE_MIN, idx: '^OMX', idxNamn: 'OMXS30' };
+  const h = await merHTML(btn.dataset);
+  if (panel.isConnected) panel.innerHTML = h;
+}
+// Ord i rubriken, kursreaktionen med diagram och "Senast det hände". Används av Visa mer och nyhetspanelen.
+async function merHTML({ sym, tid, rubrik, grupp, bolag, id }, opt = {}) {
+  const m = mktOf(sym) || { close: CLOSE_MIN, idx: '^OMX', idxNamn: 'OMXS30' };
   const [c, I] = await Promise.all([api(`/api/chart?s=${encodeURIComponent(sym)}&r=1y`, 60 * 60e3).then(bOnePerDay).catch(() => null), api(`/api/chart?s=${encodeURIComponent(m.idx)}&r=1y`, 60 * 60e3).then(bOnePerDay).catch(() => null)]);
   const P = c?.punkter; const r = P ? mdReact(P, I?.punkter, tid, m.close) : null;
   const words = newsWords(rubrik);
   let h = '';
-  if (words.length) h += `<div class="nm-sec"><span class="label-up">${EN ? 'Words in the headline' : 'Ord i rubriken'}</span>${words.map(([n, d]) => `<p class="nm-ord"><b>${esc(n)}</b> ${esc(d)}</p>`).join('')}</div>`;
+  if (words.length && !opt.utanOrd) h += `<div class="nm-sec"><span class="label-up">${EN ? 'Words in the headline' : 'Ord i rubriken'}</span>${words.map(([n, d]) => `<p class="nm-ord"><b>${esc(n)}</b> ${esc(d)}</p>`).join('')}</div>`;
   h += `<div class="nm-sec"><span class="label-up">${EN ? 'How the market reacted' : 'Så tog marknaden emot den'}</span>${r ? `${merChart(P, r)}<p class="small" style="margin:4px 0 0">${r.pct != null ? `<b class="num ${tone(r.pct)}">${esc(pct(r.pct, 1))}</b> ${r.live ? (EN ? 'so far today' : 'hittills i dag') : (EN ? 'from the close before to the close after' : 'från stängningen före till stängningen efter')}${r.idx != null ? ` · ${esc(m.idxNamn)} ${esc(pct(r.idx, 1))}` : ''}` : (EN ? 'No trading since the news.' : 'Ingen handel sedan nyheten.')}</p>` : `<p class="small muted" style="margin:0">${EN ? 'The price reaction is missing.' : 'Kursreaktionen saknas.'}</p>`}</div>`;
   // Senast det hände: samma sorts meddelande från bolaget tidigare, med hur aktien rörde sig
   if (sym.endsWith('.ST') && (grupp === 'rapport' || grupp === 'insider') && bolag && P) {
@@ -2687,7 +2680,7 @@ async function merFill(btn) {
       h += `<div class="nm-sec"><span class="label-up or">${EN ? 'Last times' : 'Senast det hände'}</span>${prev.map((x) => `<div class="nm-bar"><span class="small faint">${esc(mdWhen(x.it.tid))}</span><span class="nm-track"><span class="nm-fill ${x.r.pct >= 0 ? 'up' : 'down'}" style="${x.r.pct >= 0 ? 'left:50%' : `right:50%`};width:${(Math.abs(x.r.pct) / mx) * 50}%"></span></span><b class="num ${tone(x.r.pct)}">${esc(pct(x.r.pct, 1))}</b></div>`).join('')}<p class="small faint" style="margin:6px 0 0">${EN ? `On average the stock moved ${bn(avg, 1)} % the day after.` : `I snitt rörde sig aktien ${bn(avg, 1)} % dagen efter.`} ${EN ? 'History says nothing about the next time.' : 'Historiken säger inget om nästa gång.'}</p></div>`;
     }
   }
-  if (panel.isConnected) panel.innerHTML = h;
+  return h;
 }
 document.addEventListener('click', (e) => { const b = e.target.closest('[data-nmer]'); if (b) merFill(b); });
 

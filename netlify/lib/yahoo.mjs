@@ -214,6 +214,8 @@ export function newsFromSearch(d, sym, keyword = '') {
     url: n.link,
     source: n.publisher || '',
     datetime: raw(n.providerPublishTime),
+    // Källans bild: den största upplösningen upp till 800 pixlar bred
+    image: (n.thumbnail?.resolutions || []).filter((r) => r?.url && (r.width || 0) <= 800).sort((a, b) => (b.width || 0) - (a.width || 0))[0]?.url || n.thumbnail?.resolutions?.[0]?.url || '',
     _sym: sym
   }));
 }

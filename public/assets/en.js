@@ -809,6 +809,7 @@ const D = {
   'Prova att välja Alla, eller skriv namnet eller tickern, till exempel "AAPL", "Investor" eller "Bitcoin".': 'Try choosing All, or type the name or the ticker, for example "AAPL", "Investor" or "Bitcoin".',
   'Gissa reaktionen': 'Guess the reaction',
   'Om kryptovalutan': 'About the cryptocurrency',
+  'Bolagen själva': 'From the companies',
   'Sök aktie eller ticker …': 'Search stock or ticker …',
   'Sök fond …': 'Search fund …',
   'Sök ETF …': 'Search ETF …',

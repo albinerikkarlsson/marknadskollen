@@ -102,14 +102,14 @@ export default async (req) => {
       const seen = new Set(); const uniq = items.filter((x) => (seen.has(x.id) ? false : seen.add(x.id)));
       return cached({ kalla: 'Nasdaq Nordic', bolag: exact, items: uniq.slice(0, 40), hamtad: new Date().toISOString() }, 900);
     }
-    // Alla bolag: tre sidor, eftersom Köpenhamn, Helsingfors och Island också är med
-    const pages = await Promise.all([0, 50, 100].map((start) => query({ start: String(start) }, sprak).catch((e) => (start ? [] : Promise.reject(e)))));
+    // Alla bolag: sex sidor med 50 i varje, eftersom Köpenhamn, Helsingfors och Island också är med
+    const pages = await Promise.all([0, 50, 100, 150, 200, 250].map((start) => query({ start: String(start) }, sprak).catch((e) => (start ? [] : Promise.reject(e)))));
     const all = pages.flat();
     const nord = q.get('marknad') === 'nord';
     // Riksbanken, Riksgälden och bolåneinstitut som bara ger ut obligationer visas inte: de har ingen aktie att följa
     const se = all.filter((it) => (nord ? NORD_MARKET : SE_MARKET).test(String(it.market || '')) && !/riksbank|riksgälden|realkredit|totalkredit|nykredit|dlr kredit|kommunekredit|nordea kredit|hypotek|kuntarahoitus|asuntoluottopankki/i.test(String(it.company || '')));
     const items = pick(se.length || nord ? se : all, sprak);
-    return cached({ kalla: 'Nasdaq Nordic', marknad: nord ? 'nord' : 'se', items: items.slice(0, 80), hamtad: new Date().toISOString() }, 300);
+    return cached({ kalla: 'Nasdaq Nordic', marknad: nord ? 'nord' : 'se', items: items.slice(0, 200), hamtad: new Date().toISOString() }, 300);
   } catch (e) { return fail(e); }
 };
 
