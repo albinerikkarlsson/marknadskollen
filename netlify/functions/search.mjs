@@ -16,7 +16,7 @@ const FIXED = {
   's&p 500': [IDX('^GSPC', 'S&P 500')], 'sp500': [IDX('^GSPC', 'S&P 500')], 'nasdaq': [IDX('^IXIC', 'Nasdaq Composite')], 'dow jones': [IDX('^DJI', 'Dow Jones')]
 };
 // Små tyska och andra andrahandslistor av samma bolag döljs när huvudlistan finns
-const MINOR = new Set(['F', 'DE', 'MU', 'SG', 'HM', 'IL', 'MI', 'BE', 'DU', 'HA', 'XD', 'XC', 'SW', 'VI', 'BO', 'NS', 'JK', 'MX', 'SA', 'BA', 'HE', 'IR', 'AS', 'PA', 'MC', 'LS', 'WA', 'PR', 'TA', 'KS', 'TW', 'SS', 'SZ', 'HK', 'T', 'KL', 'BK', 'SI', 'AX', 'NZ', 'TO', 'V', 'NE', 'CN', 'JO', 'IS', 'AT', 'BD', 'SR', 'QA', 'CA']);
+const MINOR = new Set(['F', 'DE', 'MU', 'SG', 'HM', 'IL', 'MI', 'BE', 'DU', 'HA', 'XD', 'XC', 'SW', 'VI', 'BO', 'NS', 'JK', 'MX', 'SA', 'BA', 'IR', 'AS', 'PA', 'MC', 'LS', 'WA', 'PR', 'TA', 'KS', 'TW', 'SS', 'SZ', 'HK', 'T', 'KL', 'BK', 'SI', 'AX', 'NZ', 'TO', 'V', 'NE', 'CN', 'JO', 'IS', 'AT', 'BD', 'SR', 'QA', 'CA']);
 
 export default async (req) => {
   try {
@@ -31,7 +31,9 @@ export default async (req) => {
     const plain = look.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     if (plain !== look && !results.some((x) => x.borsen === 'ST')) results = [...results, ...((await fromYahoo(plain).catch(() => null)) || [])];
     const main = results.filter((x) => !MINOR.has(x.borsen));
-    results = [...(FIXED[key] || []), ...(main.length ? main : results)];
+    // Våra egna listor hittar mindre bolag som Yahoos sökning missar, och fulla svenska bolagsnamn
+    const own = await fromLists(req, q).catch((e) => { console.warn('[search] listor:', e?.message); return []; });
+    results = [...(FIXED[key] || []), ...own, ...(main.length ? main : results)];
     return cached({ results: order(results, ALIAS[key] ? look : raw, klass).slice(0, 12) }, 86400);
   } catch (e) { return fail(e); }
 };
@@ -60,6 +62,31 @@ async function fromYahoo(q) {
         lista: r.exchDisp || null
       };
     });
+}
+
+// Sökning i listorna på /api/aktier (Sverige, Norden och USA). De är cachade, så det går fort.
+const plainName = (n) => String(n).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\(publ\.?\)|\b(ab|aktiebolag|asa|oyj|abp|a\/s|inc|corp|plc|ltd|the)\b|[.,()&-]/g, ' ').replace(/\s+/g, ' ').trim();
+async function fromLists(req, q) {
+  const want = plainName(q); const tick = q.toUpperCase().replace(/\s+/g, '');
+  if (want.length < 2) return [];
+  const origin = new URL(req.url).origin;
+  const lists = await Promise.all(['se', 'nord', 'us'].map((m) => fetch(`${origin}/api/aktier?m=${m}`, { signal: AbortSignal.timeout(3500) }).then((r) => (r.ok ? r.json() : (console.warn('[search] lista', m, r.status), null))).catch((e) => { console.warn('[search] lista', m, e?.message); return null; })));
+  const words = want.split(' ');
+  const hits = [];
+  for (const a of lists.flatMap((l) => l?.aktier || [])) {
+    const n = plainName(a.namn); const base = a.sym.split('.')[0];
+    let score = null;
+    if (base === tick || base.replace(/-[A-D]$/, '') === tick) score = 0;
+    else if (n === want) score = 1;
+    else if (n.startsWith(want)) score = 2;
+    else if (words.every((w) => n.split(' ').some((x) => x.startsWith(w)))) score = 3;
+    else if (want.length >= 4 && n.includes(want)) score = 4;
+    if (score != null) hits.push([score, a]);
+  }
+  return hits.sort((x, y) => x[0] - y[0] || (y[1].mcapSek ?? y[1].mcap ?? 0) - (x[1].mcapSek ?? x[1].mcap ?? 0)).slice(0, 8).map(([, a]) => {
+    const k = a.sym.includes('.') ? classOf(a.sym) : null;
+    return { sym: a.sym, namn: tidy(a.namn), typ: k ? `${k}-aktie` : 'Aktie', klass: k, borsen: a.sym.includes('.') ? a.sym.split('.').pop() : 'US', lista: a.lista || null };
+  });
 }
 
 async function fromFinnhub(q) {

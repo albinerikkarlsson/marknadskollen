@@ -2739,6 +2739,10 @@ const STORLEK = {
   se: [['alla', 'Alla storlekar'], ['stora', 'Stora · över 10 mdr kr', (v) => v >= 10e9], ['medel', 'Medel · 1–10 mdr kr', (v) => v >= 1e9 && v < 10e9], ['sma', 'Små · under 1 mdr kr', (v) => v < 1e9]],
   us: [['alla', 'Alla storlekar'], ['stora', 'Stora · över 200 mdr $', (v) => v >= 200e9], ['medel', 'Medel · 10–200 mdr $', (v) => v >= 10e9 && v < 200e9], ['sma', 'Mindre · under 10 mdr $', (v) => v < 10e9]]
 };
+// Norden har flera valutor. Storlek och sortering görs på börsvärdet omräknat till kronor.
+STORLEK.nord = STORLEK.se;
+const AK_M = ['se', 'nord', 'us'];
+const akVal = (a, k) => (k === 'mcap' ? a.mcapSek ?? a.mcap : k === 'oms' ? a.omsSek ?? a.oms : a[k]);
 const SORTS = [['mcap', 'Börsvärde'], ['d1', 'I dag'], ['ar', '1 år'], ['pe', 'P/E'], ['utd', 'Utdelning'], ['oms', 'Omsättning'], ['namn', 'Namn']];
 const PAGE = 50;
 
@@ -2751,7 +2755,7 @@ function viewAktier() {
   </div>
   <section class="card ak-filters" aria-label="Filter">
     <div class="ak-row">
-      <div class="tabs" role="tablist" aria-label="Marknad"><button role="tab" data-m="se">Sverige</button><button role="tab" data-m="us">USA</button></div>
+      <div class="tabs" role="tablist" aria-label="Marknad"><button role="tab" data-m="se">Sverige</button><button role="tab" data-m="nord">Norden</button><button role="tab" data-m="us">USA</button></div>
       <form class="searchbar" role="search" style="flex:1;min-width:200px;max-width:none" data-akform>
         ${svg('search', 18, '#6B6F76')}
         <label class="sr-only" for="ak-q">Filtrera på namn eller ticker</label>
@@ -2768,12 +2772,12 @@ function viewAktier() {
     <div class="section-head" style="padding:12px 14px 4px;align-items:center"><h2 class="section" id="ak-count" style="font-size:20px">Hämtar …</h2><button class="linkbtn small" type="button" data-reset hidden>Rensa filter</button></div>
     <div id="ak-list">${loading('Hämtar alla aktier …')}</div>
   </section>
-  ${footer('Listan visar aktier som datakällan klassar i en bransch. Kurser kan vara fördröjda upp till 15 minuter. P/E räknas på vinsten de senaste tolv månaderna, och utdelning är direktavkastningen det senaste året.')}`;
+  ${footer('Listan visar aktier i Sverige, Norden (Oslo, Helsingfors och Köpenhamn) och de större bolagen i USA. Certifikat, warranter och börshandlade produkter är inte med. I Norden visas börsvärdet i bolagets egen valuta men sorteras i kronor. Kurser kan vara fördröjda upp till 15 minuter. P/E räknas på vinsten de senaste tolv månaderna, och utdelning är direktavkastningen det senaste året.')}`;
 }
 
 function mountAktier(params) {
   const st = {
-    m: params.get('m') === 'us' ? 'us' : 'se',
+    m: AK_M.includes(params.get('m')) ? params.get('m') : 'se',
     q: params.get('q') || '',
     k: KATEGORIER.some((x) => x[0] === params.get('k')) ? params.get('k') : 'alla',
     b: params.get('b') || 'alla',
@@ -2799,14 +2803,14 @@ function mountAktier(params) {
     if (st.q) { const q = st.q.toLowerCase(); if (!a.namn.toLowerCase().includes(q) && !a.sym.toLowerCase().includes(q)) return false; }
     if (skip !== 'k' && !KATEGORIER.find((x) => x[0] === st.k)[2](a)) return false;
     if (skip !== 'b' && st.b !== 'alla' && a.bransch !== st.b) return false;
-    if (skip !== 'st' && st.st !== 'alla') { const f = STORLEK[st.m].find((x) => x[0] === st.st)[2]; if (a.mcap == null || !f(a.mcap)) return false; }
+    if (skip !== 'st' && st.st !== 'alla') { const f = STORLEK[st.m].find((x) => x[0] === st.st)[2]; const v = akVal(a, 'mcap'); if (v == null || !f(v)) return false; }
     return true;
   };
   const sorted = (list) => {
     const dir = st.d === 'asc' ? 1 : -1; const k = st.s;
     return list.slice().sort((x, y) => {
       if (k === 'namn') return dir * -1 * x.namn.localeCompare(y.namn, 'sv');
-      const a = k === 'pe' && x.pe === -1 ? null : x[k]; const b = k === 'pe' && y.pe === -1 ? null : y[k];
+      const a = k === 'pe' && x.pe === -1 ? null : akVal(x, k); const b = k === 'pe' && y.pe === -1 ? null : akVal(y, k);
       if (a == null && b == null) return 0; if (a == null) return 1; if (b == null) return -1;
       return dir * (a - b);
     });

@@ -1,7 +1,8 @@
 import { cached, fail, ApiError } from '../lib/finnhub.mjs';
 import { yScreen, yQuotes, raw } from '../lib/yahoo.mjs';
 
-// GET /api/aktier?m=se|us  →  alla aktier på marknaden med bransch, kurs och nyckeltal, för listsidan.
+// GET /api/aktier?m=se|nord|us  →  alla aktier på marknaden med bransch, kurs och nyckeltal, för listsidan.
+// nord = Oslo, Helsingfors och Köpenhamn. Där räknas börsvärde och omsättning även om till kronor, så att listan går att jämföra.
 // Hämtas med Yahoos aktiefilter, en gång per bransch så att varje aktie får rätt bransch.
 const SECTORS = {
   'Technology': 'Teknik', 'Industrials': 'Industri', 'Financial Services': 'Finans', 'Healthcare': 'Hälsovård',
@@ -9,14 +10,20 @@ const SECTORS = {
   'Basic Materials': 'Råvaror', 'Energy': 'Energi', 'Utilities': 'Kraftförsörjning', 'Real Estate': 'Fastigheter'
 };
 const MARKETS = {
-  se: { region: 'se', pages: 2, currency: 'SEK' },
-  us: { region: 'us', pages: 3, currency: 'USD', extra: [{ operator: 'gt', operands: ['intradaymarketcap', 2e9] }] }
+  se: { regions: ['se'], pages: 2, rest: 5 },
+  nord: { regions: ['no', 'fi', 'dk'], pages: 2, rest: 4, sek: true },
+  us: { regions: ['us'], pages: 3, extra: [{ operator: 'gt', operands: ['intradaymarketcap', 2e9] }] }
 };
+// Certifikat, warranter, teckningsrätter, BTA och börshandlade produkter är inga aktier. Yahoo ger dem ingen bransch, så de rensas bara bland Övrigt.
+const JUNK_SYM = /^(BULL|BEAR|MINI|TURBO|LONG|SHORT)[-\s]|-AVA-\d|\d[LCPS]-?\d{2,}|-(BTU|BTA|BTB|TO\d*|TR|UR|IR)(\.|$)/i;
+const JUNK_NAME = /\b(ETP|ETF|ETN|ETC|UCITS|Tracker|Index|Xtrackers|iShares|21Shares|CoinShares|Virtune|Valour|WisdomTree|Bitcoin|Ethereum|Certifikat|Bull|Bear)\b/i;
+const isJunk = (a) => JUNK_SYM.test(a.sym) || JUNK_NAME.test(a.namn) || a.namn.toUpperCase() === a.sym;
 const OTC = ['PNK', 'OQB', 'OQX', 'OEM', 'OGM', 'OBB', 'XXX'];
 
 export default async (req) => {
   try {
-    const m = new URL(req.url).searchParams.get('m') === 'us' ? 'us' : 'se';
+    const mq = new URL(req.url).searchParams.get('m');
+    const m = MARKETS[mq] ? mq : 'se';
     let data = await fromScreener(m).catch((e) => { console.warn('[aktier] filter:', e?.message); return null; });
     if (!data || data.aktier.length < 20) {
       if (m !== 'se') throw new ApiError(502, 'listan kunde inte hämtas');
@@ -28,7 +35,8 @@ export default async (req) => {
 
 async function fromScreener(m) {
   const cfg = MARKETS[m];
-  const base = [{ operator: 'eq', operands: ['region', cfg.region] }, ...(cfg.extra || []), { operator: 'must_not', operands: OTC.map((x) => ({ operator: 'eq', operands: ['exchange', x] })) }];
+  const reg = cfg.regions.map((r) => ({ operator: 'eq', operands: ['region', r] }));
+  const base = [reg.length === 1 ? reg[0] : { operator: 'or', operands: reg }, ...(cfg.extra || []), { operator: 'must_not', operands: OTC.map((x) => ({ operator: 'eq', operands: ['exchange', x] })) }];
   const jobs = Object.keys(SECTORS).map(async (sec) => {
     const out = [];
     for (let page = 0; page < cfg.pages; page++) {
@@ -38,12 +46,12 @@ async function fromScreener(m) {
     }
     return out;
   });
-  // Aktier som Yahoo inte har gett någon bransch kommer annars inte med. För Sverige hämtar vi alla och lägger resten under Övrigt.
-  if (m === 'se') jobs.push((async () => {
+  // Aktier som Yahoo inte har gett någon bransch kommer annars inte med. I Norden hämtar vi alla och lägger resten under Övrigt.
+  if (cfg.rest) jobs.push((async () => {
     const out = [];
-    for (let page = 0; page < 5; page++) {
+    for (let page = 0; page < cfg.rest; page++) {
       const r = await yScreen(base, { offset: page * 250 });
-      out.push(...r.quotes.map((q) => row(q, 'Övrigt')));
+      out.push(...r.quotes.map((q) => row(q, 'Övrigt')).filter((a) => a && !isJunk(a)));
       if ((page + 1) * 250 >= r.total) break;
     }
     return out;
@@ -54,9 +62,22 @@ async function fromScreener(m) {
   const seen = new Set();
   // Branschlistorna kommer först, så att Övrigt bara får de som saknar bransch
   const aktier = ok.flatMap((x) => x.value).filter((a) => a && a.kurs != null && !seen.has(a.sym) && seen.add(a.sym));
+  if (cfg.sek) await toSek(aktier);
   const per = {}; for (const a of aktier) per[a.bransch] = (per[a.bransch] || 0) + 1;
   console.log(`[aktier] ${m}: ${aktier.length} aktier`, JSON.stringify(per), 'exempel', JSON.stringify(aktier.filter((a) => ['VOLV-B.ST', 'ERIC-B.ST', 'HEXA-B.ST', 'ABB.ST', 'AZN.ST', 'AAPL', 'MSFT'].includes(a.sym)).map((a) => [a.sym, a.kurs, a.d1, a.ar, a.pe, a.utd, a.mcap])));
   return { kalla: 'Yahoo Finance', komplett: ok.length === res.length, aktier };
+}
+
+// Börsvärde och omsättning i kronor för Norden, med dagens växelkurser
+async function toSek(aktier) {
+  const curs = [...new Set(aktier.map((a) => (a.valuta || '').toUpperCase()).filter((c) => c && c !== 'SEK'))];
+  const q = curs.length ? await yQuotes(curs.map((c) => `${c}SEK=X`)).catch(() => ({})) : {};
+  const rate = { SEK: 1 }; curs.forEach((c) => { const k = q[`${c}SEK=X`]?.kurs; if (k > 0) rate[c] = k; });
+  for (const a of aktier) {
+    const r = rate[(a.valuta || '').toUpperCase()];
+    a.mcapSek = r && a.mcap != null ? Math.round(a.mcap * r) : null;
+    a.omsSek = r && a.oms != null ? Math.round(a.oms * r) : null;
+  }
 }
 
 function row(q, bransch) {
