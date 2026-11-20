@@ -243,9 +243,40 @@ export function yearAgoClose(points) {
   if (!v || (jumpT && v[0] < jumpT)) return null;
   return v[1];
 }
+// Kursen för fem år sedan: sista stängningen fem år (1 826 dagar) före den senaste. Börjar historiken
+// högst en vecka senare än så används första kursen. Samma regel som diagrammets 5 år på sidan för varje värdepapper.
+export function fiveYearAgoClose(points) {
+  if (!points?.length) return null;
+  const lastT = points[points.length - 1][0]; const lim = lastT - 1826 * 86400;
+  let v = null; for (const p of points) { if (p[0] <= lim) v = p; else break; }
+  if (v == null && points[0][0] <= lim + 7 * 86400) v = points[0];
+  const jumpT = splitJumpT(points);
+  if (!v || (jumpT && v[0] < jumpT)) return null;
+  return v[1];
+}
+// Svängning: hur mycket kursen har rört sig det senaste året, som årlig standardavvikelse i procent (volatilitet).
+// Samma mått som fonder anger i sina faktablad. Kräver minst 100 dagar med kurser.
+export function yearVol(points, perYear = 252) {
+  if (!points?.length) return null;
+  const lastT = points[points.length - 1][0]; const p = points.filter((x) => x[0] > lastT - 365 * 86400 && x[1] > 0);
+  if (p.length < 101) return null;
+  const jumpT = splitJumpT(p); if (jumpT) return null;
+  const r = []; for (let i = 1; i < p.length; i++) r.push(Math.log(p[i][1] / p[i - 1][1]));
+  const m = r.reduce((a, c) => a + c, 0) / r.length;
+  const sd = Math.sqrt(r.reduce((a, c) => a + (c - m) ** 2, 0) / (r.length - 1));
+  return Math.round(sd * Math.sqrt(perYear) * 1000) / 10;
+}
+// En liten kurva för listor: det senaste året med n punkter
+export function sparkOf(points, n = 40) {
+  if (!points?.length) return null;
+  const lastT = points[points.length - 1][0]; const p = points.filter((x) => x[0] >= lastT - 365 * 86400);
+  if (p.length < 20 || splitJumpT(p)) return null;
+  const out = []; for (let i = 0; i < n; i++) { const v = p[Math.round((i * (p.length - 1)) / (n - 1))][1]; out.push(Number(v.toPrecision(5))); }
+  return out;
+}
 // Yahoo tar högst 20 tickers per anrop
-export async function ySpark(syms) {
-  const d = await yahoo('/v8/finance/spark', { symbols: syms.join(','), range: '1y', interval: '1d' }, { timeoutMs: 8000 });
+export async function ySpark(syms, range = '1y', interval = '1d') {
+  const d = await yahoo('/v8/finance/spark', { symbols: syms.join(','), range, interval }, { timeoutMs: 8000 });
   const out = {};
   for (const s of syms) {
     const x = d?.[s]; if (!x?.timestamp || !x?.close) continue;

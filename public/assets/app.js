@@ -1776,7 +1776,7 @@ const bOnePerDay = (d) => { if (!d?.punkter?.length) return d; const m = new Map
 const bMA = (pts, k) => { const o = []; let s = 0; for (let i = 0; i < pts.length; i++) { s += pts[i][1]; if (i >= k) s -= pts[i - k][1]; o.push(i >= k - 1 ? s / k : null); } return o; };
 
 /* ---------- Kursdiagram med glidande medelvärden ---------- */
-const B_PER = [['1m', '1M', 31], ['3m', '3M', 91], ['6m', '6M', 182], ['1y', '1Å', 365], ['3y', '3Å', 1096], ['5y', '5Å', 1830]];
+const B_PER = [['1m', '1M', 31], ['3m', '3M', 91], ['6m', '6M', 182], ['1y', '1Å', 365], ['3y', '3Å', 1096], ['5y', '5Å', 1826]];
 // Ett hopp till minst tre gånger eller en tredjedel på en dag är nästan alltid en split som datakällan inte räknat om
 const bJump = (pts, from, to) => { for (let i = 1; i < (pts?.length || 0); i++) { const t = pts[i][0]; if (t <= from || t > to) continue; const q = pts[i][1] / pts[i - 1][1]; if (q >= 3 || q <= 1 / 3) return true; } return false; };
 const bJumpTxt = () => (EN ? 'Change missing: the price jumps in a way that is probably a split the data source has not adjusted for' : 'Förändring saknas: kursen hoppar på ett sätt som troligen är en split som datakällan inte har räknat om');
@@ -2988,61 +2988,74 @@ function viewNotFound() {
 /* ================= Router ================= */
 const LEGACY = { evo: 'EVO.ST', saab: 'SAAB-B.ST', volvo: 'VOLV-B.ST' };
 /* ================= Utforska: aktier, fonder, ETF, ETP och krypto ================= */
-const KATEGORIER = [
-  ['alla', 'Alla', () => true],
-  ['utdelare', 'Utdelare', (a) => a.utd != null && a.utd >= 3],
-  ['vinnare', 'Dagens vinnare', (a) => a.d1 != null && a.d1 >= 2],
-  ['forlorare', 'Dagens förlorare', (a) => a.d1 != null && a.d1 <= -2],
-  ['lagpe', 'Låg värdering', (a) => a.pe != null && a.pe > 0 && a.pe < 15],
-  ['aret', 'Upp 30 % på ett år', (a) => a.ar != null && a.ar >= 30],
-  ['forlust', 'Går med förlust', (a) => a.pe === -1],
-  ['bevakade', 'Mina bevakade', (a) => getWatch().includes(a.sym)]
-];
-// Fonder har ingen kategori i datakällan. Index- och räntefonder känns igen på namnet, och det står i hjälptexten.
-const RANTA_RE = /ränte|räntefond|obligation|penningmarknad|kort ränta|lång ränta|likviditet|bond|fixed income|money market|kredit|high yield|företagsobl/i;
-const INDEX_RE = /\bindex|indeks|indexnära|tracker/i;
-const KAT_TYP = {
-  fonder: [['alla', 'Alla', () => true], ['index', 'Indexfonder', (a) => INDEX_RE.test(a.namn)], ['ranta', 'Räntefonder', (a) => RANTA_RE.test(a.namn)], ['vinnare', 'Upp mest i dag', (a) => a.d1 != null && a.d1 >= 1], ['bevakade', 'Mina bevakade', (a) => getWatch().includes(a.sym)]],
-  etf: [['alla', 'Alla', () => true], ['vinnare', 'Dagens vinnare', (a) => a.d1 != null && a.d1 >= 1], ['forlorare', 'Dagens förlorare', (a) => a.d1 != null && a.d1 <= -1], ['bevakade', 'Mina bevakade', (a) => getWatch().includes(a.sym)]],
-  etp: [['alla', 'Alla', () => true], ['etp', 'ETP:er', (a) => a.slag === 'etp'], ['havstang', 'Hävstång', (a) => a.slag === 'havstang'], ['bevakade', 'Mina bevakade', (a) => getWatch().includes(a.sym)]],
-  krypto: [['alla', 'Alla', () => true], ['utan', 'Utan stablecoins', (a) => !a.stable], ['stable', 'Stablecoins', (a) => a.stable], ['bevakade', 'Mina bevakade', (a) => getWatch().includes(a.sym)]]
-};
-// Storlek efter börsvärde eller fondens storlek. Gränserna gäller i listans valuta.
-const STORLEK = {
-  se: [['alla', 'Alla storlekar'], ['stora', 'Stora · över 10 mdr kr', (v) => v >= 10e9], ['medel', 'Medel · 1–10 mdr kr', (v) => v >= 1e9 && v < 10e9], ['sma', 'Små · under 1 mdr kr', (v) => v < 1e9]],
-  us: [['alla', 'Alla storlekar'], ['stora', 'Stora · över 200 mdr $', (v) => v >= 200e9], ['medel', 'Medel · 10–200 mdr $', (v) => v >= 10e9 && v < 200e9], ['sma', 'Mindre · under 10 mdr $', (v) => v < 10e9]],
-  fonder: [['alla', 'Alla storlekar'], ['stora', 'Stora · över 10 mdr kr', (v) => v >= 10e9], ['medel', 'Medel · 1–10 mdr kr', (v) => v >= 1e9 && v < 10e9], ['sma', 'Små · under 1 mdr kr', (v) => v < 1e9]],
-  'etf-us': [['alla', 'Alla storlekar'], ['stora', 'Stora · över 10 mdr $', (v) => v >= 10e9], ['medel', 'Medel · 1–10 mdr $', (v) => v >= 1e9 && v < 10e9], ['sma', 'Mindre · under 1 mdr $', (v) => v < 1e9]],
-  krypto: [['alla', 'Alla storlekar'], ['stora', 'Stora · över 100 mdr kr', (v) => v >= 100e9], ['medel', 'Medel · 1–100 mdr kr', (v) => v >= 1e9 && v < 100e9], ['sma', 'Små · under 1 mdr kr', (v) => v < 1e9]]
-};
-// Norden har flera valutor. Storlek och sortering görs på börsvärdet omräknat till kronor.
-STORLEK.nord = STORLEK.se; STORLEK['etf-se'] = STORLEK.fonder;
-const AK_M = ['se', 'nord', 'us'];
-// Typerna i Utforska: varifrån listan kommer, vilka marknader som finns och vad en rad heter
+// Filter till vänster, en tabell till höger. Varje tillgångsslag har egna filter och kolumner.
+// Inom en filtergrupp räcker det att ett val stämmer, mellan grupperna måste alla stämma.
 const UT = {
-  aktier: { namn: 'Aktier', m: ['se', 'nord', 'us'], url: (m) => `/api/aktier?m=${m}`, ar: (m) => m, en: 'aktie', fler: 'aktier', size: 'mcap', sizeLbl: 'Börsvärde' },
-  fonder: { namn: 'Fonder', m: null, url: () => '/api/lista?typ=fonder', ar: () => 'fonder', en: 'fond', fler: 'fonder', size: 'storlek', sizeLbl: 'Fondförmögenhet' },
-  etf: { namn: 'ETF', m: ['se', 'us'], url: (m) => `/api/lista?typ=etf&m=${m}`, ar: (m) => `etf-${m}`, en: 'ETF', fler: 'ETF:er', size: 'storlek', sizeLbl: 'Storlek' },
-  etp: { namn: 'ETP och certifikat', m: null, url: () => '/api/lista?typ=etp', ar: () => 'etp', en: 'produkt', fler: 'produkter', size: null, sizeLbl: '' },
-  krypto: { namn: 'Krypto', m: null, url: () => '/api/lista?typ=krypto', ar: () => 'krypto', en: 'kryptovaluta', fler: 'kryptovalutor', size: 'mcap', sizeLbl: 'Börsvärde' }
+  aktier: { namn: 'Aktier', m: ['se', 'nord', 'us'], url: (m) => `/api/aktier?m=${m}`, ar: (m) => m, en: 'aktie', fler: 'aktier', sok: 'Sök aktie eller ticker …' },
+  fonder: { namn: 'Fonder', m: null, url: () => '/api/lista?typ=fonder', ar: () => 'fonder', en: 'fond', fler: 'fonder', sok: 'Sök fond …' },
+  etf: { namn: 'ETF', m: ['se', 'us'], url: (m) => `/api/lista?typ=etf&m=${m}`, ar: (m) => `etf-${m}`, en: 'ETF', fler: 'ETF:er', sok: 'Sök ETF …' },
+  etp: { namn: 'ETP och certifikat', m: null, url: () => '/api/lista?typ=etp', ar: () => 'etp', en: 'produkt', fler: 'produkter', sok: 'Sök produkt …' },
+  krypto: { namn: 'Krypto', m: null, url: () => '/api/lista?typ=krypto', ar: () => 'krypto', en: 'kryptovaluta', fler: 'kryptovalutor', sok: 'Sök kryptovaluta …' }
 };
 const UT_M = { se: 'Sverige', nord: 'Norden', us: 'USA' };
-const akVal = (a, k) => (k === 'mcap' ? a.mcapSek ?? a.mcap ?? a.storlek : k === 'oms' ? a.omsSek ?? a.oms : k === 'storlek' ? a.storlek : k === 'kurs' ? a.kursSek ?? a.kurs : a[k]);
+// Svängning: årlig standardavvikelse det senaste året. Fem steg, samma gränser som fonders faktablad använder ungefär.
+const volDots = (v) => (v == null ? null : v < 5 ? 1 : v < 12 ? 2 : v < 20 ? 3 : v < 30 ? 4 : 5);
+const volLvl = (v) => { const d = volDots(v); return d == null ? null : d <= 2 ? 'lag' : d === 3 ? 'medel' : 'hog'; };
+const VOL_OPTS = [['lag', 'Låg · under 12 %'], ['medel', 'Medel · 12–20 %'], ['hog', 'Hög · över 20 %']];
+const FTYP = { aktie: 'Aktiefond', ranta: 'Räntefond', bland: 'Blandfond', ovrig: 'Övrig' };
+const FTYP_EN = { aktie: 'Equity fund', ranta: 'Fixed income', bland: 'Mixed fund', ovrig: 'Other' };
+const REGION = { sverige: 'Sverige', norden: 'Norden', europa: 'Europa', usa: 'USA', global: 'Globalt', tillvaxt: 'Tillväxtmarknader', ovrig: 'Övriga' };
+const REGION_EN = { sverige: 'Sweden', norden: 'Nordics', europa: 'Europe', usa: 'USA', global: 'Global', tillvaxt: 'Emerging markets', ovrig: 'Other' };
+const sizeOf = (a) => a.mcapSek ?? a.mcap ?? a.storlek ?? null;
+// Storleksgränser i kronor, eller i dollar för amerikanska listor
+const SIZE_OPTS = (usd) => (usd
+  ? [['stora', 'Stora · över 200 mdr $', (v) => v >= 200e9], ['medel', 'Medel · 10–200 mdr $', (v) => v >= 10e9 && v < 200e9], ['sma', 'Mindre · under 10 mdr $', (v) => v < 10e9]]
+  : [['stora', 'Stora · över 10 mdr kr', (v) => v >= 10e9], ['medel', 'Medel · 1–10 mdr kr', (v) => v >= 1e9 && v < 10e9], ['sma', 'Små · under 1 mdr kr', (v) => v < 1e9]]);
+const ETFSIZE = [['stora', 'Stora · över 10 mdr $', (v) => v >= 10e9], ['medel', 'Medel · 1–10 mdr $', (v) => v >= 1e9 && v < 10e9], ['sma', 'Mindre · under 1 mdr $', (v) => v < 1e9]];
+const mine = () => new Set(getWatch());
+
+// Filtergrupperna för varje tillgångsslag: [id, rubrik, [[nyckel, text, test]]]
+function utGroups(typ, m, items) {
+  const vol = ['vol', 'Svängning', VOL_OPTS.map(([k, t]) => [k, t, (a) => volLvl(a.vol) === k])];
+  const visa = ['visa', 'Visa', [['mina', 'Mina bevakade', (a) => mine().has(a.sym)]]];
+  if (typ === 'aktier') {
+    const br = [...new Set(items.map((a) => a.bransch).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'sv'));
+    const sz = SIZE_OPTS(m === 'us');
+    return [['bransch', 'Bransch', br.map((b) => [b, b, (a) => a.bransch === b])], ['storlek', 'Storlek', sz.map(([k, t, f]) => [k, t, (a) => { const v = m === 'us' ? a.mcap : sizeOf(a); return v != null && f(v); }])],
+      vol, ['mer', 'Nyckeltal', [['utd', 'Utdelning minst 3 %', (a) => a.utd != null && a.utd >= 3], ['vinst', 'Går med vinst', (a) => a.pe != null && a.pe > 0], ['forlust', 'Går med förlust', (a) => a.pe === -1]]], visa];
+  }
+  if (typ === 'fonder') {
+    return [['ftyp', 'Typ av fond', [['aktie', 'Aktiefonder', (a) => a.ftyp === 'aktie'], ['ranta', 'Räntefonder', (a) => a.ftyp === 'ranta'], ['bland', 'Blandfonder', (a) => a.ftyp === 'bland'], ['index', 'Indexfonder', (a) => a.index], ['ovrig', 'Övriga', (a) => a.ftyp === 'ovrig']]],
+      ['region', 'Region', Object.entries(REGION).map(([k, t]) => [k, t, (a) => a.region === k])], 'avgift', vol,
+      ['storlek', 'Storlek', SIZE_OPTS(false).map(([k, t, f]) => [k, t, (a) => a.storlek != null && f(a.storlek)])], visa];
+  }
+  if (typ === 'etf') {
+    return [['region', 'Region', Object.entries(REGION).map(([k, t]) => [k, t, (a) => a.region === k])], vol,
+      ['storlek', 'Storlek', (m === 'us' ? ETFSIZE : SIZE_OPTS(false)).map(([k, t, f]) => [k, t, (a) => a.storlek != null && f(a.storlek)])], visa];
+  }
+  if (typ === 'etp') return [['slag', 'Typ', [['etp', 'ETP:er', (a) => a.slag === 'etp'], ['havstang', 'Hävstång', (a) => a.slag === 'havstang']]], vol, visa];
+  return [['slag', 'Typ', [['krypto', 'Kryptovalutor', (a) => !a.stable], ['stable', 'Stablecoins', (a) => a.stable]]],
+    ['storlek', 'Storlek', [['stora', 'Stora · över 100 mdr kr', (a) => a.mcapSek >= 100e9], ['medel', 'Medel · 1–100 mdr kr', (a) => a.mcapSek >= 1e9 && a.mcapSek < 100e9], ['sma', 'Små · under 1 mdr kr', (a) => a.mcapSek != null && a.mcapSek < 1e9]]], vol, visa];
+}
 const SORTS_T = {
-  aktier: [['mcap', 'Börsvärde'], ['d1', 'I dag'], ['ar', '1 år'], ['pe', 'P/E'], ['utd', 'Utdelning'], ['oms', 'Omsättning'], ['namn', 'Namn']],
-  fonder: [['storlek', 'Fondförmögenhet'], ['d1', 'I dag'], ['ar', '1 år'], ['namn', 'Namn']],
-  etf: [['storlek', 'Storlek'], ['d1', 'I dag'], ['ar', '1 år'], ['namn', 'Namn']],
-  etp: [['ar', '1 år'], ['d1', 'I dag'], ['namn', 'Namn']],
-  krypto: [['mcap', 'Börsvärde'], ['d1', 'I dag'], ['ar', '1 år'], ['namn', 'Namn']]
+  aktier: [['mcap', 'Börsvärde'], ['d1', 'I dag'], ['ar', '1 år'], ['ar5', '5 år'], ['vol', 'Lägst svängning'], ['pe', 'P/E'], ['utd', 'Utdelning'], ['namn', 'Namn']],
+  fonder: [['storlek', 'Fondförmögenhet'], ['avgift', 'Lägst avgift'], ['ar', '1 år'], ['ar5', '5 år'], ['vol', 'Lägst svängning'], ['namn', 'Namn']],
+  etf: [['storlek', 'Storlek'], ['d1', 'I dag'], ['ar', '1 år'], ['ar5', '5 år'], ['vol', 'Lägst svängning'], ['namn', 'Namn']],
+  etp: [['ar', '1 år'], ['d1', 'I dag'], ['vol', 'Lägst svängning'], ['namn', 'Namn']],
+  krypto: [['mcap', 'Börsvärde'], ['d1', 'I dag'], ['ar', '1 år'], ['ar5', '5 år'], ['vol', 'Lägst svängning'], ['namn', 'Namn']]
 };
+const ASC = new Set(['namn', 'pe', 'avgift', 'vol']);
+const akVal = (a, k) => (k === 'mcap' ? a.mcapSek ?? a.mcap ?? a.storlek : k === 'storlek' ? a.storlek : k === 'kurs' ? a.kursSek ?? a.kurs : k === 'avgift' ? a.avgift?.[1] ?? null : k === 'pe' && a.pe === -1 ? null : a[k]);
 const PAGE = 50;
-const UT_HELP = {
-  aktier: 'Aktier i Sverige, Norden (Oslo, Helsingfors och Köpenhamn) och de större bolagen i USA. I Norden visas börsvärdet i bolagets egen valuta men sorteras i kronor. P/E räknas på vinsten de senaste tolv månaderna, och utdelning är direktavkastningen det senaste året.',
-  fonder: 'Fonder som handlas i Sverige. Fondkursen sätts en gång per dag. Indexfonder och räntefonder känns igen på fondens namn, så filtret kan missa någon. Avgifter finns inte i datakällan och visas därför inte.',
-  etf: 'Börshandlade fonder på Stockholmsbörsen, och de största i USA efter storlek.',
-  etp: 'ETP:er följer till exempel en kryptovaluta eller ett index. Hävstångsprodukter som bull, bear och minifutures rör sig flera gånger mer än det de följer och kan bli värdelösa. Listan visar det som datakällan har, inte alla certifikat som finns.',
+const FEE_MAX = 2;
+const UT_NOTE = {
+  aktier: 'Aktier i Sverige, Norden (Oslo, Helsingfors och Köpenhamn) och de större bolagen i USA. I Norden sorteras börsvärdet i kronor. P/E räknas på vinsten de senaste tolv månaderna, och utdelning är direktavkastningen det senaste året.',
+  fonder: 'Avgiften är fondens förvaltningsavgift som fondbolaget har rapporterat till Finansinspektionen, via Fondinsyn (öppna data, CC BY 4.0). Har fonden flera andelsklasser visas spannet från den billigaste till den dyraste. Fonder som är registrerade utomlands finns inte i den källan, där står det Saknas. Typ och region läses ur fondens namn och jämförelseindex. Där det inte framgår hamnar fonden under Övriga.',
+  etf: 'Börshandlade fonder på Stockholmsbörsen, och de största i USA efter storlek. Region läses ur namnet.',
+  etp: 'ETP:er följer till exempel en kryptovaluta eller ett index. Hävstångsprodukter som bull, bear och minifutures rör sig flera gånger mer än det de följer och kan bli värdelösa.',
   krypto: 'De 100 största kryptovalutorna efter börsvärde. Kursen är i dollar och räknas om till kronor med dagens växelkurs. Stablecoins följer en valuta, oftast dollarn.'
 };
+const UT_NOTE_ALL = 'Svängning är hur mycket kursen har rört sig det senaste året, räknat som årlig standardavvikelse: under 12 % är Låg, 12–20 % Medel och över 20 % Hög. Det är inte samma sak som Riskkollen på sidan för varje värdepapper. 1 år och 5 år räknas som där: senaste kurs mot stängningskursen ett och fem år tidigare, utan utdelningar.';
 
 function viewAktier() {
   return `
@@ -3051,133 +3064,164 @@ function viewAktier() {
     <span class="eyebrow" id="ak-status">Hämtar listan …</span>
     <h1 class="title">Utforska</h1>
   </div>
-  <div class="tabs ut-typ" role="tablist" aria-label="Typ av värdepapper">${Object.entries(UT).map(([k, t]) => `<button role="tab" data-typ="${k}">${esc(t.namn)}</button>`).join('')}</div>
-  <section class="card ak-filters" aria-label="Filter">
-    <div class="ak-row">
-      <div class="tabs" role="tablist" aria-label="Marknad" id="ak-m"></div>
-      <form class="searchbar" role="search" style="flex:1;min-width:200px;max-width:none" data-akform>
-        ${svg('search', 18, '#6B6F76')}
-        <label class="sr-only" for="ak-q">Filtrera på namn eller ticker</label>
-        <input id="ak-q" type="search" placeholder="Filtrera på namn eller ticker" autocomplete="off">
-      </form>
-      <label class="sr-only" for="ak-sort">Sortera</label>
-      <select class="select" id="ak-sort"></select>
+  <div class="ut-pills" role="tablist" aria-label="Typ av värdepapper">${Object.entries(UT).map(([k, t]) => `<button type="button" role="tab" data-typ="${k}">${esc(t.namn)}</button>`).join('')}</div>
+  <div class="ut-wrap">
+    <button type="button" class="btn ghost ut-ftog" data-ftog aria-expanded="false" aria-controls="ut-side">Filter <span id="ut-fn"></span></button>
+    <aside class="ut-side" id="ut-side" aria-label="Filter"></aside>
+    <div class="ut-main">
+      <div class="ut-bar">
+        <form class="searchbar ut-q" role="search" data-akform>
+          ${svg('search', 18, '#6B6F76')}
+          <label class="sr-only" for="ak-q">Sök i listan</label>
+          <input id="ak-q" type="search" autocomplete="off">
+        </form>
+        <label class="ut-sort"><span class="small muted">Sortera:</span> <select class="ut-sel" id="ak-sort"></select></label>
+      </div>
+      <div class="ut-count"><span class="small muted" id="ak-count">Hämtar …</span><button class="linkbtn small" type="button" data-reset hidden>Rensa filter</button></div>
+      <div id="ak-list">${loading('Hämtar listan …')}</div>
+      <p class="ut-note" id="ak-help"></p>
     </div>
-    <div class="ak-group"><span class="label-up">Kategori</span><div class="chips" id="ak-kat"></div></div>
-    <div class="ak-group" id="ak-bransch-g"><span class="label-up">Bransch</span><div class="chips" id="ak-bransch"></div></div>
-    <div class="ak-group" id="ak-storlek-g"><span class="label-up">Storlek</span><div class="chips" id="ak-storlek"></div></div>
-    <p class="small faint" id="ak-help" style="margin:2px 0 0"></p>
-  </section>
-  <section class="card" style="padding:8px 8px 14px" aria-labelledby="ak-count">
-    <div class="section-head" style="padding:12px 14px 4px;align-items:center"><h2 class="section" id="ak-count" style="font-size:20px">Hämtar …</h2><button class="linkbtn small" type="button" data-reset hidden>Rensa filter</button></div>
-    <div id="ak-list">${loading('Hämtar listan …')}</div>
-  </section>
-  ${footer('Källa: Yahoo Finance. Kurser kan vara fördröjda upp till 15 minuter. 1 år räknas som på sidan för varje värdepapper: senaste kurs mot stängningskursen för ett år sedan, utan utdelningar.')}`;
+  </div>
+  ${footer('Källa: Yahoo Finance. Kurser kan vara fördröjda upp till 15 minuter. Fondavgifter: Finansinspektionen via Fondinsyn.')}`;
 }
 
 function mountAktier(params) {
   const typ0 = UT[params.get('typ')] ? params.get('typ') : 'aktier';
-  const st = { typ: typ0, m: null, q: params.get('q') || '', k: params.get('k') || 'alla', b: params.get('b') || 'alla', st: params.get('st') || 'alla', s: params.get('s') || null, d: params.get('d') === 'asc' ? 'asc' : 'desc', n: PAGE };
+  const st = { typ: typ0, m: null, q: params.get('q') || '', s: params.get('s') || null, d: null, n: PAGE, f: {}, fee: FEE_MAX };
   const T = () => UT[st.typ];
   const defM = () => (T().m ? T().m[0] : null);
   st.m = T().m?.includes(params.get('m')) ? params.get('m') : defM();
-  const kats = () => (st.typ === 'aktier' ? KATEGORIER : KAT_TYP[st.typ]);
   const sorts = () => SORTS_T[st.typ];
-  const storl = () => STORLEK[st.typ === 'aktier' ? st.m : st.typ === 'etf' ? `etf-${st.m}` : st.typ] || null;
-  if (!kats().some((x) => x[0] === st.k)) st.k = 'alla';
   if (!sorts().some((x) => x[0] === st.s)) st.s = sorts()[0][0];
-  if (!['alla', 'stora', 'medel', 'sma'].includes(st.st)) st.st = 'alla';
-  let data = null; let ar = { klar: false, lista: null };
+  st.d = params.get('d') === 'asc' || params.get('d') === 'desc' ? params.get('d') : ASC.has(st.s) ? 'asc' : 'desc';
+  // Filter i adressen: f.region=global,sverige
+  for (const [k, v] of params) if (k.startsWith('f.') && v) st.f[k.slice(2)] = new Set(v.split(','));
+  if (params.get('k') === 'bevakade') st.f.visa = new Set(['mina']);
+  const fee0 = Number(params.get('avgift')); if (Number.isFinite(fee0) && fee0 > 0 && fee0 < FEE_MAX) st.fee = fee0;
+  let data = null; let groups = []; let ar = { klar: false, lista: null };
+
   const syncUrl = () => {
     const p = new URLSearchParams();
-    if (st.typ !== 'aktier') p.set('typ', st.typ); if (st.m && st.m !== defM()) p.set('m', st.m); if (st.q) p.set('q', st.q); if (st.k !== 'alla') p.set('k', st.k);
-    if (st.b !== 'alla') p.set('b', st.b); if (st.st !== 'alla') p.set('st', st.st);
-    if (st.s !== sorts()[0][0]) p.set('s', st.s); if (st.d !== 'desc') p.set('d', st.d);
+    if (st.typ !== 'aktier') p.set('typ', st.typ); if (st.m && st.m !== defM()) p.set('m', st.m); if (st.q) p.set('q', st.q);
+    for (const [k, v] of Object.entries(st.f)) if (v.size) p.set('f.' + k, [...v].join(','));
+    if (st.typ === 'fonder' && st.fee < FEE_MAX) p.set('avgift', String(st.fee));
+    if (st.s !== sorts()[0][0]) p.set('s', st.s); if (st.d !== (ASC.has(st.s) ? 'asc' : 'desc')) p.set('d', st.d);
     history.replaceState(null, '', '/aktier' + (p.toString() ? '?' + p : ''));
   };
   const setup = () => {
     document.querySelectorAll('[data-typ]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.typ === st.typ)));
-    $('#ak-m').innerHTML = T().m ? T().m.map((m) => `<button role="tab" data-m="${m}" aria-selected="${m === st.m}">${esc(UT_M[m])}</button>`).join('') : '';
-    $('#ak-m').hidden = !T().m;
-    $('#ak-sort').innerHTML = sorts().map(([k, t]) => `<option value="${k}">Sortera: ${esc(t)}</option>`).join(''); $('#ak-sort').value = st.s;
-    $('#ak-bransch-g').hidden = st.typ !== 'aktier';
-    $('#ak-storlek-g').hidden = !storl();
-    $('#ak-help').textContent = UT_HELP[st.typ];
-    $('#ak-q').value = st.q;
+    $('#ak-sort').innerHTML = sorts().map(([k, t]) => `<option value="${k}">${esc(t)}</option>`).join(''); $('#ak-sort').value = st.s;
+    $('#ak-q').placeholder = T().sok; $('#ak-q').value = st.q;
+    $('#ak-help').innerHTML = `<span>${esc(UT_NOTE[st.typ])}</span> <span>${esc(UT_NOTE_ALL)}</span>`;
   };
   setup();
 
-  // Filtrera i tur och ordning. Räknarna visar hur många som finns med övriga filter.
+  const nActive = () => Object.values(st.f).reduce((s, v) => s + v.size, 0) + (st.typ === 'fonder' && st.fee < FEE_MAX ? 1 : 0);
+  // skip = gruppen som räknas, så att siffran bredvid ett val visar hur många det blir med övriga filter
   const pass = (a, skip) => {
-    if (st.q) { const q = st.q.toLowerCase(); if (!a.namn.toLowerCase().includes(q) && !a.sym.toLowerCase().includes(q)) return false; }
-    if (skip !== 'k') { const k = kats().find((x) => x[0] === st.k); if (k && !k[2](a)) return false; }
-    if (skip !== 'b' && st.typ === 'aktier' && st.b !== 'alla' && a.bransch !== st.b) return false;
-    if (skip !== 'st' && st.st !== 'alla' && storl()) { const f = storl().find((x) => x[0] === st.st)?.[2]; const v = akVal(a, T().size || 'mcap'); if (f && (v == null || !f(v))) return false; }
+    if (st.q) { const q = st.q.toLowerCase(); if (!a.namn.toLowerCase().includes(q) && !a.sym.toLowerCase().includes(q) && !(a.kod || '').toLowerCase().includes(q)) return false; }
+    for (const g of groups) {
+      if (g === 'avgift') { if (skip !== 'avgift' && st.fee < FEE_MAX && !(a.avgift && a.avgift[1] <= st.fee + 1e-9)) return false; continue; }
+      const [id, , opts] = g; if (id === skip) continue;
+      const sel = st.f[id]; if (!sel?.size) continue;
+      if (!opts.some(([k, , f]) => sel.has(k) && f(a))) return false;
+    }
     return true;
   };
   const sorted = (list) => {
     const dir = st.d === 'asc' ? 1 : -1; const k = st.s;
     return list.slice().sort((x, y) => {
-      if (k === 'namn') return dir * -1 * x.namn.localeCompare(y.namn, 'sv');
-      const a = k === 'pe' && x.pe === -1 ? null : akVal(x, k); const b = k === 'pe' && y.pe === -1 ? null : akVal(y, k);
+      if (k === 'namn') return dir * x.namn.localeCompare(y.namn, 'sv');
+      const a = akVal(x, k); const b = akVal(y, k);
       if (a == null && b == null) return 0; if (a == null) return 1; if (b == null) return -1;
       return dir * (a - b);
     });
   };
 
-  const drawChips = () => {
+  const box = (on) => `<span class="ut-box${on ? ' on' : ''}" aria-hidden="true">${on ? svg('check', 12) : ''}</span>`;
+  const drawSide = () => {
     const base = data.items;
-    $('#ak-kat').innerHTML = kats().map(([k, t, f]) => { const n = base.filter((a) => pass(a, 'k') && f(a)).length; return `<button type="button" class="chip-btn" data-k="${k}" aria-pressed="${st.k === k}" ${n || st.k === k ? '' : 'disabled'}>${esc(t)} <span class="chip-n">${n}</span></button>`; }).join('');
-    if (st.typ === 'aktier') {
-      const counts = {}; for (const a of base) if (pass(a, 'b')) counts[a.bransch] = (counts[a.bransch] || 0) + 1;
-      const all = [...new Set(base.map((a) => a.bransch))].sort((a, b) => a.localeCompare(b, 'sv'));
-      $('#ak-bransch').innerHTML = `<button type="button" class="chip-btn" data-b="alla" aria-pressed="${st.b === 'alla'}">Alla <span class="chip-n">${base.filter((a) => pass(a, 'b')).length}</span></button>` +
-        all.map((b) => `<button type="button" class="chip-btn" data-b="${esc(b)}" aria-pressed="${st.b === b}" ${counts[b] || st.b === b ? '' : 'disabled'}>${esc(b)} <span class="chip-n">${counts[b] || 0}</span></button>`).join('');
-    }
-    $('#ak-storlek').innerHTML = storl() ? storl().map(([k, t]) => `<button type="button" class="chip-btn" data-st="${k}" aria-pressed="${st.st === k}">${esc(t)}</button>`).join('') : '';
+    const mk = T().m ? `<div class="ut-g"><div class="label-up">Marknad</div><div class="ut-seg" role="tablist">${T().m.map((m) => `<button type="button" role="tab" data-m="${m}" aria-selected="${m === st.m}">${esc(UT_M[m])}</button>`).join('')}</div></div>` : '';
+    const html = groups.map((g) => {
+      if (g === 'avgift') {
+        const n = base.filter((a) => pass(a, 'avgift') && a.avgift).length;
+        return `<div class="ut-g"><label class="label-up" for="ut-fee">Avgift högst</label><input type="range" class="ut-range" id="ut-fee" min="0.05" max="${FEE_MAX}" step="0.05" value="${st.fee}" style="--p:${((st.fee - 0.05) / (FEE_MAX - 0.05)) * 100}%"><div class="small muted num" id="ut-fee-v">${st.fee < FEE_MAX ? `${nf(st.fee, 2)} %` : 'Alla avgifter'}</div><div class="small faint">${n.toLocaleString(L)} med avgift i källan</div></div>`;
+      }
+      const [id, lbl, opts] = g; const sel = st.f[id] || new Set();
+      const rows = opts.map(([k, t, f]) => { const c = base.filter((a) => pass(a, id) && f(a)).length; const on = sel.has(k); return `<button type="button" class="ut-chk" data-fg="${esc(id)}" data-fk="${esc(k)}" aria-pressed="${on}" ${c || on ? '' : 'disabled'}>${box(on)}<span>${esc(t)}</span><span class="ut-n">${c.toLocaleString(L)}</span></button>`; }).join('');
+      return `<div class="ut-g"><div class="label-up">${esc(lbl)}${id === 'vol' ? tip('Svängning') : ''}</div><div class="ut-opts${opts.length > 8 ? ' many' : ''}">${rows}</div></div>`;
+    }).join('');
+    $('#ut-side').innerHTML = mk + html;
+    const n = nActive(); $('#ut-fn').textContent = n ? `· ${n}` : '';
   };
 
+  // Celler
   const th = (k, t, cls = '') => `<th scope="col" class="${cls}" aria-sort="${st.s === k ? (st.d === 'asc' ? 'ascending' : 'descending') : 'none'}"><button type="button" class="th-sort" data-sort="${k}">${t}${st.s === k ? (st.d === 'asc' ? ' ↑' : ' ↓') : ''}</button>${tip(t)}</th>`;
-  const arCell = (a) => (a.ar != null ? `<td class="r num hide-xs" style="color:var(--${tone(a.ar)})">${pct(a.ar, 0)}</td>` : `<td class="r num hide-xs faint">${ar.klar ? '–' : '…'}</td>`);
+  const thp = (t, cls = '') => `<th scope="col" class="${cls}">${t}${tip(t)}</th>`;
+  const wait = () => (ar.klar ? '–' : '…');
+  const pctCell = (v, cls) => (v != null ? `<td class="r num ${cls}" style="color:var(--${tone(v)})">${pct(v, Math.abs(v) < 10 ? 1 : 0)}</td>` : `<td class="r num ${cls} faint">${wait()}</td>`);
   const d1Cell = (a) => `<td class="r"><span class="pill ${tone(a.d1)}">${a.d1 != null ? pct(a.d1, 1) : '–'}</span></td>`;
+  const spark = (a) => {
+    const v = a.sp; if (!v?.length) return `<td class="hide-xs ut-spc faint">${ar.klar ? '' : '…'}</td>`;
+    const lo = Math.min(...v); const hi = Math.max(...v); const sp = hi - lo || 1;
+    const d = v.map((y, i) => `${i ? 'L' : 'M'}${(1 + (i * 88) / (v.length - 1)).toFixed(1)} ${(2 + (1 - (y - lo) / sp) * 20).toFixed(1)}`).join(' ');
+    return `<td class="hide-xs ut-spc"><svg class="ut-spark" width="90" height="24" viewBox="0 0 90 24" aria-hidden="true"><path d="${d}" fill="none" stroke="var(--${v[v.length - 1] >= v[0] ? 'up' : 'down'})" stroke-width="1.6" stroke-linejoin="round"/></svg></td>`;
+  };
+  const volCell = (a) => {
+    const n = volDots(a.vol); if (n == null) return `<td class="r hide-xs faint">${wait()}</td>`;
+    const l = volLvl(a.vol);
+    return `<td class="r hide-xs"><span class="ut-dots ${l}" title="${esc(`${EN ? 'Swings' : 'Svängning'} ${nf(a.vol, 1)} % ${EN ? 'per year' : 'per år'}`)}" aria-label="${esc(EN ? `Swings ${{ lag: 'low', medel: 'medium', hog: 'high' }[l]}, ${nf(a.vol, 1)} % per year` : `Svängning ${{ lag: 'Låg', medel: 'Medel', hog: 'Hög' }[l]}, ${nf(a.vol, 1)} % per år`)}">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</span></td>`;
+  };
+  const feeTxt = (f) => (!f ? '' : f[0] === f[1] ? `${nf(f[0], 2)} %` : `${nf(f[0], 2)}–${nf(f[1], 2)} %`);
   const star = (a, watch) => `<td class="r"><button type="button" class="star-btn" data-star="${esc(a.sym)}" data-namn="${esc(a.namn)}" aria-pressed="${watch.has(a.sym)}" aria-label="${watch.has(a.sym) ? 'Sluta bevaka' : 'Bevaka'} ${esc(a.namn)}">${svg('star', 18)}</button></td>`;
   const nameCell = (a, sub) => `<td><a class="ak-name" href="/bolag/${encodeURIComponent(a.sym)}" data-link data-namn="${esc(a.namn)}">${av(a.sym, a.kod ? a.kod.slice(0, 4) : undefined, a.namn)}<span><b>${esc(a.namn)}</b><span class="small muted">${sub}</span></span></a></td>`;
   const pxTxt = (a) => (a.kurs != null ? esc(kr(a.kurs)) + ' ' + esc(cur(a.valuta)) : '–');
   const ROWS = {
-    aktier: { head: () => `${th('namn', 'Bolag')}<th scope="col" class="hide-sm">Bransch</th>${th('d1', 'I dag', 'r')}${th('ar', '1 år', 'r hide-xs')}${th('pe', 'P/E', 'r hide-sm')}${th('utd', 'Utdelning', 'r hide-sm')}${th('mcap', 'Börsvärde', 'r hide-sm')}`,
-      row: (a) => `${nameCell(a, `${symFlag(a.sym, 'mob-ak')}${esc(a.sym)} · ${pxTxt(a)}`)}<td class="hide-sm small muted">${esc(a.bransch)}</td>${d1Cell(a)}${arCell(a)}<td class="r num hide-sm">${a.pe === -1 ? '<span class="small muted">Förlust</span>' : a.pe != null ? esc(nf(a.pe, 1)) : '–'}</td><td class="r num hide-sm">${a.utd ? esc(nf(a.utd, 1)) + ' %' : a.utd === 0 ? '0 %' : '–'}</td><td class="r num hide-sm">${a.mcap ? esc(mny(a.mcap, a.valuta)) : '–'}</td>` },
-    fonder: { head: () => `${th('namn', 'Fond')}${th('d1', 'I dag', 'r')}${th('ar', '1 år', 'r hide-xs')}${th('storlek', 'Fondförmögenhet', 'r hide-sm')}`,
-      row: (a) => `${nameCell(a, `${pxTxt(a)} · ${esc(when(a.tid))}`)}${d1Cell(a)}${arCell(a)}<td class="r num hide-sm">${a.storlek ? esc(mny(a.storlek, a.valuta)) : '–'}</td>` },
-    etf: { head: () => `${th('namn', 'ETF')}${th('d1', 'I dag', 'r')}${th('ar', '1 år', 'r hide-xs')}${th('storlek', 'Storlek', 'r hide-sm')}`,
-      row: (a) => `${nameCell(a, `${symFlag(a.sym, 'mob-ak')}${esc(a.sym)} · ${pxTxt(a)}`)}${d1Cell(a)}${arCell(a)}<td class="r num hide-sm">${a.storlek ? esc(mny(a.storlek, a.valuta)) : '–'}</td>` },
-    etp: { head: () => `${th('namn', 'Produkt')}<th scope="col" class="hide-sm">Typ</th>${th('d1', 'I dag', 'r')}${th('ar', '1 år', 'r hide-xs')}`,
-      row: (a) => `${nameCell(a, `${esc(a.sym)} · ${pxTxt(a)}`)}<td class="hide-sm small">${a.slag === 'havstang' ? '<span class="pill down">Hävstång</span>' : '<span class="pill">ETP</span>'}</td>${d1Cell(a)}${arCell(a)}` },
-    krypto: { head: () => `${th('namn', 'Kryptovaluta')}${th('kurs', 'Kurs', 'r hide-sm')}${th('d1', 'I dag', 'r')}${th('ar', '1 år', 'r hide-xs')}${th('mcap', 'Börsvärde', 'r hide-sm')}`,
-      row: (a) => `${nameCell(a, `${esc(a.kod)}${a.stable ? ' · stablecoin' : ''} · ${esc(kr(a.kurs))} $`)}<td class="r num hide-sm">${a.kursSek != null ? esc(kr(a.kursSek)) + ' kr' : '–'}</td>${d1Cell(a)}${arCell(a)}<td class="r num hide-sm">${a.mcapSek ? esc(mny(a.mcapSek, 'SEK')) : '–'}</td>` }
+    aktier: { head: () => `${th('namn', 'Bolag')}${th('d1', 'I dag', 'r')}${thp('Utveckling', 'hide-xs')}${th('ar', '1 år', 'r')}${th('ar5', '5 år', 'r hide-xs')}${th('pe', 'P/E', 'r hide-md')}${th('utd', 'Utdelning', 'r hide-md')}${th('mcap', 'Börsvärde', 'r hide-md')}${th('vol', 'Svängning', 'r hide-xs')}`,
+      row: (a) => `${nameCell(a, `${symFlag(a.sym, 'mob-ak')}${esc(a.sym)} · ${pxTxt(a)}${a.bransch ? ` · ${esc(a.bransch)}` : ''}`)}${d1Cell(a)}${spark(a)}${pctCell(a.ar, '')}${pctCell(a.ar5, 'hide-xs')}<td class="r num hide-md">${a.pe === -1 ? '<span class="small muted">Förlust</span>' : a.pe != null ? esc(nf(a.pe, 1)) : '–'}</td><td class="r num hide-md">${a.utd ? esc(nf(a.utd, 1)) + ' %' : a.utd === 0 ? '0 %' : '–'}</td><td class="r num hide-md">${a.mcap ? esc(mny(a.mcap, a.valuta)) : '–'}</td>${volCell(a)}` },
+    fonder: { head: () => `${th('namn', 'Fond')}${th('avgift', 'Avgift', 'r')}${thp('Utveckling', 'hide-xs')}${th('ar', '1 år', 'r')}${th('ar5', '5 år', 'r hide-xs')}${th('vol', 'Svängning', 'r hide-xs')}`,
+      row: (a) => `${nameCell(a, `${esc([a.region !== 'ovrig' ? (EN ? REGION_EN : REGION)[a.region] : null, a.index ? 'Index' : a.ftyp !== 'ovrig' ? (EN ? FTYP_EN : FTYP)[a.ftyp] : null].filter(Boolean).join(' · ') || (EN ? 'Fund' : 'Fond'))} · ${pxTxt(a)}${a.klasser > 1 ? ` · ${a.klasser} ${EN ? 'share classes' : 'andelsklasser'}` : ''}`)}<td class="r num">${a.avgift ? esc(feeTxt(a.avgift)) : '<span class="small faint">Saknas</span>'}</td>${spark(a)}${pctCell(a.ar, '')}${pctCell(a.ar5, 'hide-xs')}${volCell(a)}` },
+    etf: { head: () => `${th('namn', 'ETF')}${th('d1', 'I dag', 'r')}${thp('Utveckling', 'hide-xs')}${th('ar', '1 år', 'r')}${th('ar5', '5 år', 'r hide-xs')}${th('storlek', 'Fondförmögenhet', 'r hide-md')}${th('vol', 'Svängning', 'r hide-xs')}`,
+      row: (a) => `${nameCell(a, `${symFlag(a.sym, 'mob-ak')}${esc(a.sym)} · ${pxTxt(a)}`)}${d1Cell(a)}${spark(a)}${pctCell(a.ar, '')}${pctCell(a.ar5, 'hide-xs')}<td class="r num hide-md">${a.storlek ? esc(mny(a.storlek, a.valuta)) : '–'}</td>${volCell(a)}` },
+    etp: { head: () => `${th('namn', 'Produkt')}<th scope="col" class="hide-md">Typ</th>${th('d1', 'I dag', 'r')}${thp('Utveckling', 'hide-xs')}${th('ar', '1 år', 'r')}${th('vol', 'Svängning', 'r hide-xs')}`,
+      row: (a) => `${nameCell(a, `${esc(a.sym)} · ${pxTxt(a)} · ${a.slag === 'havstang' ? (EN ? 'Leverage' : 'Hävstång') : 'ETP'}`)}<td class="hide-md small">${a.slag === 'havstang' ? '<span class="pill down">Hävstång</span>' : '<span class="pill">ETP</span>'}</td>${d1Cell(a)}${spark(a)}${pctCell(a.ar, '')}${volCell(a)}` },
+    krypto: { head: () => `${th('namn', 'Kryptovaluta')}${th('kurs', 'Kurs', 'r hide-md')}${th('d1', 'I dag', 'r')}${thp('Utveckling', 'hide-xs')}${th('ar', '1 år', 'r')}${th('ar5', '5 år', 'r hide-xs')}${th('mcap', 'Börsvärde', 'r hide-md')}${th('vol', 'Svängning', 'r hide-xs')}`,
+      row: (a) => `${nameCell(a, `${esc(a.kod)}${a.stable ? ' · stablecoin' : ''} · ${esc(kr(a.kurs))} $${a.kursSek != null ? ` · ${esc(kr(a.kursSek))} kr` : ''}`)}<td class="r num hide-md">${a.kursSek != null ? esc(kr(a.kursSek)) + ' kr' : '–'}</td>${d1Cell(a)}${spark(a)}${pctCell(a.ar, '')}${pctCell(a.ar5, 'hide-xs')}<td class="r num hide-md">${a.mcapSek ? esc(mny(a.mcapSek, 'SEK')) : '–'}</td>${volCell(a)}` }
   };
   const drawList = () => {
     const list = sorted(data.items.filter((a) => pass(a)));
-    const filtered = st.q || st.k !== 'alla' || st.b !== 'alla' || st.st !== 'alla';
+    const filtered = st.q || nActive() > 0;
     $('#ak-count').textContent = `${list.length.toLocaleString(L)} ${list.length === 1 ? T().en : T().fler}`;
     $('[data-reset]').hidden = !filtered;
     if (!list.length) { $('#ak-list').innerHTML = '<div class="empty">Inget matchar filtren. Prova att ta bort något filter.</div>'; return; }
     const watch = new Set(getWatch());
     const show = list.slice(0, st.n); const R = ROWS[st.typ];
-    $('#ak-list').innerHTML = `${st.s === 'ar' && !ar.klar ? '<p class="small faint" style="margin:6px 14px">1 år räknas fortfarande. Listan sorteras om när det är klart.</p>' : ''}<div class="table-wrap"><table class="ak-table">
+    const waitSort = ['ar', 'ar5', 'vol'].includes(st.s) && !ar.klar;
+    $('#ak-list').innerHTML = `${waitSort ? '<p class="small faint" style="margin:6px 0">Räknar fortfarande. Listan sorteras om när det är klart.</p>' : ''}<div class="table-wrap ut-tw"><table class="ak-table ut-table">
       <thead><tr>${R.head()}<th scope="col" class="r"><span class="sr-only">Bevaka</span></th></tr></thead>
       <tbody>${show.map((a) => `<tr>${R.row(a)}${star(a, watch)}</tr>`).join('')}</tbody></table></div>
       ${list.length > show.length ? `<div style="display:flex;justify-content:center;padding:14px"><button class="btn ghost" type="button" data-more>Visa fler (${(list.length - show.length).toLocaleString(L)} kvar)</button></div>` : ''}`;
   };
-  const draw = () => { if (!data) return; syncUrl(); drawChips(); drawList(); };
+  const draw = () => { if (!data) return; syncUrl(); drawSide(); drawList(); };
 
-  // 1 år: kursen för ett år sedan hämtas för 500 åt gången. Samma uträkning som på sidan för varje värdepapper.
+  // 1 år, 5 år, svängning och kurvan hämtas för 250 åt gången, tre delar i taget.
+  // Samma uträkning som på sidan för varje värdepapper.
   const loadAr = async (key, items) => {
     ar = { klar: false, lista: key };
-    const parts = Math.ceil(items.length / 500);
-    await Promise.all(Array.from({ length: parts }, (_, i) => api(`/api/ar?lista=${key}&del=${i}&v=2`, 3 * 3600e3).then((r) => {
+    const parts = Math.ceil(items.length / 250); let redraw = 0;
+    const one = (i) => api(`/api/ar?lista=${key}&del=${i}&v=3`, 3 * 3600e3).then((r) => {
       if (ar.lista !== key || !r?.ref) return;
-      for (const a of items) { const ref = r.ref[a.sym]; if (ref && a.kurs) a.ar = Math.round((a.kurs / ref - 1) * 10000) / 100; }
-    }).catch(() => null)));
+      for (const a of items) {
+        const k = a.sym; const r1 = r.ref[k]; const r5 = r.ref5?.[k];
+        if (r1 && a.kurs) a.ar = Math.round((a.kurs / r1 - 1) * 10000) / 100;
+        if (r5 && a.kurs) a.ar5 = Math.round((a.kurs / r5 - 1) * 10000) / 100;
+        if (r.vol?.[k] != null) a.vol = r.vol[k];
+        if (r.sp?.[k]) a.sp = r.sp[k];
+      }
+      // Rita om då och då medan resten hämtas, så att siffrorna dyker upp
+      if (Date.now() - redraw > 900 && $('#ak-list') && data?.items === items) { redraw = Date.now(); drawList(); }
+    }).catch(() => null);
+    for (let i = 0; i < parts; i += 3) await Promise.all([i, i + 1, i + 2].filter((x) => x < parts).map(one));
     if (ar.lista !== key) return;
     ar.klar = true; if ($('#ak-list') && data?.items === items) draw();
   };
@@ -3195,9 +3239,12 @@ function mountAktier(params) {
       $('#ak-list').innerHTML = `<div class="empty">${esc(d?.error ? errText(d) : 'Datakällan svarade inte.')} Prova igen om en stund.</div>`;
       return;
     }
-    items.forEach((a) => { a.ar = null; });
+    items.forEach((a) => { a.ar = null; a.ar5 = null; a.vol = null; a.sp = null; });
     data = { ...d, items };
-    if (st.b !== 'alla' && !items.some((a) => a.bransch === st.b)) st.b = 'alla';
+    groups = utGroups(typ, m, items);
+    // Val som inte finns i den här listan tas bort
+    for (const g of groups) { if (g === 'avgift') continue; const sel = st.f[g[0]]; if (sel) for (const k of [...sel]) if (!g[2].some((o) => o[0] === k)) sel.delete(k); }
+    for (const k of Object.keys(st.f)) if (!groups.some((g) => g !== 'avgift' && g[0] === k)) delete st.f[k];
     $('#ak-status').textContent = `${items.length.toLocaleString(L)} ${T().fler}${d.komplett === false ? ' (delar av listan saknas just nu)' : ''} · ${d.kalla} · hämtat kl ${clock(d.hamtad)}${typ === 'krypto' && d.usdsek ? ` · 1 $ = ${nf(d.usdsek, 2)} kr` : ''}`;
     draw();
     loadAr(T().ar(m), items);
@@ -3206,24 +3253,30 @@ function mountAktier(params) {
   let qt;
   $('#ak-q').addEventListener('input', (e) => { clearTimeout(qt); qt = setTimeout(() => { st.q = e.target.value.trim(); st.n = PAGE; draw(); }, 150); });
   $('[data-akform]').addEventListener('submit', (e) => e.preventDefault());
-  $('#ak-sort').addEventListener('change', (e) => { st.s = e.target.value; st.d = st.s === 'namn' || st.s === 'pe' ? 'asc' : 'desc'; st.n = PAGE; draw(); });
+  $('#ak-sort').addEventListener('change', (e) => { st.s = e.target.value; st.d = ASC.has(st.s) ? 'asc' : 'desc'; st.n = PAGE; draw(); });
+  $('.main').addEventListener('input', (e) => {
+    if (e.target.id !== 'ut-fee') return;
+    st.fee = Number(e.target.value); e.target.style.setProperty('--p', `${((st.fee - 0.05) / (FEE_MAX - 0.05)) * 100}%`);
+    $('#ut-fee-v').textContent = st.fee < FEE_MAX ? `${nf(st.fee, 2)} %` : 'Alla avgifter';
+    clearTimeout(qt); qt = setTimeout(() => { st.n = PAGE; syncUrl(); drawList(); $('#ut-fn').textContent = nActive() ? `· ${nActive()}` : ''; }, 120);
+  });
+  $('.main').addEventListener('change', (e) => { if (e.target.id === 'ut-fee') draw(); });
   $('.main').addEventListener('click', (e) => {
     const t = e.target.closest('button');
     if (!t) { const a = e.target.closest('.ak-name'); if (a) rememberName(decodeURIComponent(a.getAttribute('href').split('/').pop()), a.dataset.namn); return; }
-    if (t.dataset.typ && t.dataset.typ !== st.typ) { st.typ = t.dataset.typ; st.m = defM(); st.k = 'alla'; st.b = 'alla'; st.st = 'alla'; st.s = sorts()[0][0]; st.d = 'desc'; st.q = ''; st.n = PAGE; data = null; setup(); syncUrl(); load(); return; }
-    if (t.dataset.m && t.dataset.m !== st.m) { st.m = t.dataset.m; st.b = 'alla'; st.st = 'alla'; st.n = PAGE; data = null; setup(); syncUrl(); load(); return; }
-    if (t.dataset.k) { st.k = t.dataset.k; st.n = PAGE; draw(); return; }
-    if (t.dataset.b) { st.b = t.dataset.b; st.n = PAGE; draw(); return; }
-    if (t.dataset.st) { st.st = t.dataset.st; st.n = PAGE; draw(); return; }
-    if (t.dataset.sort) { const k = t.dataset.sort; if (st.s === k) st.d = st.d === 'asc' ? 'desc' : 'asc'; else { st.s = k; st.d = k === 'namn' || k === 'pe' ? 'asc' : 'desc'; } $('#ak-sort').value = st.s; st.n = PAGE; draw(); return; }
+    if (t.dataset.typ && t.dataset.typ !== st.typ) { st.typ = t.dataset.typ; st.m = defM(); st.f = {}; st.fee = FEE_MAX; st.s = sorts()[0][0]; st.d = ASC.has(st.s) ? 'asc' : 'desc'; st.q = ''; st.n = PAGE; data = null; setup(); syncUrl(); load(); return; }
+    if (t.dataset.m && t.dataset.m !== st.m) { st.m = t.dataset.m; st.f = {}; st.n = PAGE; data = null; setup(); syncUrl(); load(); return; }
+    if (t.dataset.fg) { const s = (st.f[t.dataset.fg] ||= new Set()); if (s.has(t.dataset.fk)) s.delete(t.dataset.fk); else s.add(t.dataset.fk); st.n = PAGE; draw(); return; }
+    if (t.hasAttribute('data-ftog')) { const o = !$('#ut-side').classList.contains('open'); $('#ut-side').classList.toggle('open', o); t.setAttribute('aria-expanded', String(o)); return; }
+    if (t.dataset.sort) { const k = t.dataset.sort; if (st.s === k) st.d = st.d === 'asc' ? 'desc' : 'asc'; else { st.s = k; st.d = ASC.has(k) ? 'asc' : 'desc'; } if (sorts().some((x) => x[0] === k)) $('#ak-sort').value = st.s; st.n = PAGE; draw(); return; }
     if (t.hasAttribute('data-more')) { st.n += PAGE * 2; drawList(); return; }
-    if (t.hasAttribute('data-reset')) { st.q = ''; st.k = 'alla'; st.b = 'alla'; st.st = 'alla'; $('#ak-q').value = ''; st.n = PAGE; draw(); return; }
+    if (t.hasAttribute('data-reset')) { st.q = ''; st.f = {}; st.fee = FEE_MAX; $('#ak-q').value = ''; st.n = PAGE; draw(); return; }
     if (t.dataset.star) {
       if (askLogin()) return;
       rememberName(t.dataset.star, t.dataset.namn);
       const on = toggleWatch(t.dataset.star, t.dataset.namn);
-      t.setAttribute('aria-pressed', String(!!on)); refreshNav('aktier'); drawChips();
-      if (st.k === 'bevakade' && !on) drawList();
+      t.setAttribute('aria-pressed', String(!!on)); refreshNav('aktier'); drawSide();
+      if (st.f.visa?.has('mina') && !on) drawList();
       toast(on ? `${t.dataset.namn} bevakas` : `${t.dataset.namn} bevakas inte längre`, '');
     }
   });
@@ -3248,6 +3301,11 @@ const ORD = {
   'Blankning': 'Att låna aktier och sälja dem för att tjäna pengar om kursen faller. Hög blankning betyder att många professionella investerare tror på ett fall. Det är en signal, inte ett facit.',
   'Insynshandel': 'Köp och försäljningar av personer i bolagets ledning och styrelse, och deras närstående. De måste anmäla affärerna till Finansinspektionen.',
   '1 år': 'Hur mycket kursen har gått upp eller ner det senaste året.',
+  '5 år': 'Hur mycket kursen har gått upp eller ner de senaste fem åren, utan utdelningar.',
+  'Svängning': 'Hur mycket kursen har rört sig upp och ner det senaste året, räknat som årlig standardavvikelse. Under 12 % är Låg, 12–20 % Medel och över 20 % Hög. Fler prickar betyder större svängningar.',
+  'Utveckling': 'Kursen det senaste året. Grön om den är högre nu än för ett år sedan.',
+  'Avgift': 'Fondens årliga förvaltningsavgift enligt Finansinspektionen. Den dras från fondens värde lite varje dag. 0,20 % betyder ungefär 20 kr per år för varje 10 000 kr.',
+  'Fondförmögenhet': 'Hur mycket pengar som finns i fonden totalt.',
   'Ticker': 'Aktiens förkortning på börsen, till exempel VOLV-B.ST för Volvo B på Stockholmsbörsen.',
   'Aktieslag': 'Många svenska bolag har A- och B-aktier. A-aktier har oftast mer rösträtt, B-aktier handlas oftast mest.',
   'ETF': 'En fond som handlas på börsen som en aktie. Den följer ofta ett index, till exempel hela Stockholmsbörsen.',

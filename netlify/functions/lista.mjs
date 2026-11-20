@@ -1,6 +1,6 @@
 import { cached, fail, ApiError } from '../lib/finnhub.mjs';
 import { yScreen, yQuotes, raw, dayChange } from '../lib/yahoo.mjs';
-import { kindOf, STABLE } from '../lib/klass.mjs';
+import { kindOf, STABLE, fundKind, fundRegion, fundBase, isUtd } from '../lib/klass.mjs';
 
 // GET /api/lista?typ=fonder              →  alla svenska fonder
 // GET /api/lista?typ=etf&m=se|us         →  ETF:er på Stockholmsbörsen, eller de största i USA
@@ -38,17 +38,47 @@ const base = (q) => {
   };
 };
 
+// Avgifter och jämförelseindex för fonder registrerade i Sverige. Fondbolagen rapporterar dem till Finansinspektionen
+// varje kvartal, och Fondinsyn publicerar dem som öppna data (CC BY 4.0). Utländska fonder som säljs i Sverige finns inte med.
+async function fiFonder() {
+  const idx = await fetch('https://www.fondinsyn.se/data/index.json', { signal: AbortSignal.timeout(5000) }).then((r) => (r.ok ? r.json() : null));
+  const q = idx?.quarters?.[0]; if (!q?.id || !/^\d{4}Q[1-4]$/.test(q.id)) return null;
+  const d = await fetch(`https://www.fondinsyn.se/data/${q.id}.json`, { signal: AbortSignal.timeout(7000) }).then((r) => (r.ok ? r.json() : null));
+  const map = new Map();
+  for (const f of d?.fundInfo || []) {
+    if (!Array.isArray(f) || !f[1]) continue;
+    const lo = Number(f[5]); const hi = Number(f[6]);
+    const k = fundBase(f[1]); if (map.has(k)) continue;
+    map.set(k, { index: typeof f[3] === 'string' ? f[3] : '', avgift: Number.isFinite(lo) && Number.isFinite(hi) && f[5] != null && f[6] != null ? [lo, hi] : null });
+  }
+  return { map, kvartal: q.id, slut: q.curr || null };
+}
+
 async function fonder() {
-  const r = await all([region('se')], { quoteType: 'MUTUALFUND', sortField: 'fundnetassets' }, 4000);
-  const seen = new Set();
-  const items = r.quotes.map((q) => ({ ...base(q), storlek: raw(q.netAssets) })).filter((a) => a.kurs && !seen.has(a.sym) && seen.add(a.sym));
-  return { typ: 'fonder', items, komplett: r.komplett };
+  const [r, fi] = await Promise.all([
+    all([region('se')], { quoteType: 'MUTUALFUND', sortField: 'fundnetassets' }, 4000),
+    fiFonder().catch((e) => { console.log('[lista] fondinsyn', String(e)); return null; })
+  ]);
+  // En rad per fond: andelsklasserna slås ihop. Klassen utan utdelning visas, annars den första.
+  const grupper = new Map();
+  for (const q of r.quotes) {
+    const a = { ...base(q), storlek: raw(q.netAssets) }; if (!a.kurs) continue;
+    const k = fundBase(a.namn); const g = grupper.get(k);
+    if (!g) grupper.set(k, { a, n: 1 });
+    else { g.n++; if (isUtd(g.a.namn) && !isUtd(a.namn)) g.a = a; }
+  }
+  const items = [...grupper.entries()].map(([k, { a, n }]) => {
+    const f = fi?.map.get(k) || null;
+    const { typ, index } = fundKind(a.namn, f?.index);
+    return { ...a, klasser: n, avgift: f?.avgift || null, ftyp: typ, index, region: fundRegion(a.namn, f?.index) };
+  });
+  return { typ: 'fonder', items, komplett: r.komplett, avgiftKalla: fi ? { kvartal: fi.kvartal, slut: fi.slut, antal: items.filter((a) => a.avgift).length } : null };
 }
 
 async function etf(m) {
   const r = await all([region(m), ...(m === 'us' ? [notOtc] : [])], { quoteType: 'ETF', sortField: 'fundnetassets' }, m === 'us' ? 1000 : 1000);
   const seen = new Set();
-  const items = r.quotes.map((q) => ({ ...base(q), storlek: raw(q.netAssets) })).filter((a) => a.kurs && !seen.has(a.sym) && seen.add(a.sym));
+  const items = r.quotes.map((q) => ({ ...base(q), storlek: raw(q.netAssets) })).filter((a) => a.kurs && !seen.has(a.sym) && seen.add(a.sym)).map((a) => ({ ...a, region: fundRegion(a.namn), ftyp: fundKind(a.namn).typ }));
   return { typ: 'etf', m, items, komplett: r.komplett };
 }
 
