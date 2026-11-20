@@ -11,7 +11,8 @@ const SECTORS = {
 };
 const MARKETS = {
   se: { regions: ['se'], pages: 2, rest: 5 },
-  nord: { regions: ['no', 'fi', 'dk'], pages: 2, rest: 4, sek: true },
+  // I Norden är det som saknar bransch nästan bara danska fonder och obligationer, så den delen hämtas inte
+  nord: { regions: ['no', 'fi', 'dk'], pages: 2, sek: true },
   us: { regions: ['us'], pages: 3, extra: [{ operator: 'gt', operands: ['intradaymarketcap', 2e9] }] }
 };
 // Certifikat, warranter, teckningsrätter, BTA och börshandlade produkter är inga aktier. Yahoo ger dem ingen bransch, så de rensas bara bland Övrigt.
@@ -46,7 +47,7 @@ async function fromScreener(m) {
     }
     return out;
   });
-  // Aktier som Yahoo inte har gett någon bransch kommer annars inte med. I Norden hämtar vi alla och lägger resten under Övrigt.
+  // Aktier som Yahoo inte har gett någon bransch kommer annars inte med. För Sverige hämtar vi alla och lägger resten under Övrigt.
   if (cfg.rest) jobs.push((async () => {
     const out = [];
     for (let page = 0; page < cfg.rest; page++) {

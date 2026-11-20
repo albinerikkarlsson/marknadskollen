@@ -15,6 +15,7 @@ const FIXED = {
   'guld': [IDX('GC=F', 'Guld', 'Råvara')], 'gold': [IDX('GC=F', 'Guld', 'Råvara')], 'olja': [IDX('CL=F', 'Olja (WTI)', 'Råvara')], 'silver': [IDX('SI=F', 'Silver', 'Råvara')],
   's&p 500': [IDX('^GSPC', 'S&P 500')], 'sp500': [IDX('^GSPC', 'S&P 500')], 'nasdaq': [IDX('^IXIC', 'Nasdaq Composite')], 'dow jones': [IDX('^DJI', 'Dow Jones')]
 };
+const NORDIC = new Set(['CO', 'OL', 'HE']);
 // Små tyska och andra andrahandslistor av samma bolag döljs när huvudlistan finns
 const MINOR = new Set(['F', 'DE', 'MU', 'SG', 'HM', 'IL', 'MI', 'BE', 'DU', 'HA', 'XD', 'XC', 'SW', 'VI', 'BO', 'NS', 'JK', 'MX', 'SA', 'BA', 'IR', 'AS', 'PA', 'MC', 'LS', 'WA', 'PR', 'TA', 'KS', 'TW', 'SS', 'SZ', 'HK', 'T', 'KL', 'BK', 'SI', 'AX', 'NZ', 'TO', 'V', 'NE', 'CN', 'JO', 'IS', 'AT', 'BD', 'SR', 'QA', 'CA']);
 
@@ -80,7 +81,7 @@ async function fromLists(req, q) {
     else if (n === want) score = 1;
     else if (n.startsWith(want)) score = 2;
     else if (words.every((w) => n.split(' ').some((x) => x.startsWith(w)))) score = 3;
-    else if (want.length >= 4 && n.includes(want)) score = 4;
+    else if (want.length >= 5 && n.includes(want)) score = 4;
     if (score != null) hits.push([score, a]);
   }
   return hits.sort((x, y) => x[0] - y[0] || (y[1].mcapSek ?? y[1].mcap ?? 0) - (x[1].mcapSek ?? x[1].mcap ?? 0)).slice(0, 8).map(([, a]) => {
@@ -105,7 +106,9 @@ export function order(list, raw, klass) {
   const want = norm(raw.replace(/\s+(ser\.?\s*)?[abcd](-?aktien?)?$/i, ''));
   // Bolag vars namn är precis det man skrev (t.ex. "AB Volvo" för "volvo") går före liknande namn
   const base = (r) => r.sym.split('.')[0].replace(/-[A-D]$/, '');
-  const rank = (r) => (r.borsen === 'IDX' ? -100 : 0) + (r.borsen === 'ST' && base(r) === exact ? -25 : 0) + (r.sym === exact || r.sym.split('.')[0] === exact ? -20 : 0) + (norm(r.namn) === want ? -1 : 0) + (r.borsen === 'ST' ? 0 : r.borsen === 'US' ? 1 : r.borsen === 'OTC' ? 3 : 2) * 3;
+  // Oslo, Helsingfors och Köpenhamn räknas som huvudlistor, precis som USA
+  const tier = (b) => (b === 'ST' ? 0 : b === 'US' || NORDIC.has(b) ? 1 : b === 'OTC' ? 3 : 2);
+  const rank = (r) => (r.borsen === 'IDX' ? -100 : 0) + (r.borsen === 'ST' && base(r) === exact ? -25 : 0) + (r.sym === exact || r.sym.split('.')[0] === exact || base(r) === exact ? -20 : 0) + (norm(r.namn) === want ? -1 : 0) + tier(r.borsen) * 3;
   const cls = (r) => (!r.klass ? 0 : klass ? (r.klass === klass ? 0 : 2) : r.klass === 'B' ? 0 : r.klass === 'A' ? 1 : 2);
   const seen = new Set();
   return list
