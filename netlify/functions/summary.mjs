@@ -11,6 +11,7 @@ export default async (req) => {
   try {
     const p = new URL(req.url).searchParams;
     if (p.get('syms')) return await weekSummary(p);
+    if (p.get('dagens')) return await dagens(req, p);
     const sym = cleanSymbol(p.get('s'));
     if (!sym) throw new ApiError(400, 'ogiltig ticker');
     const namn = (p.get('namn') || sym).slice(0, 80);
@@ -74,6 +75,36 @@ async function weekSummary(p) {
   const punkter = parsePoints(text);
   if (!punkter.length) return cached({ saknas: 'no_ai_answer' }, 600);
   return cached({ punkter, antalNyheter: rows.length, hamtad: new Date().toISOString() }, 6 * 3600);
+}
+
+// GET /api/summary?dagens=1  →  dagens tre viktigaste nyheter för svenska sparare, med varför de spelar roll
+// Bygger på rubrikerna från nyhetsflödena och bolagens meddelanden. Hänvisningarna pekar på källorna.
+async function dagens(req, p) {
+  const en = p.get('lang') === 'en';
+  const key = Netlify.env.get('ANTHROPIC_API_KEY');
+  if (!key) return cached({ saknas: 'no_ai_key' }, 300);
+  const origin = new URL(req.url).origin;
+  const get = (u) => fetch(origin + u, { signal: AbortSignal.timeout(7000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const [se, world, md] = await Promise.all([get('/api/news?region=se'), get('/api/news?region=world'), get('/api/meddelanden?sprak=sv')]);
+  const since = Date.now() - 36 * 3600e3;
+  const fresh = (iso) => iso && new Date(iso).getTime() >= since;
+  const src = [];
+  for (const n of (se?.items || []).filter((x) => fresh(x.datum)).slice(0, 10)) src.push({ typ: 'nyhet', rubrik: n.rubrik, kalla: n.kalla, lank: n.lank, tid: n.datum, bolag: n.bolag || [] });
+  for (const n of (md?.items || []).filter((x) => fresh(x.tid) && /rapport|report|interim|bokslut|quarter|insider|vinstvarning|profit warning/i.test(x.kategori || '')).slice(0, 14)) src.push({ typ: 'meddelande', rubrik: n.rubrik, kalla: n.bolag, lank: n.lank, tid: n.tid, bolagNamn: n.bolag });
+  for (const n of (world?.items || []).filter((x) => fresh(x.datum)).slice(0, 10)) src.push({ typ: 'varlden', rubrik: n.rubrik, kalla: n.kalla, lank: n.lank, tid: n.datum, bolag: n.bolag || [] });
+  if (src.length < 3) return cached({ saknas: 'no_news' }, 900);
+  const lista = src.map((x, i) => `${i + 1}. [${x.typ === 'meddelande' ? 'Bolagsmeddelande från ' + x.kalla : x.typ === 'varlden' ? 'Världen, ' + x.kalla : 'Sverige, ' + x.kalla}] ${x.rubrik}`).join('\n');
+  const prompt = `Här är rubrikerna från det senaste dygnet: nyheter om svenska bolag, meddelanden från bolag på Stockholmsbörsen och nyheter från världens börser.\n\n${lista}\n\nVälj de tre som betyder mest för en svensk privatperson som sparar i aktier och fonder. ${en ? 'Svara på enkel ENGELSKA.' : 'Svara på enkel svenska.'} För varje: en kort rubrik på högst tio ord som säger vad som hände, och en mening om varför det spelar roll, alltså vilka bolag, branscher eller sparare som berörs. Regler:\n- Bara det som står i rubrikerna, inga egna fakta och inga siffror som inte står där.\n- Inga råd om att köpa eller sälja och inga gissningar om vart kursen går.\n- Neutral ton. Använd aldrig ordet "säkert".\nSvara endast med JSON: {"punkter": [{"rubrik": "...", "varfor": "...", "kallor": [nummer]}]}`;
+  const body = await askAI(key, prompt);
+  const text = (body?.content || []).filter((c) => c.type === 'text').map((c) => c.text || '').join('').trim();
+  let punkter = [];
+  try { const t = text.replace(/```(?:json)?/gi, ''); const j = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)); punkter = (j.punkter || []).slice(0, 3); } catch { punkter = []; }
+  punkter = punkter.map((x) => {
+    const k = (Array.isArray(x.kallor) ? x.kallor : []).map((n) => src[Number(n) - 1]).filter(Boolean).slice(0, 3);
+    return { rubrik: String(x.rubrik || '').trim(), varfor: String(x.varfor || '').trim(), kallor: k.map((y) => ({ rubrik: y.rubrik, kalla: y.kalla, lank: y.lank, tid: y.tid, bolag: y.bolag || [], bolagNamn: y.bolagNamn || null })) };
+  }).filter((x) => x.rubrik && x.varfor && x.kallor.length && !/säkert/i.test(x.rubrik + x.varfor));
+  if (!punkter.length) return cached({ saknas: 'no_ai_answer' }, 600);
+  return cached({ punkter, antal: src.length, hamtad: new Date().toISOString() }, 3600);
 }
 
 // Svaret ska vara JSON, men om modellen skriver en vanlig punktlista tar vi den i stället

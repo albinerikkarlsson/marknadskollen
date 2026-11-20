@@ -1,3 +1,4 @@
+import { kindOf } from '../lib/klass.mjs';
 import { finnhub, cached, fail } from '../lib/finnhub.mjs';
 import { ySearch } from '../lib/yahoo.mjs';
 
@@ -22,6 +23,8 @@ const MINOR = new Set(['F', 'DE', 'MU', 'SG', 'HM', 'IL', 'MI', 'BE', 'DU', 'HA'
 export default async (req) => {
   try {
     const raw = (new URL(req.url).searchParams.get('q') || '').trim().slice(0, 40);
+    // typ: bara en sorts värdepapper (aktie, fond, etf, etp, krypto)
+    const typ = TYPER.has(new URL(req.url).searchParams.get('typ')) ? new URL(req.url).searchParams.get('typ') : null;
     const { q, klass } = splitClass(raw);
     if (q.length < 2) return cached({ results: [] }, 3600);
     const key = q.toLowerCase().replace(/\s+/g, ' ');
@@ -33,9 +36,10 @@ export default async (req) => {
     if (plain !== look && !results.some((x) => x.borsen === 'ST')) results = [...results, ...((await fromYahoo(plain).catch(() => null)) || [])];
     const main = results.filter((x) => !MINOR.has(x.borsen));
     // Våra egna listor hittar mindre bolag som Yahoos sökning missar, och fulla svenska bolagsnamn
-    const own = await fromLists(req, q).catch((e) => { console.warn('[search] listor:', e?.message); return []; });
+    const own = await fromLists(req, q, typ).catch((e) => { console.warn('[search] listor:', e?.message); return []; });
     results = [...(FIXED[key] || []), ...own, ...(main.length ? main : results)];
-    return cached({ results: order(results, ALIAS[key] ? look : raw, klass).slice(0, 12) }, 86400);
+    if (typ) results = results.filter((r) => typOf(r) === typ);
+    return cached({ results: order(results, ALIAS[key] ? look : raw, klass).slice(0, typ ? 20 : 12) }, 86400);
   } catch (e) { return fail(e); }
 };
 
@@ -50,32 +54,40 @@ const classOf = (sym) => { const m = String(sym).match(/-([A-D])(\.[A-Z]+)?$/); 
 async function fromYahoo(q) {
   const d = await ySearch(q, { quotes: 20 });
   return (d?.quotes || [])
-    .filter((r) => r?.symbol && (r.longname || r.shortname) && ['EQUITY', 'ETF', 'MUTUALFUND'].includes(r.quoteType))
+    // Krypto bara i dollar (BTC-USD), samma valuta som i kryptolistan
+    .filter((r) => r?.symbol && (r.longname || r.shortname) && (['EQUITY', 'ETF', 'MUTUALFUND'].includes(r.quoteType) || (r.quoteType === 'CRYPTOCURRENCY' && /-USD$/i.test(r.symbol))))
     .map((r) => {
       const sym = r.symbol.toUpperCase();
-      const k = sym.includes('.') ? classOf(sym) : null;
+      const krypto = r.quoteType === 'CRYPTOCURRENCY';
+      const k = sym.includes('.') && !krypto ? classOf(sym) : null;
+      const slag = r.quoteType === 'MUTUALFUND' || krypto ? null : kindOf(sym, r.longname || r.shortname);
+      const typ = krypto ? 'Krypto' : slag === 'etp' ? 'ETP' : slag === 'havstang' ? 'Certifikat' : k ? `${k}-aktie` : TYP[r.quoteType] || r.typeDisp || '';
       return {
         sym,
-        namn: tidy(r.longname || r.shortname),
-        typ: (k ? `${k}-aktie` : TYP[r.quoteType] || r.typeDisp || '') + (OTC.has(r.exchange) ? ' · OTC i USA' : ''),
+        namn: krypto ? tidy(r.shortname || r.longname).replace(/\s+USD$/i, '') : tidy(r.longname || r.shortname),
+        typ: typ + (OTC.has(r.exchange) ? ' · OTC i USA' : ''),
         klass: k,
-        borsen: OTC.has(r.exchange) ? 'OTC' : sym.includes('.') ? sym.split('.').pop() : 'US',
-        lista: r.exchDisp || null
+        borsen: krypto ? 'KRYPTO' : OTC.has(r.exchange) ? 'OTC' : sym.includes('.') ? sym.split('.').pop() : 'US',
+        lista: krypto ? 'Krypto' : r.exchDisp || null
       };
     });
 }
 
-// Sökning i listorna på /api/aktier (Sverige, Norden och USA). De är cachade, så det går fort.
+// Sökning i våra egna listor: aktier i Sverige, Norden och USA, fonder, ETF:er, ETP:er och krypto. De är cachade, så det går fort.
+const LISTOR = [['aktier?m=se', 'aktie'], ['aktier?m=nord', 'aktie'], ['aktier?m=us', 'aktie'], ['lista?typ=fonder', 'fond'], ['lista?typ=etf&m=se', 'etf'], ['lista?typ=etf&m=us', 'etf'], ['lista?typ=etp', 'etp'], ['lista?typ=krypto', 'krypto']];
 const plainName = (n) => String(n).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\(publ\.?\)|\b(ab|aktiebolag|asa|oyj|abp|a\/s|inc|corp|plc|ltd|the)\b|[.,()&-]/g, ' ').replace(/\s+/g, ' ').trim();
-async function fromLists(req, q) {
+const TYPER = new Set(['aktie', 'fond', 'etf', 'etp', 'krypto']);
+// Vilken sort ett sökresultat är, utifrån typtexten
+export const typOf = (r) => { const t = String(r.typ || ''); return /Krypto/.test(t) ? 'krypto' : /^Fond/.test(t) ? 'fond' : /^ETF/.test(t) ? 'etf' : /^(ETP|Certifikat)/.test(t) ? 'etp' : /^Index/.test(t) ? 'index' : 'aktie'; };
+async function fromLists(req, q, typ = null) {
   const want = plainName(q); const tick = q.toUpperCase().replace(/\s+/g, '');
   if (want.length < 2) return [];
   const origin = new URL(req.url).origin;
-  const lists = await Promise.all(['se', 'nord', 'us'].map((m) => fetch(`${origin}/api/aktier?m=${m}`, { signal: AbortSignal.timeout(3500) }).then((r) => (r.ok ? r.json() : (console.warn('[search] lista', m, r.status), null))).catch((e) => { console.warn('[search] lista', m, e?.message); return null; })));
+  const lists = await Promise.all(LISTOR.filter(([, slag]) => !typ || slag === typ).map(([u, slag]) => fetch(`${origin}/api/${u}`, { signal: AbortSignal.timeout(3500) }).then((r) => (r.ok ? r.json() : (console.warn('[search] lista', u, r.status), null))).then((d) => (d ? (d.aktier || d.items || []).map((a) => ({ ...a, _slag: a.slag || slag })) : [])).catch((e) => { console.warn('[search] lista', u, e?.message); return []; })));
   const words = want.split(' ');
   const hits = [];
-  for (const a of lists.flatMap((l) => l?.aktier || [])) {
-    const n = plainName(a.namn); const base = a.sym.split('.')[0];
+  for (const a of lists.flat()) {
+    const n = plainName(a.namn); const base = a._slag === 'krypto' ? a.kod || a.sym.replace(/-USD$/, '') : a.sym.split('.')[0];
     let score = null;
     if (base === tick || base.replace(/-[A-D]$/, '') === tick) score = 0;
     else if (n === want) score = 1;
@@ -84,9 +96,12 @@ async function fromLists(req, q) {
     else if (want.length >= 5 && n.includes(want)) score = 4;
     if (score != null) hits.push([score, a]);
   }
-  return hits.sort((x, y) => x[0] - y[0] || (y[1].mcapSek ?? y[1].mcap ?? 0) - (x[1].mcapSek ?? x[1].mcap ?? 0)).slice(0, 8).map(([, a]) => {
-    const k = a.sym.includes('.') ? classOf(a.sym) : null;
-    return { sym: a.sym, namn: tidy(a.namn), typ: k ? `${k}-aktie` : 'Aktie', klass: k, borsen: a.sym.includes('.') ? a.sym.split('.').pop() : 'US', lista: a.lista || null };
+  const size = (a) => a.mcapSek ?? a.mcap ?? a.storlek ?? 0;
+  const TYPNAMN = { fond: 'Fond', etf: 'ETF', etp: 'ETP', havstang: 'Certifikat', krypto: 'Krypto' };
+  return hits.sort((x, y) => x[0] - y[0] || size(y[1]) - size(x[1])).slice(0, typ ? 20 : 8).map(([, a]) => {
+    const krypto = a._slag === 'krypto';
+    const k = a._slag === 'aktie' && a.sym.includes('.') ? classOf(a.sym) : null;
+    return { sym: a.sym, namn: tidy(a.namn), typ: k ? `${k}-aktie` : TYPNAMN[a._slag] || 'Aktie', klass: k, borsen: krypto ? 'KRYPTO' : a.sym.includes('.') ? a.sym.split('.').pop() : 'US', lista: a.lista || null };
   });
 }
 
@@ -107,7 +122,7 @@ export function order(list, raw, klass) {
   // Bolag vars namn är precis det man skrev (t.ex. "AB Volvo" för "volvo") går före liknande namn
   const base = (r) => r.sym.split('.')[0].replace(/-[A-D]$/, '');
   // Oslo, Helsingfors och Köpenhamn räknas som huvudlistor, precis som USA
-  const tier = (b) => (b === 'ST' ? 0 : b === 'US' || NORDIC.has(b) ? 1 : b === 'OTC' ? 3 : 2);
+  const tier = (b) => (b === 'ST' ? 0 : b === 'US' || b === 'KRYPTO' || NORDIC.has(b) ? 1 : b === 'OTC' ? 3 : 2);
   const rank = (r) => (r.borsen === 'IDX' ? -100 : 0) + (r.borsen === 'ST' && base(r) === exact ? -25 : 0) + (r.sym === exact || r.sym.split('.')[0] === exact || base(r) === exact ? -20 : 0) + (norm(r.namn) === want ? -1 : 0) + tier(r.borsen) * 3;
   const cls = (r) => (!r.klass ? 0 : klass ? (r.klass === klass ? 0 : 2) : r.klass === 'B' ? 0 : r.klass === 'A' ? 1 : 2);
   const seen = new Set();

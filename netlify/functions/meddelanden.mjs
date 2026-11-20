@@ -1,11 +1,13 @@
 import { cached, fail, ApiError } from '../lib/finnhub.mjs';
 import { normName, nameMatch } from '../lib/fi.mjs';
+import { yChart } from '../lib/yahoo.mjs';
 
 // GET /api/meddelanden?sprak=sv            →  de senaste bolagsmeddelandena från bolag på Stockholmsbörsen och First North
 // GET /api/meddelanden?namn=AB Volvo&sprak=sv  →  ett bolags meddelanden det senaste året
 // Källa: Nasdaq Nordics meddelandetjänst. Bolagen måste offentliggöra meddelandena, vi visar rubrik, kategori och länk.
 const BASE = 'https://api.news.eu.nasdaq.com/news/query.action';
 const SE_MARKET = /stockholm|sweden|sverige/i;
+const NORD_MARKET = /copenhagen|denmark|danmark|helsinki|finland/i;
 
 async function query(params, sprak = 'sv', timeoutMs = 8000) {
   const p = new URLSearchParams({
@@ -88,6 +90,7 @@ export default async (req) => {
     const q = new URL(req.url).searchParams;
     const sprak = q.get('sprak') === 'en' ? 'en' : 'sv';
     const namn = (q.get('namn') || '').trim().slice(0, 80);
+    if (q.get('gissa')) return cached(await quiz(sprak), 6 * 3600);
     if (namn) {
       const want = normName(namn);
       if (!want) throw new ApiError(400, 'namn saknas');
@@ -103,10 +106,44 @@ export default async (req) => {
     const pages = await Promise.all([0, 50, 100].map((start) => query({ start: String(start) }, sprak).catch((e) => (start ? [] : Promise.reject(e)))));
     const all = pages.flat();
     // Riksbankens och Riksgäldens certifikat är inga bolag, de visas inte
-    const se = all.filter((it) => SE_MARKET.test(String(it.market || '')) && !/riksbank|riksgälden/i.test(String(it.company || '')));
-    const items = pick(se.length ? se : all, sprak);
-    return cached({ kalla: 'Nasdaq Nordic', items: items.slice(0, 80), hamtad: new Date().toISOString() }, 300);
+    const nord = q.get('marknad') === 'nord';
+    const se = all.filter((it) => (nord ? NORD_MARKET : SE_MARKET).test(String(it.market || '')) && !/riksbank|riksgälden/i.test(String(it.company || '')));
+    const items = pick(se.length || nord ? se : all, sprak);
+    return cached({ kalla: 'Nasdaq Nordic', marknad: nord ? 'nord' : 'se', items: items.slice(0, 80), hamtad: new Date().toISOString() }, 300);
   } catch (e) { return fail(e); }
 };
+
+/* ---------- Gissa reaktionen ---------- */
+// Rapporter och insiderinformation från några stora bolag de senaste månaderna, med hur aktien rörde sig.
+// Rörelsen räknas som på bolagssidan: stängningen före meddelandet mot första stängningen efter.
+const QUIZ = [['VOLV-B.ST', 'Volvo, AB'], ['SAAB-B.ST', 'SAAB AB'], ['ERIC-B.ST', 'Ericsson, Telefonab. L M'], ['HM-B.ST', 'Hennes & Mauritz AB, H & M'], ['INVE-B.ST', 'Investor AB'], ['ATCO-A.ST', 'Atlas Copco AB'], ['EVO.ST', 'Evolution AB'], ['SAND.ST', 'Sandvik Aktiebolag'], ['ABB.ST', 'ABB Ltd'], ['ESSITY-B.ST', 'Essity Aktiebolag (publ)']];
+const QUIZ_CAT = /rapport|report|interim|bokslut|year-end|quarter|kvartal|insider/i;
+const stoDay = (ms) => { const p = Object.fromEntries(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Stockholm', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ms)).map((x) => [x.type, x.value])); return { day: `${p.year}-${p.month}-${p.day}`, min: Number(p.hour) * 60 + Number(p.minute) }; };
+export function reaction(P, I, iso) {
+  if (!P?.length || !iso) return null;
+  const a = stoDay(new Date(iso).getTime()); const days = P.map((p) => stoDay(p[0] * 1000).day);
+  let b = -1; for (let i = 0; i < P.length; i++) { if (days[i] < a.day || (days[i] === a.day && a.min >= 17 * 60 + 30)) b = i; else break; }
+  if (b < 0 || b + 1 >= P.length) return null;
+  const today = stoDay(Date.now()); if (days[b + 1] === today.day && today.min < 17 * 60 + 30) return null;
+  const pct = (P[b + 1][1] / P[b][1] - 1) * 100;
+  let idx = null; if (I?.length) { const im = new Map(I.map((p) => [stoDay(p[0] * 1000).day, p[1]])); const i0 = im.get(days[b]); const i1 = im.get(days[b + 1]); if (i0 && i1) idx = (i1 / i0 - 1) * 100; }
+  return { pct: Math.round(pct * 100) / 100, idx: idx == null ? null : Math.round(idx * 100) / 100, fore: days[b], efter: days[b + 1] };
+}
+async function quiz(sprak) {
+  const since = Date.now() - 120 * 864e5;
+  const idx = await yChart('^OMX', '6mo', '1d').catch(() => null);
+  const per = await Promise.all(QUIZ.map(async ([sym, namn]) => {
+    const exact = await findCompany(namn, sprak).catch(() => null); if (!exact) return [];
+    const [p0, p1, c] = await Promise.all([query({ company: exact }, sprak).catch(() => []), query({ company: exact, start: '50' }, sprak).catch(() => []), yChart(sym, '6mo', '1d').catch(() => null)]);
+    const own = [...p0, ...p1];
+    const items = pick(own.filter((it) => it.company === exact), sprak).filter((x) => QUIZ_CAT.test(x.kategori) && new Date(x.tid).getTime() >= since);
+    const seen = new Set();
+    const out = items.filter((x) => (seen.has(x.rubrik) ? false : seen.add(x.rubrik))).map((x) => ({ ...x, sym, r: reaction(c?.points, idx?.points, x.tid) })).filter((x) => x.r);
+    return out.map((x) => ({ id: x.id, sym, bolag: x.bolag, rubrik: x.rubrik, kategori: x.kategori, tid: x.tid, lank: x.lank, pct: x.r.pct, idx: x.r.idx, fore: x.r.fore, efter: x.r.efter, tidigare: out.filter((y) => y.id !== x.id && QUIZ_CAT.test(y.kategori)).map((y) => ({ tid: y.tid, rubrik: y.rubrik, pct: y.r.pct })).slice(0, 4) }));
+  }));
+  // Bara meddelanden där aktien rörde sig minst en halv procent, annars blir det en gissning på brus
+  const items = per.flat().filter((x) => Math.abs(x.pct) >= 0.5).sort((a, z) => z.tid.localeCompare(a.tid));
+  return { kalla: 'Nasdaq Nordic och Yahoo Finance', items: items.slice(0, 24), hamtad: new Date().toISOString() };
+}
 
 export const config = { path: '/api/meddelanden' };

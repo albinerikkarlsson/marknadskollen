@@ -201,12 +201,34 @@ export function newsFromSearch(d, sym, keyword = '') {
 
 /* ---------- Aktiefilter (screener) ---------- */
 // Hämtar upp till 250 värdepapper per anrop som matchar ett filter, t.ex. alla svenska aktier i en bransch.
-export async function yScreen(operands, { size = 250, offset = 0, sortField = 'intradaymarketcap' } = {}) {
+// quoteType kan vara EQUITY, ETF, MUTUALFUND eller CRYPTOCURRENCY.
+export async function yScreen(operands, { size = 250, offset = 0, sortField = 'intradaymarketcap', quoteType = 'EQUITY' } = {}) {
   const d = await yahoo('/v1/finance/screener', { formatted: 'false', lang: 'en-US', region: 'US', corsDomain: 'finance.yahoo.com' }, {
     withCrumb: true, timeoutMs: 9000,
-    body: { offset, size, sortField, sortType: 'DESC', quoteType: 'EQUITY', query: { operator: 'AND', operands }, userId: '', userIdType: 'guid' }
+    body: { offset, size, sortField, sortType: 'DESC', quoteType, query: { operator: 'AND', operands }, userId: '', userIdType: 'guid' }
   });
   const r = d?.finance?.result?.[0];
   if (!r) throw new ApiError(502, 'Yahoo gav inget filterresultat: ' + JSON.stringify(d?.finance?.error || d).slice(0, 160));
   return { total: r.total ?? (r.quotes || []).length, quotes: r.quotes || [] };
+}
+
+/* ---------- Kursen för ett år sedan ---------- */
+// Samma regel som "1 år" på bolagssidan (perfFromChart): dagliga stängningskurser för ett år,
+// sista stängningen på eller före dagen för 365 dagar sedan. Finns den inte tas första kursen om den är minst 360 dagar gammal.
+export function yearAgoClose(points) {
+  if (!points?.length) return null;
+  const lastT = points[points.length - 1][0]; const lim = lastT - 365 * 86400;
+  let v = null; for (const [t, c] of points) { if (t <= lim) v = c; else break; }
+  if (v == null && points[0][0] <= lastT - 360 * 86400) v = points[0][1];
+  return v;
+}
+// Yahoo tar högst 20 tickers per anrop
+export async function ySpark(syms) {
+  const d = await yahoo('/v8/finance/spark', { symbols: syms.join(','), range: '1y', interval: '1d' }, { timeoutMs: 8000 });
+  const out = {};
+  for (const s of syms) {
+    const x = d?.[s]; if (!x?.timestamp || !x?.close) continue;
+    out[s] = x.timestamp.map((t, i) => [t, x.close[i]]).filter((p) => Number.isFinite(p[1]));
+  }
+  return out;
 }

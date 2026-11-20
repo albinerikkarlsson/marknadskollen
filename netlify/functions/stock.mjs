@@ -1,4 +1,5 @@
 import { finnhub, cached, fail, cleanSymbol, num, quoteOrNull, ApiError } from '../lib/finnhub.mjs';
+import { kindOf } from '../lib/klass.mjs';
 import { ySummary, yChart, metricFromSummary, perfFromChart, raw } from '../lib/yahoo.mjs';
 import { buildFactors, perfFromMetric, riskScore, summarize, thinkAbout, money, blankFactor } from '../lib/risk.mjs';
 import { loadBlankning, findBlank } from '../lib/fi.mjs';
@@ -70,7 +71,8 @@ async function fromYahoo(sym) {
   const nyckeltal = s && (price.quoteType || 'EQUITY') === 'EQUITY' ? keyFigures(s, cur) : [];
   return {
     sym, namn, kalla: 'Yahoo Finance', nyckeltal,
-    typ: TYP[typ] || null,
+    // ETP:er och certifikat kallar Yahoo ETF eller aktie. Namnet avgör.
+    typ: (typ === 'ETF' || typ === 'EQUITY') && kindOf(sym, namn) === 'etp' ? 'ETP' : typ === 'EQUITY' && kindOf(sym, namn) === 'havstang' ? 'Certifikat' : TYP[typ] || null,
     kort: sym.replace('^', '').split('.')[0].split('-')[0].slice(0, 4),
     lista: [bors, sektor].filter(Boolean).join(' · '),
     logo: fp?.logo || null,
@@ -201,7 +203,7 @@ function keyFigures(s, cur) {
   ];
 }
 const fmt = (n) => n.toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const TYP = { EQUITY: 'Aktie', ETF: 'ETF', MUTUALFUND: 'Fond', INDEX: 'Index' };
+const TYP = { EQUITY: 'Aktie', ETF: 'ETF', MUTUALFUND: 'Fond', INDEX: 'Index', CRYPTOCURRENCY: 'Krypto' };
 const SECTOR_SV = {
   // Yahoo
   'Technology': 'Teknik', 'Industrials': 'Industri', 'Financial Services': 'Finans', 'Healthcare': 'Hälsovård',

@@ -252,7 +252,7 @@ const NAV = [
   ] },
   { group: 'Börsen', items: [
     { id: 'sok', href: '/sok', label: 'Bolag', icon: 'search' },
-    { id: 'aktier', href: '/aktier', label: 'Alla aktier', icon: 'list' },
+    { id: 'aktier', href: '/aktier', label: 'Utforska', icon: 'list' },
     { id: 'jamfor', href: '/jamfor', label: 'Jämför', icon: 'compare' },
     { id: 'bevakning', href: '/bevakning', label: 'Bevakning', icon: 'star', badge: true }
   ] },
@@ -1224,63 +1224,112 @@ function viewSok(params) {
   return `
   ${topbar([['Översikt', '/oversikt'], ['Bolag', '/sok']], false)}
   <div class="stack" style="gap:6px">
-    <span class="eyebrow">Sök på en aktie, fond eller ETF. Du får affärsidé, historia, kursutveckling och en full riskkoll på samma sida.</span>
-    <h1 class="title">Bolag</h1>
+    <span class="eyebrow">Aktier, fonder, ETF:er, ETP:er och krypto. Samma riskkoll för allt.</span>
+    <h1 class="title">Sök bland allt du kan spara i</h1>
   </div>
   <form class="big-search" role="search" data-sokform>
     ${svg('search', 22, '#6B6F76')}
-    <label class="sr-only" for="sokq">Sök bolag eller ticker</label>
-    <input id="sokq" name="q" type="search" value="${esc(q)}" placeholder="Skriv ett bolag eller en ticker, till exempel Volvo, Apple eller NVDA" autocomplete="off">
+    <label class="sr-only" for="sokq">Sök aktie, fond, ETF eller krypto</label>
+    <input id="sokq" name="q" type="search" value="${esc(q)}" placeholder="Skriv ett namn eller en ticker, till exempel Volvo, Avanza Global eller Bitcoin" autocomplete="off">
     <button class="btn" type="submit">Sök</button>
   </form>
-  <section class="stack" style="gap:12px" aria-live="polite">
-    <span class="label-up" id="results-label">Populära</span>
-    <div class="results-grid" id="results"></div>
+  <div class="chips sok-typ" role="group" aria-label="Typ av värdepapper">${SOK_TYP.map(([k, t]) => `<button type="button" class="chip-btn" data-styp="${k}" aria-pressed="${k === 'alla'}">${esc(t)}</button>`).join('')}</div>
+  <section class="stack" style="gap:12px" aria-live="polite" id="sok-res" hidden>
+    <span class="label-up" id="results-label"></span>
+    <div id="results"></div>
   </section>
+  <div id="sok-upptack">${loading('Hämtar …')}</div>
   ${footer()}`;
 }
+const SOK_TYP = [['alla', 'Alla'], ['aktie', 'Aktier'], ['fond', 'Fonder'], ['etf', 'ETF'], ['etp', 'ETP och certifikat'], ['krypto', 'Krypto']];
+const SOK_GRUPP = { aktie: 'Aktier', fond: 'Fonder', etf: 'ETF', etp: 'ETP och certifikat', krypto: 'Krypto', index: 'Index' };
+const typOfRes = (r) => { const t = String(r.typ || ''); return /Krypto/.test(t) ? 'krypto' : /^Fond/.test(t) ? 'fond' : /^ETF/.test(t) ? 'etf' : /^(ETP|Certifikat)/.test(t) ? 'etp' : /^Index/.test(t) ? 'index' : 'aktie'; };
 
-function resultsHTML(list) {
-  return list.map((r) => `
-    <a class="result tilt" href="/bolag/${encodeURIComponent(r.sym)}" data-link data-namn="${esc(r.klass ? `${r.namn}, ${r.typ}` : r.namn)}" data-sym="${esc(r.sym)}">
+// Senast besökta sidor, bara i den här webbläsaren
+const SENKEY = 'mk-senast';
+const getSenast = () => { try { const v = JSON.parse(localStorage.getItem(SENKEY)); return Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 8) : []; } catch { return []; } };
+const pushSenast = (sym) => { try { localStorage.setItem(SENKEY, JSON.stringify([sym, ...getSenast().filter((x) => x !== sym)].slice(0, 8))); } catch { /* privat läge */ } };
+
+function resultsHTML(list, q) {
+  return list.map((r) => {
+    const x = q?.[r.sym];
+    return `<a class="result tilt" href="/bolag/${encodeURIComponent(r.sym)}" data-link data-namn="${esc(r.klass ? `${r.namn}, ${r.typ}` : r.namn)}" data-sym="${esc(r.sym)}">
       ${av(r.sym)}
       <span style="flex:1;min-width:0"><span style="display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.namn)}</span><span class="small muted">${esc([r.typ, r.sym].filter(Boolean).join(' · '))}</span></span>
-      <span class="muted" aria-hidden="true">→</span>
-    </a>`).join('');
+      ${x?.kurs != null ? `<span class="r" style="flex:none;text-align:right"><span class="num small" style="display:block">${esc(kr(x.kurs))} ${esc(cur(x.valuta))}</span><span class="pill ${tone(x.d1)} small">${x.d1 != null ? esc(pct(x.d1, 1)) : '–'}</span></span>` : '<span class="muted" aria-hidden="true">→</span>'}
+    </a>`;
+  }).join('');
+}
+
+// Upptäck: alla tillgångsslag med antal, störst rörelse i dag, största bolagen och det man tittade på senast
+async function sokUpptack() {
+  const box = $('#sok-upptack'); if (!box) return;
+  const L = (u) => api(u, 10 * 60e3).then((d) => (d && !d.error ? d.aktier || d.items || [] : null)).catch(() => null);
+  const [se, nord, us, fonder, etfSe, etfUs, etp, krypto] = await Promise.all(['/api/aktier?m=se', '/api/aktier?m=nord', '/api/aktier?m=us', '/api/lista?typ=fonder', '/api/lista?typ=etf&m=se', '/api/lista?typ=etf&m=us', '/api/lista?typ=etp', '/api/lista?typ=krypto'].map(L));
+  if (!$('#sok-upptack')) return;
+  const n = (a) => (a ? a.length.toLocaleString(L) : '–');
+  const ex = (a, k = 3) => (a ? a.slice().sort((x, y) => (y.mcapSek ?? y.mcap ?? y.storlek ?? 0) - (x.mcapSek ?? x.mcap ?? x.storlek ?? 0)).slice(0, k).map((x) => x.namn.replace(/\s*\(publ\.?\)/i, '').replace(/,?\s*(ser\.?\s*)?[AB](-aktie)?$/i, '')).join(', ') + ' …' : '');
+  const tile = (t, href, cnt, d, e) => `<a class="card up-tile" href="${href}" data-link><span class="up-h"><b>${esc(t)}</b><span class="or" aria-hidden="true">→</span></span><span class="small muted">${esc(d)}</span><span class="num up-n">${cnt}</span><span class="small faint">${esc(e)}</span></a>`;
+  const etf = etfSe || etfUs ? [...(etfSe || []), ...(etfUs || [])] : null;
+  const tiles = [
+    tile('Svenska aktier', '/aktier', n(se), 'Stockholmsbörsen och First North', ex(se)),
+    tile('Nordiska aktier', '/aktier?m=nord', n(nord), 'Oslo, Helsingfors och Köpenhamn', ex(nord)),
+    tile('Amerikanska aktier', '/aktier?m=us', n(us), 'Bolag över 2 miljarder dollar', ex(us)),
+    tile('Fonder', '/aktier?typ=fonder', n(fonder), 'Fonder som handlas i Sverige', ex(fonder)),
+    tile('ETF och ETP', '/aktier?typ=etf', etf || etp ? ((etf?.length || 0) + (etp?.length || 0)).toLocaleString(L) : '–', 'Börshandlade fonder och produkter', ex(etfSe, 2)),
+    tile('Krypto', '/aktier?typ=krypto', n(krypto), 'De största kryptovalutorna, i kronor', ex(krypto))
+  ].join('');
+  // Störst rörelse: bolag på minst en miljard och kryptovalutor som inte är stablecoins
+  const movers = [...(se || []).filter((a) => (a.mcap || 0) >= 1e9).map((a) => ({ ...a, t: 'Aktie' })), ...(krypto || []).filter((a) => !a.stable).map((a) => ({ ...a, t: 'Krypto' }))].filter((a) => a.d1 != null).sort((a, b) => Math.abs(b.d1) - Math.abs(a.d1)).slice(0, 5);
+  const big = (se || []).slice().sort((a, b) => (b.mcap || 0) - (a.mcap || 0)).slice(0, 5).map((a) => ({ ...a, t: 'Aktie' }));
+  const row = (a) => `<a class="row-link up-row" href="/bolag/${encodeURIComponent(a.sym)}" data-link data-namn="${esc(a.namn)}"><span class="grow" style="min-width:0"><b class="up-nm">${esc(a.namn)}</b> <span class="small faint">${esc(a.kod || a.sym.split('.')[0])}</span></span>${a.t ? `<span class="pill outline small">${esc(a.t)}</span>` : ''}<b class="num ${tone(a.d1)}" style="width:64px;text-align:right">${a.d1 != null ? esc(pct(a.d1, 1)) : '–'}</b></a>`;
+  const sen = getSenast();
+  const senQ = sen.length ? await getQuotes(sen).catch(() => ({})) : {};
+  if (!$('#sok-upptack')) return;
+  box.innerHTML = `<div class="grid g3 up-grid">${tiles}</div>
+    <div class="grid g3" style="margin-top:16px">
+      <section class="card"><h2 class="label-up" style="margin:0 0 4px">Störst rörelse i dag</h2>${movers.map(row).join('') || '<p class="small muted">Saknas just nu.</p>'}<p class="small faint" style="margin:8px 0 0">Svenska bolag över en miljard kronor och kryptovalutor utom stablecoins.</p></section>
+      <section class="card"><h2 class="label-up" style="margin:0 0 4px">Störst på Stockholmsbörsen</h2>${big.map(row).join('') || '<p class="small muted">Saknas just nu.</p>'}<p class="small faint" style="margin:8px 0 0">Efter börsvärde.</p></section>
+      <section class="card"><h2 class="label-up" style="margin:0 0 4px">Du tittade senast på</h2>${sen.length ? sen.slice(0, 5).map((s) => row({ sym: s, namn: nameOf(s), d1: senQ[s]?.d1 ?? null, t: senQ[s]?.typ || '' })).join('') : '<p class="small muted">Sidor du öppnar visas här.</p>'}<p class="small faint" style="margin:8px 0 0">Sparas bara i den här webbläsaren.</p></section>
+    </div>`;
 }
 
 function mountSok(params) {
-  let q = params.get('q') || '';
+  let q = params.get('q') || ''; let typ = 'alla';
   let timer;
   const label = (t) => { $('#results-label').textContent = t; };
-  const show = (list, t) => { label(t); $('#results').innerHTML = resultsHTML(list); };
+  const showRes = (on) => { $('#sok-res').hidden = !on; $('#sok-upptack').hidden = on; };
   const search = async () => {
     const term = q.trim();
     history.replaceState(null, '', '/sok' + (term ? '?q=' + encodeURIComponent(term) : ''));
-    if (term.length < 2) { show(POPULAR, 'Populära'); return; }
-    label('Söker …');
-    const res = await api('/api/search?q=' + encodeURIComponent(term), 60 * 60e3);
+    if (term.length < 2) { showRes(false); return; }
+    showRes(true); label('Söker …');
+    const res = await api('/api/search?q=' + encodeURIComponent(term) + (typ !== 'alla' ? '&typ=' + typ : ''), 60 * 60e3);
     if (term !== q.trim() || !$('#results')) return;
-    if (res?.results) {
-      const n = res.results.length;
-      show(res.results, n ? `${n} ${n === 1 ? 'träff' : 'träffar'} för "${term}"` : `Inga träffar för "${term}"`);
-      if (!res.results.length) $('#results').innerHTML = '<div class="empty">Prova bolagets namn eller ticker, till exempel "AAPL" eller "Investor".</div>';
-    } else {
-      label('Sökningen fungerar inte just nu');
-      $('#results').innerHTML = `<div class="empty">${esc(errText(res))}</div>`;
-    }
+    if (!res?.results) { label('Sökningen fungerar inte just nu'); $('#results').innerHTML = `<div class="empty">${esc(errText(res))}</div>`; return; }
+    const n = res.results.length;
+    label(n ? `${n} ${n === 1 ? 'träff' : 'träffar'} för "${term}"` : `Inga träffar för "${term}"`);
+    if (!n) { $('#results').innerHTML = `<div class="empty">${typ !== 'alla' ? 'Prova att välja Alla, eller skriv' : 'Prova'} namnet eller tickern, till exempel "AAPL", "Investor" eller "Bitcoin".</div>`; return; }
+    // Grupperat per sort, i samma ordning som träffarna
+    const groups = []; for (const r of res.results) { const g = typOfRes(r); let x = groups.find((y) => y[0] === g); if (!x) groups.push(x = [g, []]); x[1].push(r); }
+    const draw = (qq) => { $('#results').innerHTML = groups.map(([g, list]) => `<div class="sok-grp"><div class="sok-gh"><span class="label-up">${esc(SOK_GRUPP[g])}</span><span class="small faint">${list.length} ${list.length === 1 ? 'träff' : 'träffar'}</span></div><div class="results-grid">${resultsHTML(list, qq)}</div></div>`).join(''); };
+    draw(null);
+    const qq = await getQuotes(res.results.map((r) => r.sym)).catch(() => null);
+    if (qq && term === q.trim() && $('#results')) draw(qq);
   };
-  if (q) search(); else show(POPULAR, 'Populära');
+  if (q) search(); else showRes(false);
+  sokUpptack();
   const input = $('#sokq');
   input.addEventListener('input', () => { q = input.value; clearTimeout(timer); timer = setTimeout(search, 350); });
   $('[data-sokform]').addEventListener('submit', (e) => {
     e.preventDefault(); q = input.value; clearTimeout(timer);
-    // Enter med en träff i listan går direkt till första bolaget
+    // Enter med en träff i listan går direkt till första träffen
     const first = $('#results a.result');
     if (first && q.trim().length >= 2 && $('#results-label').textContent.includes('träff')) { rememberName(first.dataset.sym, first.dataset.namn); navigate(first.getAttribute('href')); return; }
     search();
   });
-  $('#results').addEventListener('click', (e) => { const a = e.target.closest('a.result'); if (a) rememberName(a.dataset.sym, a.dataset.namn); });
+  $('.sok-typ').addEventListener('click', (e) => { const b = e.target.closest('[data-styp]'); if (!b) return; typ = b.dataset.styp; document.querySelectorAll('[data-styp]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); if (q.trim().length >= 2) search(); else $('#sokq').focus(); });
+  $('.main').addEventListener('click', (e) => { const a = e.target.closest('a.result, a.up-row'); if (a) rememberName(a.dataset.sym || decodeURIComponent(a.getAttribute('href').split('/').pop()), a.dataset.namn); });
 }
 
 async function getStock(sym) {
@@ -1305,21 +1354,23 @@ function viewNyheter() {
       <button role="tab" data-region="world" aria-selected="${!newsMine()}">Världen</button>
       <button role="tab" data-region="se" aria-selected="false">Sverige</button>
       <button role="tab" data-region="md" aria-selected="false">Bolagsmeddelanden</button>
+      <button role="tab" data-region="insyn" aria-selected="false">Insyn</button>
     </div>
   </div>
   <div class="split">
-    <section class="wide stack" aria-label="Nyhetslista" id="newslist">${loading('Hämtar nyheter …')}</section>
-    <aside class="narrow stack" style="gap:16px">
-      <div class="card dark rings stack" style="gap:10px">
-        <span class="small muted">Antal nyheter</span>
-        <span class="num" style="font-size:44px;font-weight:300;line-height:1" id="news-count">–</span>
-        <span class="small faint" id="news-range"></span>
-      </div>
-      <div class="card stack">
-        <span class="small muted">Ämne</span>
+    <div class="wide stack" style="gap:16px">
+      <section class="card nd-day" id="news-dagens" aria-labelledby="nd-h" hidden></section>
+      <div class="nf-bar">
         <div class="chips" id="newsfilter"></div>
-        <p class="small faint" style="margin:0" id="news-help"></p>
+        <span class="small faint num"><span id="news-count">–</span> <span id="news-range"></span></span>
       </div>
+      <p class="small faint" style="margin:-6px 0 0" id="news-help"></p>
+      <section class="stack" aria-label="Nyhetslista" id="newslist">${loading('Hämtar nyheter …')}</section>
+    </div>
+    <aside class="narrow stack" style="gap:16px">
+      <section class="card stack nq" id="news-quiz" aria-labelledby="nq-h" style="gap:10px"><h2 class="label-up" id="nq-h" style="margin:0">Gissa reaktionen</h2>${loading('Hämtar …')}</section>
+      <section class="card stack" aria-labelledby="ni-h" style="gap:8px"><h2 class="label-up" id="ni-h" style="margin:0">Ledningen köper och säljer</h2><div id="news-insyn">${loading('Hämtar …')}</div></section>
+      <section class="card stack" aria-labelledby="nk-h" style="gap:8px"><h2 class="label-up" id="nk-h" style="margin:0">Dina bolag rapporterar</h2><div id="news-kal">${loading('Hämtar …')}</div></section>
       <div class="empty">Vi visar rubrik, en kort ingress och länk till källan. Läs alltid hela artikeln innan du gör något med dina pengar.</div>
     </aside>
   </div>
@@ -1338,12 +1389,145 @@ async function getMyNews() {
     .map((n) => { const h = (now - new Date(n.datum).getTime()) / 3600e3; return { ...n, poang: n.vikt * 6 + (n.agd ? 4 : 2) - h / 6 }; });
   return { ok: true, hamtad: new Date().toISOString(), items, mina: true };
 }
+
+// Börsens stängning (svensk tid) och jämförelseindex för en ticker
+const mktOf = (sym) => { const x = String(sym).split('.')[1] || ''; return x === 'ST' ? { close: 17 * 60 + 30, idx: '^OMX', idxNamn: 'OMXS30' } : x === 'CO' ? { close: 17 * 60, idx: '^OMXC25', idxNamn: 'OMXC25' } : x === 'HE' ? { close: 17 * 60 + 30, idx: '^OMXH25', idxNamn: 'OMXH25' } : x === 'OL' ? { close: 16 * 60 + 20, idx: '^OSEAX', idxNamn: 'Oslo Børs' } : x ? null : { close: 22 * 60, idx: '^GSPC', idxNamn: 'S&P 500' }; };
+// Antal aktier man ägde när nyheten kom: bara köp gjorda före nyheten (äldre innehav utan datum räknas med)
+const heldQty = (sym, iso) => { const t = iso ? Date.parse(iso) : NaN; return getPort().filter((b) => b.sym === sym && (!b.tid || !Number.isFinite(t) || Date.parse(b.tid) <= t)).reduce((s, b) => s + (b.antal || 0), 0); };
+// "Det här betyder för dig": kursreaktionen gånger antal aktier, i kronor
+function forDigHTML(sym, P, I, iso, fx) {
+  const m = mktOf(sym); if (!m) return '';
+  const r = mdReact(P, I, iso, m.close);
+  const px = r ? `<span class="nx-px"><b class="num ${tone(r.pct)}">${r.pct != null ? esc(pct(r.pct, 1)) : '–'}</b> <span class="faint">${r.pct == null ? (EN ? 'no trading since' : 'ingen handel sedan dess') : r.live ? (EN ? 'so far today' : 'hittills i dag') : (EN ? 'the stock' : 'aktien')}${r.idx != null ? ` · ${esc(m.idxNamn)} ${esc(pct(r.idx, 1))}` : ''}</span></span>` : `<span class="faint">${EN ? 'Price reaction missing' : 'Kursreaktion saknas'}</span>`;
+  const q = heldQty(sym, iso);
+  const kr = r && r.after != null && q > 0 && fx ? (P[r.after][1] - P[r.b][1]) * q * fx : null;
+  const me = kr != null ? `<div class="nx-me"><span><b>${EN ? 'What it means for you' : 'Det här betyder för dig'}</b> · ${EN ? `your ${nfAntal(q)} shares` : `dina ${nfAntal(q)} aktier`}${r.live ? (EN ? ', so far today' : ', hittills i dag') : ''}</span><b class="num ${tone(kr)}">${kr >= 0 ? '+' : '−'}${esc(sek(Math.abs(kr)))}</b></div>` : '';
+  return `<div class="nx-re small"><span class="faint">${EN ? 'How the market reacted' : 'Så tog marknaden emot den'}</span>${px}</div>${me}`;
+}
+
+/* ---------- Dagens tre ---------- */
+async function newsDagens() {
+  const box = $('#news-dagens'); if (!box) return;
+  const d = await api('/api/summary?dagens=1' + (EN ? '&lang=en' : ''), 30 * 60e3).catch(() => null);
+  if (!$('#news-dagens')) return;
+  if (!d?.punkter?.length) { box.hidden = true; return; }
+  const { port, all } = mySyms(); const own = new Set(port); const mine = new Set(all);
+  const map = await mdSymMap().catch(() => null);
+  const symsOf = (p) => { const out = new Set(); for (const k of p.kallor) { for (const b of k.bolag || []) { const hit = all.find((s) => s.split('.')[0] === String(b).toUpperCase()); if (hit) out.add(hit); } if (k.bolagNamn && map) { const s = mdSymOf(map, k.bolagNamn); if (s && mine.has(s)) out.add(s); } } return [...out]; };
+  box.hidden = false;
+  box.innerHTML = `<div class="nd-head"><h2 class="label-up or" id="nd-h" style="margin:0">${EN ? 'Today’s three in 60 seconds' : 'Dagens tre på 60 sekunder'}</h2><span class="small faint">${EN ? 'Summarised by AI from the headlines' : 'Sammanfattat av AI från rubrikerna'} · ${esc(clock(d.hamtad))}</span></div>
+    <ol class="nd-list">${d.punkter.map((p) => { const s = symsOf(p); return `<li><div class="nd-t">${esc(p.rubrik)}${s.map((x) => `<a class="pill outline nd-mine" href="/bolag/${encodeURIComponent(x)}" data-link>${esc(ovName(x))} · ${own.has(x) ? (EN ? 'you own' : 'du äger') : (EN ? 'watched' : 'bevakad')}</a>`).join('')}</div><p class="nd-why"><b>${EN ? 'Why it matters:' : 'Varför det spelar roll:'}</b> ${esc(p.varfor)}</p><div class="nd-src small faint">${p.kallor.map((k) => { const u = safeUrl(k.lank); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" data-noi18n>${esc(k.kalla || (EN ? 'Source' : 'Källa'))} ↗</a>` : ''; }).join(' · ')}</div></li>`; }).join('')}</ol>
+    <p class="small faint" style="margin:6px 0 0">${EN ? 'The summary only uses the headlines. Read the source before you do anything with your money.' : 'Sammanfattningen bygger bara på rubrikerna. Läs källan innan du gör något med dina pengar.'}</p>`;
+}
+
+/* ---------- Gissa reaktionen ---------- */
+const GKEY = 'mk-gissa';
+const getGissa = () => { try { const v = JSON.parse(localStorage.getItem(GKEY)); return v && typeof v === 'object' ? { svar: v.svar || {}, rad: v.rad || 0 } : { svar: {}, rad: 0 }; } catch { return { svar: {}, rad: 0 }; } };
+const setGissa = (v) => { try { localStorage.setItem(GKEY, JSON.stringify(v)); } catch { /* privat läge */ } };
+async function newsQuiz() {
+  const box = $('#news-quiz'); if (!box) return;
+  const d = await api('/api/meddelanden?gissa=1&sprak=' + (EN ? 'en' : 'sv'), 60 * 60e3).catch(() => null);
+  if (!$('#news-quiz')) return;
+  const head = `<h2 class="label-up" id="nq-h" style="margin:0">${EN ? 'Guess the reaction' : 'Gissa reaktionen'}</h2>`;
+  const all = (d?.items || []).filter((x) => new Date(x.tid).getTime() < Date.now() - 2 * dayMs);
+  if (!all.length) { box.innerHTML = `${head}<p class="small muted" style="margin:0">${EN ? 'No questions right now. Come back later.' : 'Inga frågor just nu. Titta in senare.'}</p>`; return; }
+  const g = getGissa();
+  const left = all.filter((x) => g.svar[x.id] == null);
+  const score = () => { const v = Object.values(getGissa().svar); return { ratt: v.filter(Boolean).length, antal: v.length }; };
+  const foot = () => { const s = score(); const r = getGissa().rad; return s.antal ? `<p class="small faint nq-score" style="margin:0">${EN ? 'Your score' : 'Din träffsäkerhet'}: <b class="num">${s.ratt} ${EN ? 'of' : 'av'} ${s.antal}</b>${r > 1 ? ` · ${EN ? 'correct in a row' : 'rätt i rad'}: <b class="num or">${r}</b>` : ''}</p>` : ''; };
+  let cur = left[0] || null;
+  const ask = () => {
+    if (!cur) { box.innerHTML = `${head}<p class="small muted" style="margin:0">${EN ? 'You have answered all questions for now. New ones come when companies publish reports.' : 'Du har svarat på alla frågor just nu. Nya kommer när bolagen släpper rapporter.'}</p>${foot()}`; return; }
+    box.innerHTML = `${head}<div class="small faint">${esc(ovName(cur.sym))} · ${esc(mdWhen(cur.tid))}</div><p class="nq-q" data-noi18n>”${esc(cur.rubrik)}”</p><p class="small muted" style="margin:0">${EN ? 'Did the stock rise or fall the day after?' : 'Steg eller föll aktien dagen efter?'}</p><div class="nq-btns"><button type="button" class="btn ghost" data-g="1">▲ ${EN ? 'Rose' : 'Steg'}</button><button type="button" class="btn ghost" data-g="0">▼ ${EN ? 'Fell' : 'Föll'}</button></div>${foot()}`;
+  };
+  const reveal = (guessUp) => {
+    const up = cur.pct >= 0; const ok = guessUp === up;
+    const v = getGissa(); v.svar[cur.id] = ok; v.rad = ok ? v.rad + 1 : 0; setGissa(v);
+    const prev = (cur.tidigare || []).filter((x) => x.pct != null).slice(0, 3);
+    box.innerHTML = `${head}<div class="nq-res ${ok ? 'up' : 'down'}"><b>${ok ? (EN ? 'Correct!' : 'Rätt!') : (EN ? 'Not this time.' : 'Inte den här gången.')}</b> ${esc(ovName(cur.sym))} ${up ? (EN ? 'rose' : 'steg') : (EN ? 'fell' : 'föll')} <b class="num ${tone(cur.pct)}">${esc(pct(cur.pct, 1))}</b>${cur.idx != null ? `<span class="small faint"> · OMXS30 ${esc(pct(cur.idx, 1))}</span>` : ''}</div>
+      ${prev.length ? `<div class="small"><span class="label-up or" style="font-size:10.5px">${EN ? 'Last times' : 'Senast det hände'}</span>${prev.map((x) => `<div class="nq-prev"><span class="faint">${esc(mdWhen(x.tid))}</span><b class="num ${tone(x.pct)}">${esc(pct(x.pct, 1))}</b></div>`).join('')}</div>` : ''}
+      <p class="small faint" style="margin:0">${EN ? 'From the close before the announcement to the close after. The stock market is hard to predict, even for professionals.' : 'Från stängningen före meddelandet till stängningen efter. Börsen är svår att förutse, även för proffs.'}</p>
+      <div class="nq-btns">${safeUrl(cur.lank) ? `<a class="btn ghost small" href="${esc(safeUrl(cur.lank))}" target="_blank" rel="noopener noreferrer">${EN ? 'Read it' : 'Läs den'} ↗</a>` : ''}<button type="button" class="btn small" data-next>${EN ? 'Next' : 'Nästa'}</button></div>${foot()}`;
+  };
+  box.onclick = (e) => {
+    const b = e.target.closest('[data-g]'); if (b && cur) { reveal(b.dataset.g === '1'); return; }
+    if (e.target.closest('[data-next]')) { const g2 = getGissa(); cur = all.find((x) => g2.svar[x.id] == null) || null; ask(); }
+  };
+  ask();
+}
+
+/* ---------- Ledningen köper och säljer ---------- */
+async function newsInsyn() {
+  const box = $('#news-insyn'); if (!box) return;
+  const d = await api('/api/insyn', 30 * 60e3).catch(() => null);
+  if ($('#news-insyn')) box.innerHTML = insynOverviewHTML(d);
+}
+
+/* ---------- Dina bolag rapporterar ---------- */
+async function newsKal() {
+  const box = $('#news-kal'); if (!box) return;
+  const { port, all } = mySyms();
+  if (!all.length) { box.innerHTML = `<p class="small muted" style="margin:0">${EN ? 'Watch or buy stocks and you will see here when they report.' : 'Bevaka eller köp aktier så ser du här när de rapporterar.'}</p>`; return; }
+  const syms = all.filter((s) => !s.startsWith('^')).slice(0, 15);
+  const kal = await Promise.all(syms.map((s) => api('/api/kalender?s=' + encodeURIComponent(s), 6 * 3600e3).catch(() => null)));
+  if (!$('#news-kal')) return;
+  const today = dayKey(new Date()); const end = dayKey(new Date(Date.now() + 14 * dayMs));
+  const up = syms.map((s, i) => ({ sym: s, k: kal[i] })).filter((x) => x.k?.rapport && x.k.rapport >= today && x.k.rapport <= end).sort((a, b) => a.k.rapport.localeCompare(b.k.rapport));
+  if (!up.length) { box.innerHTML = `<p class="small muted" style="margin:0">${EN ? 'None of your companies report in the next two weeks.' : 'Inget av dina bolag rapporterar de närmaste två veckorna.'}</p>`; return; }
+  const dagTxt = (iso) => new Date(iso + 'T12:00:00Z').toLocaleDateString(L, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Stockholm' });
+  box.innerHTML = up.map((x) => `<div class="nk-row" data-ksym="${esc(x.sym)}"><div class="nk-l"><a href="/bolag/${encodeURIComponent(x.sym)}" data-link><b>${esc(ovName(x.sym))}</b></a><span class="small faint">${esc(dagTxt(x.k.rapport))}${x.k.rapportUppskattad ? (EN ? ' · preliminary' : ' · preliminärt') : ''}</span></div><span class="pill outline small">${port.includes(x.sym) ? (EN ? 'You own' : 'Du äger') : (EN ? 'Watched' : 'Bevakad')}</span><div class="nk-last small faint" data-klast></div></div>`).join('') + `<p class="small faint" style="margin:6px 0 0">${EN ? 'Dates from Yahoo Finance. Last time: the move from the close before the latest report to the close after.' : 'Datum från Yahoo Finance. Förra gången: rörelsen från stängningen före senaste rapporten till stängningen efter.'}</p>`;
+  // Förra gången, för bolag på Stockholmsbörsen (rapporterna kommer från Nasdaq Nordic)
+  const idx = api('/api/chart?s=%5EOMX&r=1y', 60 * 60e3).then(bOnePerDay).catch(() => null);
+  for (const x of up.filter((y) => y.sym.endsWith('.ST')).slice(0, 4)) {
+    (async () => {
+      const md = await getMdd(x.k.namn || nameOf(x.sym)).catch(() => null);
+      const rep = (md?.items || []).find((it) => mdGroup(it.kategori)[0] === 'rapport' && new Date(it.tid).getTime() < Date.now() - dayMs);
+      if (!rep) return;
+      const [c, I] = await Promise.all([api(`/api/chart?s=${encodeURIComponent(x.sym)}&r=1y`, 60 * 60e3).then(bOnePerDay).catch(() => null), idx]);
+      const r = mdReact(c?.punkter, I?.punkter, rep.tid);
+      const el = document.querySelector(`[data-ksym="${CSS.escape(x.sym)}"] [data-klast]`);
+      if (el && r?.pct != null) el.innerHTML = `${EN ? 'Last time' : 'Förra gången'}: <b class="num ${tone(r.pct)}">${esc(pct(r.pct, 1))}</b> ${EN ? 'the day after' : 'dagen efter'} (${esc(mdWhen(rep.tid))})`;
+    })();
+  }
+}
+
+/* ---------- Insyn som egen flik ---------- */
+async function newsInsynTab(state) {
+  const list = $('#newslist'); if (!list) return;
+  list.innerHTML = loading(EN ? 'Fetching insider trades …' : 'Hämtar insynsaffärer …');
+  const d = await api('/api/insyn', 30 * 60e3).catch(() => null);
+  if (!$('#newslist') || state.region !== 'insyn') return;
+  $('#newsfilter').innerHTML = ''; $('#news-status').innerHTML = d?.hamtad ? liveTag(d.hamtad) : '';
+  $('#news-help').innerHTML = EN ? 'Purchases and sales by people in senior positions, reported to Finansinspektionen in the last seven days. Insider trades are not a buy or sell signal.' : 'Köp och försäljningar som personer i ledande ställning har anmält till Finansinspektionen de senaste sju dagarna. Insynsaffärer är ingen köp- eller säljsignal.';
+  if (!d || d.error) { list.innerHTML = `<div class="empty">${FI_DOWN}</div>`; $('#news-count').textContent = '–'; $('#news-range').textContent = ''; return; }
+  $('#news-count').textContent = String(d.antal ?? (d.senaste || []).length); $('#news-range').textContent = EN ? 'trades in 7 days' : 'affärer på 7 dagar';
+  list.innerHTML = `${d.storsta?.length ? `<section class="card"><h2 class="label-up" style="margin:0 0 6px">${EN ? 'Largest in SEK' : 'Störst i kronor'}</h2>${insynRows(d.storsta.slice(0, 10), true)}</section>` : ''}${d.senaste?.length ? `<section class="card"><h2 class="label-up" style="margin:0 0 6px">${EN ? 'Latest' : 'Senaste'}</h2>${insynRows(d.senaste.slice(0, 15), true)}</section>` : ''}<p class="small faint">${EN ? 'Source: Finansinspektionen’s insider register.' : 'Källa: Finansinspektionens insynsregister.'}</p>`;
+}
+
 function mountNyheter() {
-  let region = new URLSearchParams(location.search).get('flik') === 'meddelanden' ? 'md' : newsMine() ? 'mina' : 'world'; let filt = 'Alla';
+  let region = new URLSearchParams(location.search).get('flik') === 'meddelanden' ? 'md' : new URLSearchParams(location.search).get('flik') === 'insyn' ? 'insyn' : newsMine() ? 'mina' : 'world'; let filt = 'Alla';
   document.querySelectorAll('[data-region]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.region === region))); let sort = 'viktigt'; let data = null;
-  const mdState = { get region() { return region; } };
+  const mdState = { get region() { return region; }, marknad: 'se' };
+  // Kursreaktion och "för dig" fylls i när nyheten syns
+  const pxCache = new Map(); const idxCache = new Map(); let fxP = null; let io = null;
+  const fill = async (el) => {
+    const sym = el.dataset.nsym; const iso = el.dataset.ntid; const m = mktOf(sym); if (!m) { el.remove(); return; }
+    if (!pxCache.has(sym)) pxCache.set(sym, api(`/api/chart?s=${encodeURIComponent(sym)}&r=1m`, 15 * 60e3).then(bOnePerDay).catch(() => null));
+    if (!idxCache.has(m.idx)) idxCache.set(m.idx, api(`/api/chart?s=${encodeURIComponent(m.idx)}&r=1m`, 15 * 60e3).then(bOnePerDay).catch(() => null));
+    const [c, I] = await Promise.all([pxCache.get(sym), idxCache.get(m.idx)]);
+    if (!c?.punkter) { el.innerHTML = `<span class="small faint">${EN ? 'Price reaction missing' : 'Kursreaktion saknas'}</span>`; return; }
+    fxP ||= fxToSek(getPort().map((b) => b.kursValuta || b.valuta).concat(['USD', 'EUR', 'DKK', 'NOK']));
+    const fx = await fxP.catch(() => ({ SEK: 1 }));
+    el.innerHTML = forDigHTML(sym, c.punkter, I?.punkter, iso, fx[c.valuta || 'SEK'] ?? (c.valuta === 'SEK' ? 1 : null));
+  };
+  const watchPx = () => {
+    io?.disconnect(); const els = [...document.querySelectorAll('#newslist [data-nsym]')];
+    if (!('IntersectionObserver' in window)) { els.forEach(fill); return; }
+    io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { io.unobserve(e.target); fill(e.target); } }), { rootMargin: '200px 0px' });
+    els.forEach((x) => io.observe(x));
+  };
   const draw = () => {
-    if (region === 'md' || !data || !$('#newslist')) return;
+    if (region === 'md' || region === 'insyn' || !data || !$('#newslist')) return;
     if (!data.ok) { $('#newslist').innerHTML = `<div class="empty">${esc(errText(data.error))}</div>`; $('#newsfilter').innerHTML = ''; $('#news-status').innerHTML = ''; return; }
     const byTime = (a, b) => String(b.datum).localeCompare(String(a.datum));
     const all = data.items.slice().sort(data.mina && sort === 'viktigt' ? (a, b) => b.poang - a.poang || byTime(a, b) : byTime);
@@ -1353,22 +1537,25 @@ function mountNyheter() {
     $('#news-status').innerHTML = all.length ? liveTag(data.hamtad) : '';
     $('#news-count').textContent = String(all.length);
     const times = all.map((n) => n.datum).sort();
-    $('#news-range').textContent = all.length ? `Senaste ${when(times[times.length - 1])}, äldsta ${when(times[0])}` : '';
+    $('#news-range').textContent = all.length ? `${EN ? 'news' : 'nyheter'} · ${EN ? 'latest' : 'senaste'} ${when(times[times.length - 1])}` : '';
     $('#newsfilter').innerHTML = cats.map((c) => `<button type="button" class="chip-btn" data-filt="${esc(c)}" aria-pressed="${c === filt}">${esc(c)}</button>`).join('')
       + (data.mina ? `<span class="news-sort"><button type="button" class="chip-btn" data-sort="viktigt" aria-pressed="${sort === 'viktigt'}">Viktigast först</button><button type="button" class="chip-btn" data-sort="tid" aria-pressed="${sort === 'tid'}">Senaste först</button></span>` : '');
-    $('#news-help').innerHTML = data.mina ? 'Nyheter om aktierna du äger och bevakar. <b>Viktigast först</b> lyfter rapporter, vinstvarningar, affärer, utdelningar och ledningsbyten, och aktier du äger före aktier du bara bevakar. Sorteringen bygger på rubrikens ord och säger inget om hur kursen kommer att gå.' : 'Ämnet sätts utifrån orden i rubriken.';
+    $('#news-help').innerHTML = data.mina ? (EN ? 'News about the stocks you own and watch, with how the price reacted. <b>What it means for you</b> is the move times your number of shares.' : 'Nyheter om aktierna du äger och bevakar, med hur kursen reagerade. <b>Det här betyder för dig</b> är rörelsen gånger ditt antal aktier.') : 'Ämnet sätts utifrån orden i rubriken.';
     $('#newslist').innerHTML = list.map((n) => `
       <article class="card news-item">
         <div class="stack" style="gap:8px;flex:1;min-width:0">
           <div class="meta">${n.amne ? `<span class="pill news-topic t-${esc(n.amne)}">${esc(n.amne)}</span>` : ''}${n.min ? `<a class="pill outline" href="/bolag/${encodeURIComponent(n.min)}" data-link>${esc(ovName(n.min))}${n.agd ? '<span>&nbsp;· du äger</span>' : ''}</a>` : ''}<span class="pill outline src">${flag(n.land)}${esc(n.kalla)}</span><span class="num">${esc(n.tidTxt)}</span>${!n.min && n.bolagTxt ? `<span>${esc(n.bolagTxt)}</span>` : ''}</div>
           <h3>${newsTitle(n)}</h3>
           ${n.text ? `<p class="news-text">${esc(n.text)}</p>` : ''}
-          <div class="meta">${sourceLink(n)}</div>
+          ${n.min && n.datum ? `<div class="nx" data-nsym="${esc(n.min)}" data-ntid="${esc(n.datum)}"><span class="md-skel"></span></div>` : ''}
+          <div class="meta">${n.min && n.datum ? merBtn({ sym: n.min, tid: n.datum, rubrik: n.rubrik, grupp: '', bolag: '' }) : ''}${sourceLink(n)}</div>
         </div>
       </article>`).join('') || `<div class="empty">${filt !== 'Alla' ? `Inga nyheter om ${esc(filt.toLowerCase())} just nu.` : region === 'mina' ? 'Inga nyheter om dina aktier de senaste två veckorna.' : region === 'se' ? 'Inga nyheter om svenska bolag just nu.' : 'Inga nyheter just nu.'}</div>`;
+    watchPx();
   };
   const load = async () => {
-    const r = region; if (r === 'md') return mdNyheter(mdState); $('#newslist').innerHTML = loading('Hämtar nyheter …');
+    const r = region; if (r === 'md') return mdNyheter(mdState); if (r === 'insyn') return newsInsynTab(mdState);
+    $('#newslist').innerHTML = loading('Hämtar nyheter …');
     const d = r === 'mina' ? await getMyNews() : await getNews(r); if (r !== region) return; data = d; draw();
   };
   $('.tabs').addEventListener('click', (e) => {
@@ -1377,8 +1564,8 @@ function mountNyheter() {
     document.querySelectorAll('[data-region]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
     load();
   });
-  $('#newsfilter').addEventListener('click', (e) => { const b = e.target.closest('[data-filt]'); if (b) { filt = b.dataset.filt; draw(); } const so = e.target.closest('[data-sort]'); if (so) { sort = so.dataset.sort; draw(); } });
-  load();
+  $('#newsfilter').addEventListener('click', (e) => { if (region === 'md' || region === 'insyn') return; const b = e.target.closest('[data-filt]'); if (b) { filt = b.dataset.filt; draw(); } const so = e.target.closest('[data-sort]'); if (so) { sort = so.dataset.sort; draw(); } });
+  load(); newsDagens(); newsQuiz(); newsInsyn(); newsKal();
 }
 
 /* ================= Bevakning ================= */
@@ -1763,6 +1950,7 @@ function bHead(s, tabs, active) {
 }
 
 async function mountBolag(sym) {
+  pushSenast(sym);
   // Kurser, rapporter och kalender börjar hämtas samtidigt som bolagsdatan i stället för efteråt, så att flikarna fylls snabbare
   if (!/[\^=]/.test(sym)) { const q = encodeURIComponent(sym); const sw = isSwedish(sym);
     api(`/api/chart?s=${q}&r=5yd`, 30 * 60e3); api(`/api/chart?s=${encodeURIComponent(sw ? '^OMX' : '^GSPC')}&r=5yd`, 30 * 60e3);
@@ -1794,7 +1982,8 @@ async function mountBolag(sym) {
 
   // Data hämtas en gång per sidvisning och delas mellan flikarna
   const C = {};
-  const idxSym = se ? '^OMX' : '^GSPC'; const idxName = se ? 'OMXS30' : 'S&P 500';
+  // Jämförelseindex: Stockholm OMXS30, Köpenhamn OMXC25, Helsingfors OMXH25, Oslo Oslo Børs, annars S&P 500
+  const mk = mktOf(sym); const idxSym = se ? '^OMX' : mk?.idx || '^GSPC'; const idxName = se ? 'OMXS30' : mk?.idxNamn || 'S&P 500';
   const get = {
     px: () => (C.px ||= api(`/api/chart?s=${encodeURIComponent(sym)}&r=5yd`, 30 * 60e3).then(bOnePerDay)),
     idx: () => (C.idx ||= api(`/api/chart?s=${encodeURIComponent(idxSym)}&r=5yd`, 30 * 60e3).then(bOnePerDay)),
@@ -2356,7 +2545,8 @@ function bKalender(panel, ctx) {
 }
 async function bNyheter(panel, ctx) {
   const { s, sym } = ctx;
-  const md = ctx.se && ctx.isEq;
+  // Bolagsmeddelanden från Nasdaq Nordic: Stockholm, Köpenhamn och Helsingfors
+  const md = (ctx.se || /\.(CO|HE)$/.test(sym)) && ctx.isEq;
   panel.innerHTML = `<div class="b-grid">${md ? bCard('c12', `${bLabel(EN ? 'Company announcements and the price reaction' : 'Bolagets meddelanden och kursreaktionen')}<div id="b-md">${loading(EN ? 'Fetching announcements …' : 'Hämtar meddelanden …')}</div>`) : ''}${bCard('c12', `${bLabel(`Senaste om ${s.namn}`)}<div id="ai-sum"></div><div id="bolagnews">${loading('Hämtar nyheter …')}</div>`)}</div>`;
   if (md) bMeddelanden(ctx);
   aiSummary(sym, s.namn);
@@ -2371,7 +2561,7 @@ async function bNyheter(panel, ctx) {
 /* ================= Bolagsmeddelanden från Nasdaq Nordic, med kursreaktion ================= */
 // Varje meddelande visas med hur aktien rörde sig: från stängningen före meddelandet till stängningen efter.
 // Ingen tolkning, bara rörelsen. Index samma dagar visas bredvid så att man ser om hela börsen rörde sig.
-const getMdd = (namn) => api('/api/meddelanden?sprak=' + (EN ? 'en' : 'sv') + (namn ? '&namn=' + encodeURIComponent(namn) : ''), (namn ? 15 : 5) * 60e3);
+const getMdd = (namn, marknad = 'se') => api('/api/meddelanden?sprak=' + (EN ? 'en' : 'sv') + (namn ? '&namn=' + encodeURIComponent(namn) : marknad === 'nord' ? '&marknad=nord' : ''), (namn ? 15 : 5) * 60e3);
 // Grupper för filtret. Kategorierna kommer från Nasdaq, på svenska eller engelska.
 const MD_GROUPS = [
   ['rapport', ['Rapporter', 'Reports'], /rapport|report|bokslut|annual|interim|half.?year|quarter|årsredovisning/i, '#60A5FA'],
@@ -2386,15 +2576,16 @@ const mdWhen = (iso) => { const d = new Date(iso); if (isNaN(d)) return ''; cons
 const stoParts = (ms) => { const p = Object.fromEntries(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Stockholm', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ms)).map((x) => [x.type, x.value])); return { day: `${p.year}-${p.month}-${p.day}`, min: Number(p.hour) * 60 + Number(p.minute) }; };
 const CLOSE_MIN = 17 * 60 + 30;
 // Kursreaktionen: senaste stängning före meddelandet och första stängningen efter
-function mdReact(P, I, iso) {
+// closeMin: när börsen stänger i svensk tid (Stockholm 17:30, USA 22:00)
+function mdReact(P, I, iso, closeMin = CLOSE_MIN) {
   if (!P?.length || !iso) return null;
   const a = stoParts(new Date(iso).getTime());
   const days = P.map((p) => bKey(p[0]));
-  let b = -1; for (let i = 0; i < P.length; i++) { if (days[i] < a.day || (days[i] === a.day && a.min >= CLOSE_MIN)) b = i; else break; }
+  let b = -1; for (let i = 0; i < P.length; i++) { if (days[i] < a.day || (days[i] === a.day && a.min >= closeMin)) b = i; else break; }
   if (b < 0) return null;
   const after = b + 1 < P.length ? b + 1 : null;
   const today = stoParts(Date.now());
-  const live = after != null && days[after] === today.day && today.min < CLOSE_MIN;
+  const live = after != null && days[after] === today.day && today.min < closeMin;
   const pct = after != null ? (P[after][1] / P[b][1] - 1) * 100 : null;
   let idx = null;
   if (after != null && I?.length) { const im = new Map(I.map((p) => [bKey(p[0]), p[1]])); const i0 = im.get(days[b]); const i1 = im.get(days[after]); if (i0 && i1) idx = (i1 / i0 - 1) * 100; }
@@ -2413,8 +2604,8 @@ function mdSpark(P, r) {
   const seg = r.after != null ? `<path d="M${X(r.b).toFixed(1)} ${Y(P[r.b][1]).toFixed(1)}L${X(r.after).toFixed(1)} ${Y(P[r.after][1]).toFixed(1)}" stroke="${c}" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="${X(r.after).toFixed(1)}" cy="${Y(P[r.after][1]).toFixed(1)}" r="2.6" fill="${c}"/>` : '';
   return `<svg class="md-spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><line x1="${xm.toFixed(1)}" x2="${xm.toFixed(1)}" y1="0" y2="${H}" stroke="var(--muted)" stroke-dasharray="2 2" stroke-opacity=".6"/><path d="${line}" fill="none" stroke="var(--muted)" stroke-opacity=".75" stroke-width="1.3"/>${seg}</svg>`;
 }
-function mdPxHTML(P, I, iso, idxName = 'OMXS30') {
-  const r = mdReact(P, I, iso);
+function mdPxHTML(P, I, iso, idxName = 'OMXS30', closeMin = CLOSE_MIN) {
+  const r = mdReact(P, I, iso, closeMin);
   if (!r) return `<span class="md-pxt faint small">${EN ? 'Price missing' : 'Kurs saknas'}</span>`;
   const txt = r.pct == null ? `<span class="faint small">${EN ? 'No trading since' : 'Ingen handel sedan dess'}</span>`
     : `<b class="num ${tone(r.pct)}">${esc(pct(r.pct, 1))}</b><span class="small faint">${r.live ? (EN ? 'so far today' : 'hittills i dag') : (EN ? 'the stock' : 'aktien')}${r.idx != null ? ` · ${esc(idxName)} ${esc(pct(r.idx, 1))}` : ''}</span>`;
@@ -2428,8 +2619,69 @@ function mdRow(it, opt = {}) {
       ${u ? `<a class="md-title" href="${esc(u)}" target="_blank" rel="noopener noreferrer" data-noi18n>${esc(it.rubrik)}<span class="sr-only">${EN ? ' (opens in a new tab)' : ' (öppnas i ny flik)'}</span></a>` : `<span class="md-title" data-noi18n>${esc(it.rubrik)}</span>`}
     </div>
     <div class="md-px" aria-label="${EN ? 'Price reaction' : 'Kursreaktion'}">${opt.px ?? (opt.sym || opt.pending ? '<span class="md-skel"></span>' : '')}</div>
+    ${opt.sym && it.tid ? `<div class="md-mer">${merBtn({ sym: opt.sym, tid: it.tid, rubrik: it.rubrik, grupp: mdGroup(it.kategori)[0], bolag: it.bolag, id: it.id })}</div>` : ''}
   </article>`;
 }
+/* ================= Visa mer om en nyhet ================= */
+// Ord som ofta står i börsnyheter, med en förklaring på en mening
+const NEWS_ORD = [
+  [/vinstvarning|profit warning/i, ['Vinstvarning', 'Profit warning'], ['Bolaget säger i förväg att resultatet blir sämre än väntat.', 'The company says in advance that the result will be worse than expected.']],
+  [/delårsrapport|kvartalsrapport|interim report|quarterly report|\bq[1-4]\b/i, ['Delårsrapport', 'Interim report'], ['Bolagets redovisning för ett kvartal eller halvår: försäljning, vinst och utsikter.', 'The company’s accounts for a quarter or half-year: sales, profit and outlook.']],
+  [/bokslutskommuniké|year-end report/i, ['Bokslutskommuniké', 'Year-end report'], ['Den första sammanfattningen av hela räkenskapsåret, före årsredovisningen.', 'The first summary of the whole financial year, before the annual report.']],
+  [/rörelseresultat|rörelsemarginal|operating (income|profit|margin)|\bebit\b/i, ['Rörelseresultat', 'Operating profit'], ['Vinsten från själva verksamheten, före räntor och skatt. Marginalen är den delen av försäljningen.', 'Profit from the business itself, before interest and tax. The margin is that share of sales.']],
+  [/orderingång|order intake/i, ['Orderingång', 'Order intake'], ['Värdet av nya beställningar under perioden. Visar ofta hur försäljningen kan bli framöver.', 'The value of new orders in the period. Often shows what future sales may look like.']],
+  [/återköp|buy.?back|repurchase/i, ['Återköp', 'Buyback'], ['Bolaget köper tillbaka egna aktier. Då blir det färre aktier och varje aktie äger en större del av bolaget.', 'The company buys back its own shares, so each remaining share owns a larger part of the company.']],
+  [/nyemission|riktad emission|företrädesemission|share issue|rights issue|directed issue/i, ['Nyemission', 'Share issue'], ['Bolaget tar in pengar genom att ge ut nya aktier. Befintliga ägares andel blir mindre om de inte köper.', 'The company raises money by issuing new shares. Existing owners’ stake shrinks if they do not buy.']],
+  [/insiderinformation|inside information/i, ['Insiderinformation', 'Inside information'], ['Information som kan påverka kursen och som bolaget måste offentliggöra direkt.', 'Information that can move the price and must be published immediately.']],
+  [/utdelning|dividend/i, ['Utdelning', 'Dividend'], ['Den del av vinsten som betalas ut till ägarna.', 'The part of profit paid out to the owners.']],
+  [/förvärv|uppköp|acquisition|acquire|takeover|\bbud\b|offer for/i, ['Förvärv', 'Acquisition'], ['Ett bolag köper ett annat bolag eller en del av det.', 'A company buys another company or part of one.']],
+  [/riktkurs|price target/i, ['Riktkurs', 'Price target'], ['En analytikers bedömning av vad aktien kan vara värd om ett år. Ingen garanti och ofta fel.', 'An analyst’s view of what the share may be worth in a year. No guarantee and often wrong.']],
+  [/blankning|short (position|selling)|kortsälj/i, ['Blankning', 'Short selling'], ['Någon lånar aktier och säljer dem i hopp om att kunna köpa tillbaka billigare.', 'Someone borrows shares and sells them hoping to buy them back cheaper.']],
+  [/årsstämma|extra bolagsstämma|annual general meeting|\bagm\b|\begm\b/i, ['Bolagsstämma', 'General meeting'], ['Mötet där ägarna röstar om till exempel utdelning och styrelse.', 'The meeting where owners vote on for example dividends and the board.']],
+  [/likviditet|liquidity/i, ['Likviditet', 'Liquidity'], ['Hur mycket pengar bolaget har tillgängligt för att betala sina räkningar.', 'How much cash the company has available to pay its bills.']]
+];
+const newsWords = (t) => NEWS_ORD.filter(([re]) => re.test(String(t || ''))).slice(0, 3).map(([, n, d]) => [n[EN ? 1 : 0], d[EN ? 1 : 0]]);
+// Större diagram: tre veckor före och en vecka efter, med nyheten markerad
+function merChart(P, r) {
+  if (!r) return '';
+  const end = r.after ?? r.b; const i0 = Math.max(0, r.b - 15); const i1 = Math.min(P.length - 1, end + 5);
+  const pts = P.slice(i0, i1 + 1); if (pts.length < 2) return '';
+  const W = 320; const H = 90; const lo = Math.min(...pts.map((p) => p[1])); const hi = Math.max(...pts.map((p) => p[1])); const span = hi - lo || hi * 0.01 || 1;
+  const X = (i) => 4 + ((i - i0) / (i1 - i0 || 1)) * (W - 8); const Y = (v) => 6 + (1 - (v - lo) / span) * (H - 12);
+  const line = pts.map((p, k) => `${k ? 'L' : 'M'}${X(i0 + k).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join('');
+  const c = r.pct == null ? 'var(--muted)' : r.pct >= 0 ? 'var(--up)' : 'var(--down)';
+  const xm = X(r.after != null ? (r.b + r.after) / 2 : r.b);
+  const seg = r.after != null ? `<path d="M${X(r.b).toFixed(1)} ${Y(P[r.b][1]).toFixed(1)}L${X(r.after).toFixed(1)} ${Y(P[r.after][1]).toFixed(1)}" stroke="${c}" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="${X(r.after).toFixed(1)}" cy="${Y(P[r.after][1]).toFixed(1)}" r="3.4" fill="${c}"/>` : '';
+  return `<svg class="nm-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><line x1="${xm.toFixed(1)}" x2="${xm.toFixed(1)}" y1="0" y2="${H}" stroke="var(--accent,#FF5A00)" stroke-dasharray="3 3"/><path d="${line}" fill="none" stroke="var(--ink-2,#A9ABB1)" stroke-width="1.6"/>${seg}</svg>`;
+}
+const merBtn = (o) => `<button type="button" class="linkbtn small nm-btn" data-nmer data-sym="${esc(o.sym)}" data-tid="${esc(o.tid)}" data-rubrik="${esc(o.rubrik)}" data-grupp="${esc(o.grupp || '')}" data-bolag="${esc(o.bolag || '')}" data-id="${esc(o.id || '')}" aria-expanded="false">${EN ? 'Show more' : 'Visa mer'}</button>`;
+async function merFill(btn) {
+  const host = btn.closest('.md-row, .news-item'); if (!host) return;
+  let panel = host.querySelector('.nm-panel');
+  if (panel) { const open = panel.hidden; panel.hidden = !open; btn.setAttribute('aria-expanded', String(open)); btn.textContent = open ? (EN ? 'Show less' : 'Visa mindre') : (EN ? 'Show more' : 'Visa mer'); return; }
+  panel = document.createElement('div'); panel.className = 'nm-panel'; panel.innerHTML = loading(EN ? 'Loading …' : 'Hämtar …');
+  ((host.classList.contains('news-item') && btn.closest('.news-item > *')) || host).appendChild(panel); btn.setAttribute('aria-expanded', 'true'); btn.textContent = EN ? 'Show less' : 'Visa mindre';
+  const { sym, tid, rubrik, grupp, bolag, id } = btn.dataset; const m = mktOf(sym) || { close: CLOSE_MIN, idx: '^OMX', idxNamn: 'OMXS30' };
+  const [c, I] = await Promise.all([api(`/api/chart?s=${encodeURIComponent(sym)}&r=1y`, 60 * 60e3).then(bOnePerDay).catch(() => null), api(`/api/chart?s=${encodeURIComponent(m.idx)}&r=1y`, 60 * 60e3).then(bOnePerDay).catch(() => null)]);
+  const P = c?.punkter; const r = P ? mdReact(P, I?.punkter, tid, m.close) : null;
+  const words = newsWords(rubrik);
+  let h = '';
+  if (words.length) h += `<div class="nm-sec"><span class="label-up">${EN ? 'Words in the headline' : 'Ord i rubriken'}</span>${words.map(([n, d]) => `<p class="nm-ord"><b>${esc(n)}</b> ${esc(d)}</p>`).join('')}</div>`;
+  h += `<div class="nm-sec"><span class="label-up">${EN ? 'How the market reacted' : 'Så tog marknaden emot den'}</span>${r ? `${merChart(P, r)}<p class="small" style="margin:4px 0 0">${r.pct != null ? `<b class="num ${tone(r.pct)}">${esc(pct(r.pct, 1))}</b> ${r.live ? (EN ? 'so far today' : 'hittills i dag') : (EN ? 'from the close before to the close after' : 'från stängningen före till stängningen efter')}${r.idx != null ? ` · ${esc(m.idxNamn)} ${esc(pct(r.idx, 1))}` : ''}` : (EN ? 'No trading since the news.' : 'Ingen handel sedan nyheten.')}</p>` : `<p class="small muted" style="margin:0">${EN ? 'The price reaction is missing.' : 'Kursreaktionen saknas.'}</p>`}</div>`;
+  // Senast det hände: samma sorts meddelande från bolaget tidigare, med hur aktien rörde sig
+  if (sym.endsWith('.ST') && (grupp === 'rapport' || grupp === 'insider') && bolag && P) {
+    const md = await getMdd(bolag).catch(() => null);
+    const prev = (md?.items || []).filter((it) => it.id !== id && it.tid < tid && mdGroup(it.kategori)[0] === grupp).slice(0, 4)
+      .map((it) => ({ it, r: mdReact(P, I?.punkter, it.tid, m.close) })).filter((x) => x.r?.pct != null);
+    if (prev.length) {
+      const mx = Math.max(...prev.map((x) => Math.abs(x.r.pct)), 0.5); const avg = prev.reduce((s, x) => s + Math.abs(x.r.pct), 0) / prev.length;
+      h += `<div class="nm-sec"><span class="label-up or">${EN ? 'Last times' : 'Senast det hände'}</span>${prev.map((x) => `<div class="nm-bar"><span class="small faint">${esc(mdWhen(x.it.tid))}</span><span class="nm-track"><span class="nm-fill ${x.r.pct >= 0 ? 'up' : 'down'}" style="${x.r.pct >= 0 ? 'left:50%' : `right:50%`};width:${(Math.abs(x.r.pct) / mx) * 50}%"></span></span><b class="num ${tone(x.r.pct)}">${esc(pct(x.r.pct, 1))}</b></div>`).join('')}<p class="small faint" style="margin:6px 0 0">${EN ? `On average the stock moved ${bn(avg, 1)} % the day after.` : `I snitt rörde sig aktien ${bn(avg, 1)} % dagen efter.`} ${EN ? 'History says nothing about the next time.' : 'Historiken säger inget om nästa gång.'}</p></div>`;
+    }
+  }
+  if (panel.isConnected) panel.innerHTML = h;
+}
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-nmer]'); if (b) merFill(b); });
+
 const MD_NOTE = () => `<p class="small faint md-note">${EN ? 'Source: company announcements via Nasdaq Nordic. The price shows the move from the close before the announcement to the close after. Other news the same day can also affect the price.' : 'Källa: bolagens meddelanden via Nasdaq Nordic. Kursen visar rörelsen från stängningen före meddelandet till stängningen efter. Andra nyheter samma dag kan också påverka kursen.'}</p>`;
 
 // Bolagssidan: meddelanden med kursreaktion
@@ -2444,7 +2696,7 @@ async function bMeddelanden(ctx) {
     const shown = list.filter((x) => (filt === 'alla' ? mdGroup(x.kategori)[0] !== 'rutin' : filt === 'allt' ? true : mdGroup(x.kategori)[0] === filt)).slice(0, 15);
     const groups = MD_GROUPS.filter((g) => list.some((x) => mdGroup(x.kategori)[0] === g[0]));
     box.innerHTML = `<div class="chips md-filt">${[['alla', EN ? 'Important' : 'Viktiga'], ...groups.filter((g) => g[0] !== 'rutin').map((g) => [g[0], mdLbl(g)]), ['allt', EN ? 'All' : 'Alla, även rutin']].map(([k, t]) => `<button type="button" class="chip-btn" data-noi18n data-mdf="${k}" aria-pressed="${k === filt}">${esc(t)}</button>`).join('')}</div>
-      <div class="md-list">${shown.map((it) => mdRow(it, { px: P ? mdPxHTML(P, I, it.tid, ctx.idxName) : undefined, pending: !P })).join('') || `<p class="b-note">${EN ? 'Nothing in this category.' : 'Inget i den här kategorin.'}</p>`}</div>${MD_NOTE()}`;
+      <div class="md-list">${shown.map((it) => mdRow(it, { sym: ctx.sym, px: P ? mdPxHTML(P, I, it.tid, ctx.idxName, mktOf(ctx.sym)?.close) : undefined, pending: !P })).join('') || `<p class="b-note">${EN ? 'Nothing in this category.' : 'Inget i den här kategorin.'}</p>`}</div>${MD_NOTE()}`;
   };
   draw(null, null);
   const [px, ix] = await Promise.all([ctx.get.px().catch(() => null), ctx.get.idx().catch(() => null)]);
@@ -2455,13 +2707,13 @@ async function bMeddelanden(ctx) {
 
 // Nyhetssidan: alla bolag. Bolagets namn hos Nasdaq kopplas till rätt aktie via listan med alla svenska aktier.
 const normCo = (n) => String(n || '').toLowerCase().replace(/\(publ\.?\)/g, ' ').replace(/[,.()"'&]/g, ' ').replace(/\b(ab|aktiebolag|aktiebolaget|publ|asa|oyj|a\/s|plc|inc|corp|ltd|sa|nv|ag|se|ser|class|series)\b/g, ' ').replace(/\b[ab]\b$/g, ' ').replace(/\s+/g, ' ').trim();
-let MD_MAP = null;
-async function mdSymMap() {
-  if (MD_MAP) return MD_MAP;
-  const d = await api('/api/aktier?m=se', 10 * 60e3).catch(() => null); const m = new Map();
+const MD_MAP = {};
+async function mdSymMap(mk = 'se') {
+  if (MD_MAP[mk]) return MD_MAP[mk];
+  const d = await api('/api/aktier?m=' + mk, 10 * 60e3).catch(() => null); const m = new Map();
   const put = (k, a) => { if (!k) return; const o = m.get(k); if (!o || (a.oms || 0) > (o.oms || 0)) m.set(k, a); };
   for (const a of d?.aktier || []) { const n = String(a.namn).replace(/\s+ser\.?\s*[A-Z]$/i, '').replace(/,?\s*[A-Z]-aktie$/i, ''); put(normCo(n), a); if (mdSig(n)) put('#' + mdSig(n), a); }
-  MD_MAP = m; return m;
+  MD_MAP[mk] = m; return m;
 }
 const MD_SIGFILL = new Set(['h', 'm', 'l', 'lm', 'the', 'telefonaktiebolaget', 'telefonab', 'holding', 'holdings', 'group', 'gruppen', 'koncernen', 'b', 'a', 'abp', 'oyj']);
 const mdSig = (n) => normCo(n).split(' ').filter((w) => w && !MD_SIGFILL.has(w)).sort().join(' ');
@@ -2477,8 +2729,9 @@ const mdSymOf = (map, co) => {
 async function mdNyheter(state) {
   const list = $('#newslist'); if (!list) return;
   list.innerHTML = loading(EN ? 'Fetching announcements …' : 'Hämtar meddelanden …');
-  const [d, map] = await Promise.all([getMdd(null).catch(() => null), mdSymMap()]);
-  if (!$('#newslist') || state.region !== 'md') return;
+  const mk = state.marknad || 'se';
+  const [d, map] = await Promise.all([getMdd(null, mk).catch(() => null), mdSymMap(mk)]);
+  if (!$('#newslist') || state.region !== 'md' || (state.marknad || 'se') !== mk) return;
   if (!d || d.error) { list.innerHTML = `<div class="empty">${EN ? 'The announcements could not be fetched right now.' : 'Meddelandena kunde inte hämtas just nu.'}</div>`; return; }
   const mine = new Set(mySyms().all);
   const items = (d.items || []).map((it) => ({ ...it, sym: mdSymOf(map, it.bolag) }));
@@ -2489,19 +2742,20 @@ async function mdNyheter(state) {
     $('#news-count').textContent = String(shown.length);
     const times = items.map((n) => n.tid).sort(); $('#news-range').textContent = items.length ? `${EN ? 'Latest' : 'Senaste'} ${when(times[times.length - 1])}, ${EN ? 'oldest' : 'äldsta'} ${when(times[0])}` : '';
     const chips = [['alla', EN ? 'Important' : 'Viktiga'], ...(mine.size ? [['mina', EN ? 'My stocks' : 'Mina aktier']] : []), ...MD_GROUPS.filter((g) => g[0] !== 'rutin').map((g) => [g[0], mdLbl(g)]), ['nyhet', EN ? 'News and orders' : 'Nyheter och ordrar'], ['allt', EN ? 'All, incl. routine' : 'Alla, även rutin']];
-    $('#newsfilter').innerHTML = chips.map(([k, t]) => `<button type="button" class="chip-btn" data-noi18n data-mdf="${k}" aria-pressed="${k === filt}">${esc(t)}</button>`).join('');
-    $('#news-help').innerHTML = EN ? 'Announcements from companies on the Stockholm Stock Exchange and First North. <b>Important</b> hides buybacks and other routine notices.' : 'Meddelanden från bolag på Stockholmsbörsen och First North. <b>Viktiga</b> döljer återköp och andra rutinmeddelanden.';
+    $('#newsfilter').innerHTML = `<span class="seg-mk">${[['se', EN ? 'Sweden' : 'Sverige'], ['nord', EN ? 'Copenhagen and Helsinki' : 'Köpenhamn och Helsingfors']].map(([k, t]) => `<button type="button" class="chip-btn" data-noi18n data-mdm="${k}" aria-pressed="${k === mk}">${esc(t)}</button>`).join('')}</span>` + chips.map(([k, t]) => `<button type="button" class="chip-btn" data-noi18n data-mdf="${k}" aria-pressed="${k === filt}">${esc(t)}</button>`).join('');
+    $('#news-help').innerHTML = mk === 'nord' ? (EN ? 'Announcements from companies on Nasdaq Copenhagen and Helsinki. Oslo is not included, the exchange is not part of Nasdaq. <b>Important</b> hides buybacks and other routine notices.' : 'Meddelanden från bolag på Nasdaq Köpenhamn och Helsingfors. Oslo är inte med, börsen hör inte till Nasdaq. <b>Viktiga</b> döljer återköp och andra rutinmeddelanden.') : (EN ? 'Announcements from companies on the Stockholm Stock Exchange and First North. <b>Important</b> hides buybacks and other routine notices.' : 'Meddelanden från bolag på Stockholmsbörsen och First North. <b>Viktiga</b> döljer återköp och andra rutinmeddelanden.');
     list.innerHTML = shown.length ? `<section class="card md-card">${shown.map((it) => mdRow(it, { sym: it.sym, showCo: true })).join('')}${MD_NOTE()}</section>` : `<div class="empty">${EN ? 'Nothing in this category right now.' : 'Inget i den här kategorin just nu.'}</div>`;
     watchPx();
   };
   // Kurserna hämtas först när raden syns, och bara en gång per aktie
-  const cache = new Map(); let idxP = null;
-  const getIdx = () => (idxP ||= api('/api/chart?s=%5EOMX&r=1m', 15 * 60e3).then(bOnePerDay).catch(() => null));
+  const cache = new Map(); const idxC = new Map();
+  const getIdx = (ix) => { if (!idxC.has(ix)) idxC.set(ix, api(`/api/chart?s=${encodeURIComponent(ix)}&r=1m`, 15 * 60e3).then(bOnePerDay).catch(() => null)); return idxC.get(ix); };
   const fill = async (row) => {
     const sym = row.dataset.mdsym; const it = items.find((x) => x.id === row.dataset.mdid); if (!sym || !it) return;
+    const m = mktOf(sym) || { close: CLOSE_MIN, idx: '^OMX', idxNamn: 'OMXS30' };
     if (!cache.has(sym)) cache.set(sym, api(`/api/chart?s=${encodeURIComponent(sym)}&r=1m`, 15 * 60e3).then(bOnePerDay).catch(() => null));
-    const [c, ix] = await Promise.all([cache.get(sym), getIdx()]);
-    const el = row.querySelector('.md-px'); if (el) el.innerHTML = c?.punkter ? mdPxHTML(c.punkter, ix?.punkter, it.tid) : `<span class="md-pxt faint small">${EN ? 'Price missing' : 'Kurs saknas'}</span>`;
+    const [c, ix] = await Promise.all([cache.get(sym), getIdx(m.idx)]);
+    const el = row.querySelector('.md-px'); if (el) el.innerHTML = c?.punkter ? mdPxHTML(c.punkter, ix?.punkter, it.tid, m.idxNamn, m.close) : `<span class="md-pxt faint small">${EN ? 'Price missing' : 'Kurs saknas'}</span>`;
   };
   let io = null;
   const watchPx = () => {
@@ -2510,7 +2764,7 @@ async function mdNyheter(state) {
     io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { io.unobserve(e.target); fill(e.target); } }), { rootMargin: '200px 0px' });
     rows.forEach((r) => io.observe(r));
   };
-  $('#newsfilter').onclick = (e) => { const b = e.target.closest('[data-mdf]'); if (!b) return; filt = b.dataset.mdf; draw(); };
+  $('#newsfilter').onclick = (e) => { const mm = e.target.closest('[data-mdm]'); if (mm && mm.dataset.mdm !== mk) { state.marknad = mm.dataset.mdm; mdNyheter(state); return; } const b = e.target.closest('[data-mdf]'); if (!b) return; filt = b.dataset.mdf; draw(); };
   draw();
 }
 
@@ -2723,87 +2977,132 @@ function viewNotFound() {
 
 /* ================= Router ================= */
 const LEGACY = { evo: 'EVO.ST', saab: 'SAAB-B.ST', volvo: 'VOLV-B.ST' };
-/* ================= Alla aktier: lista med filter ================= */
+/* ================= Utforska: aktier, fonder, ETF, ETP och krypto ================= */
 const KATEGORIER = [
   ['alla', 'Alla', () => true],
   ['utdelare', 'Utdelare', (a) => a.utd != null && a.utd >= 3],
   ['vinnare', 'Dagens vinnare', (a) => a.d1 != null && a.d1 >= 2],
   ['forlorare', 'Dagens förlorare', (a) => a.d1 != null && a.d1 <= -2],
   ['lagpe', 'Låg värdering', (a) => a.pe != null && a.pe > 0 && a.pe < 15],
-  ['aret', 'Årets vinnare', (a) => a.ar != null && a.ar >= 30],
+  ['aret', 'Upp 30 % på ett år', (a) => a.ar != null && a.ar >= 30],
   ['forlust', 'Går med förlust', (a) => a.pe === -1],
   ['bevakade', 'Mina bevakade', (a) => getWatch().includes(a.sym)]
 ];
-// Storlek efter börsvärde. Gränserna gäller i respektive valuta (kronor för Sverige, dollar för USA).
+// Fonder har ingen kategori i datakällan. Index- och räntefonder känns igen på namnet, och det står i hjälptexten.
+const RANTA_RE = /ränte|räntefond|obligation|penningmarknad|kort ränta|lång ränta|likviditet|bond|fixed income|money market|kredit|high yield|företagsobl/i;
+const INDEX_RE = /\bindex|indeks|indexnära|tracker/i;
+const KAT_TYP = {
+  fonder: [['alla', 'Alla', () => true], ['index', 'Indexfonder', (a) => INDEX_RE.test(a.namn)], ['ranta', 'Räntefonder', (a) => RANTA_RE.test(a.namn)], ['vinnare', 'Upp mest i dag', (a) => a.d1 != null && a.d1 >= 1], ['bevakade', 'Mina bevakade', (a) => getWatch().includes(a.sym)]],
+  etf: [['alla', 'Alla', () => true], ['vinnare', 'Dagens vinnare', (a) => a.d1 != null && a.d1 >= 1], ['forlorare', 'Dagens förlorare', (a) => a.d1 != null && a.d1 <= -1], ['bevakade', 'Mina bevakade', (a) => getWatch().includes(a.sym)]],
+  etp: [['alla', 'Alla', () => true], ['etp', 'ETP:er', (a) => a.slag === 'etp'], ['havstang', 'Hävstång', (a) => a.slag === 'havstang'], ['bevakade', 'Mina bevakade', (a) => getWatch().includes(a.sym)]],
+  krypto: [['alla', 'Alla', () => true], ['utan', 'Utan stablecoins', (a) => !a.stable], ['stable', 'Stablecoins', (a) => a.stable], ['bevakade', 'Mina bevakade', (a) => getWatch().includes(a.sym)]]
+};
+// Storlek efter börsvärde eller fondens storlek. Gränserna gäller i listans valuta.
 const STORLEK = {
   se: [['alla', 'Alla storlekar'], ['stora', 'Stora · över 10 mdr kr', (v) => v >= 10e9], ['medel', 'Medel · 1–10 mdr kr', (v) => v >= 1e9 && v < 10e9], ['sma', 'Små · under 1 mdr kr', (v) => v < 1e9]],
-  us: [['alla', 'Alla storlekar'], ['stora', 'Stora · över 200 mdr $', (v) => v >= 200e9], ['medel', 'Medel · 10–200 mdr $', (v) => v >= 10e9 && v < 200e9], ['sma', 'Mindre · under 10 mdr $', (v) => v < 10e9]]
+  us: [['alla', 'Alla storlekar'], ['stora', 'Stora · över 200 mdr $', (v) => v >= 200e9], ['medel', 'Medel · 10–200 mdr $', (v) => v >= 10e9 && v < 200e9], ['sma', 'Mindre · under 10 mdr $', (v) => v < 10e9]],
+  fonder: [['alla', 'Alla storlekar'], ['stora', 'Stora · över 10 mdr kr', (v) => v >= 10e9], ['medel', 'Medel · 1–10 mdr kr', (v) => v >= 1e9 && v < 10e9], ['sma', 'Små · under 1 mdr kr', (v) => v < 1e9]],
+  'etf-us': [['alla', 'Alla storlekar'], ['stora', 'Stora · över 10 mdr $', (v) => v >= 10e9], ['medel', 'Medel · 1–10 mdr $', (v) => v >= 1e9 && v < 10e9], ['sma', 'Mindre · under 1 mdr $', (v) => v < 1e9]],
+  krypto: [['alla', 'Alla storlekar'], ['stora', 'Stora · över 100 mdr kr', (v) => v >= 100e9], ['medel', 'Medel · 1–100 mdr kr', (v) => v >= 1e9 && v < 100e9], ['sma', 'Små · under 1 mdr kr', (v) => v < 1e9]]
 };
 // Norden har flera valutor. Storlek och sortering görs på börsvärdet omräknat till kronor.
-STORLEK.nord = STORLEK.se;
+STORLEK.nord = STORLEK.se; STORLEK['etf-se'] = STORLEK.fonder;
 const AK_M = ['se', 'nord', 'us'];
-const akVal = (a, k) => (k === 'mcap' ? a.mcapSek ?? a.mcap : k === 'oms' ? a.omsSek ?? a.oms : a[k]);
-const SORTS = [['mcap', 'Börsvärde'], ['d1', 'I dag'], ['ar', '1 år'], ['pe', 'P/E'], ['utd', 'Utdelning'], ['oms', 'Omsättning'], ['namn', 'Namn']];
+// Typerna i Utforska: varifrån listan kommer, vilka marknader som finns och vad en rad heter
+const UT = {
+  aktier: { namn: 'Aktier', m: ['se', 'nord', 'us'], url: (m) => `/api/aktier?m=${m}`, ar: (m) => m, en: 'aktie', fler: 'aktier', size: 'mcap', sizeLbl: 'Börsvärde' },
+  fonder: { namn: 'Fonder', m: null, url: () => '/api/lista?typ=fonder', ar: () => 'fonder', en: 'fond', fler: 'fonder', size: 'storlek', sizeLbl: 'Fondförmögenhet' },
+  etf: { namn: 'ETF', m: ['se', 'us'], url: (m) => `/api/lista?typ=etf&m=${m}`, ar: (m) => `etf-${m}`, en: 'ETF', fler: 'ETF:er', size: 'storlek', sizeLbl: 'Storlek' },
+  etp: { namn: 'ETP och certifikat', m: null, url: () => '/api/lista?typ=etp', ar: () => 'etp', en: 'produkt', fler: 'produkter', size: null, sizeLbl: '' },
+  krypto: { namn: 'Krypto', m: null, url: () => '/api/lista?typ=krypto', ar: () => 'krypto', en: 'kryptovaluta', fler: 'kryptovalutor', size: 'mcap', sizeLbl: 'Börsvärde' }
+};
+const UT_M = { se: 'Sverige', nord: 'Norden', us: 'USA' };
+const akVal = (a, k) => (k === 'mcap' ? a.mcapSek ?? a.mcap ?? a.storlek : k === 'oms' ? a.omsSek ?? a.oms : k === 'storlek' ? a.storlek : k === 'kurs' ? a.kursSek ?? a.kurs : a[k]);
+const SORTS_T = {
+  aktier: [['mcap', 'Börsvärde'], ['d1', 'I dag'], ['ar', '1 år'], ['pe', 'P/E'], ['utd', 'Utdelning'], ['oms', 'Omsättning'], ['namn', 'Namn']],
+  fonder: [['storlek', 'Fondförmögenhet'], ['d1', 'I dag'], ['ar', '1 år'], ['namn', 'Namn']],
+  etf: [['storlek', 'Storlek'], ['d1', 'I dag'], ['ar', '1 år'], ['namn', 'Namn']],
+  etp: [['ar', '1 år'], ['d1', 'I dag'], ['namn', 'Namn']],
+  krypto: [['mcap', 'Börsvärde'], ['d1', 'I dag'], ['ar', '1 år'], ['namn', 'Namn']]
+};
 const PAGE = 50;
+const UT_HELP = {
+  aktier: 'Aktier i Sverige, Norden (Oslo, Helsingfors och Köpenhamn) och de större bolagen i USA. I Norden visas börsvärdet i bolagets egen valuta men sorteras i kronor. P/E räknas på vinsten de senaste tolv månaderna, och utdelning är direktavkastningen det senaste året.',
+  fonder: 'Fonder som handlas i Sverige. Fondkursen sätts en gång per dag. Indexfonder och räntefonder känns igen på fondens namn, så filtret kan missa någon. Avgifter finns inte i datakällan och visas därför inte.',
+  etf: 'Börshandlade fonder på Stockholmsbörsen, och de största i USA efter storlek.',
+  etp: 'ETP:er följer till exempel en kryptovaluta eller ett index. Hävstångsprodukter som bull, bear och minifutures rör sig flera gånger mer än det de följer och kan bli värdelösa. Listan visar det som datakällan har, inte alla certifikat som finns.',
+  krypto: 'De 100 största kryptovalutorna efter börsvärde. Kursen är i dollar och räknas om till kronor med dagens växelkurs. Stablecoins följer en valuta, oftast dollarn.'
+};
 
 function viewAktier() {
   return `
-  ${topbar([['Översikt', '/oversikt'], ['Alla aktier', '/aktier']])}
+  ${topbar([['Översikt', '/oversikt'], ['Utforska', '/aktier']])}
   <div class="stack" style="gap:6px">
     <span class="eyebrow" id="ak-status">Hämtar listan …</span>
-    <h1 class="title">Alla aktier</h1>
+    <h1 class="title">Utforska</h1>
   </div>
+  <div class="tabs ut-typ" role="tablist" aria-label="Typ av värdepapper">${Object.entries(UT).map(([k, t]) => `<button role="tab" data-typ="${k}">${esc(t.namn)}</button>`).join('')}</div>
   <section class="card ak-filters" aria-label="Filter">
     <div class="ak-row">
-      <div class="tabs" role="tablist" aria-label="Marknad"><button role="tab" data-m="se">Sverige</button><button role="tab" data-m="nord">Norden</button><button role="tab" data-m="us">USA</button></div>
+      <div class="tabs" role="tablist" aria-label="Marknad" id="ak-m"></div>
       <form class="searchbar" role="search" style="flex:1;min-width:200px;max-width:none" data-akform>
         ${svg('search', 18, '#6B6F76')}
         <label class="sr-only" for="ak-q">Filtrera på namn eller ticker</label>
         <input id="ak-q" type="search" placeholder="Filtrera på namn eller ticker" autocomplete="off">
       </form>
       <label class="sr-only" for="ak-sort">Sortera</label>
-      <select class="select" id="ak-sort">${SORTS.map(([k, t]) => `<option value="${k}">Sortera: ${t}</option>`).join('')}</select>
+      <select class="select" id="ak-sort"></select>
     </div>
     <div class="ak-group"><span class="label-up">Kategori</span><div class="chips" id="ak-kat"></div></div>
-    <div class="ak-group"><span class="label-up">Bransch</span><div class="chips" id="ak-bransch"></div></div>
-    <div class="ak-group"><span class="label-up">Storlek</span><div class="chips" id="ak-storlek"></div></div>
+    <div class="ak-group" id="ak-bransch-g"><span class="label-up">Bransch</span><div class="chips" id="ak-bransch"></div></div>
+    <div class="ak-group" id="ak-storlek-g"><span class="label-up">Storlek</span><div class="chips" id="ak-storlek"></div></div>
+    <p class="small faint" id="ak-help" style="margin:2px 0 0"></p>
   </section>
   <section class="card" style="padding:8px 8px 14px" aria-labelledby="ak-count">
     <div class="section-head" style="padding:12px 14px 4px;align-items:center"><h2 class="section" id="ak-count" style="font-size:20px">Hämtar …</h2><button class="linkbtn small" type="button" data-reset hidden>Rensa filter</button></div>
-    <div id="ak-list">${loading('Hämtar alla aktier …')}</div>
+    <div id="ak-list">${loading('Hämtar listan …')}</div>
   </section>
-  ${footer('Listan visar aktier i Sverige, Norden (Oslo, Helsingfors och Köpenhamn) och de större bolagen i USA. Certifikat, warranter och börshandlade produkter är inte med. I Norden visas börsvärdet i bolagets egen valuta men sorteras i kronor. Kurser kan vara fördröjda upp till 15 minuter. P/E räknas på vinsten de senaste tolv månaderna, och utdelning är direktavkastningen det senaste året.')}`;
+  ${footer('Källa: Yahoo Finance. Kurser kan vara fördröjda upp till 15 minuter. 1 år räknas som på sidan för varje värdepapper: senaste kurs mot stängningskursen för ett år sedan, utan utdelningar.')}`;
 }
 
 function mountAktier(params) {
-  const st = {
-    m: AK_M.includes(params.get('m')) ? params.get('m') : 'se',
-    q: params.get('q') || '',
-    k: KATEGORIER.some((x) => x[0] === params.get('k')) ? params.get('k') : 'alla',
-    b: params.get('b') || 'alla',
-    st: ['alla', 'stora', 'medel', 'sma'].includes(params.get('st')) ? params.get('st') : 'alla',
-    s: SORTS.some((x) => x[0] === params.get('s')) ? params.get('s') : 'mcap',
-    d: params.get('d') === 'asc' ? 'asc' : 'desc',
-    n: PAGE
-  };
-  let data = null;
+  const typ0 = UT[params.get('typ')] ? params.get('typ') : 'aktier';
+  const st = { typ: typ0, m: null, q: params.get('q') || '', k: params.get('k') || 'alla', b: params.get('b') || 'alla', st: params.get('st') || 'alla', s: params.get('s') || null, d: params.get('d') === 'asc' ? 'asc' : 'desc', n: PAGE };
+  const T = () => UT[st.typ];
+  const defM = () => (T().m ? T().m[0] : null);
+  st.m = T().m?.includes(params.get('m')) ? params.get('m') : defM();
+  const kats = () => (st.typ === 'aktier' ? KATEGORIER : KAT_TYP[st.typ]);
+  const sorts = () => SORTS_T[st.typ];
+  const storl = () => STORLEK[st.typ === 'aktier' ? st.m : st.typ === 'etf' ? `etf-${st.m}` : st.typ] || null;
+  if (!kats().some((x) => x[0] === st.k)) st.k = 'alla';
+  if (!sorts().some((x) => x[0] === st.s)) st.s = sorts()[0][0];
+  if (!['alla', 'stora', 'medel', 'sma'].includes(st.st)) st.st = 'alla';
+  let data = null; let ar = { klar: false, lista: null };
   const syncUrl = () => {
     const p = new URLSearchParams();
-    if (st.m !== 'se') p.set('m', st.m); if (st.q) p.set('q', st.q); if (st.k !== 'alla') p.set('k', st.k);
+    if (st.typ !== 'aktier') p.set('typ', st.typ); if (st.m && st.m !== defM()) p.set('m', st.m); if (st.q) p.set('q', st.q); if (st.k !== 'alla') p.set('k', st.k);
     if (st.b !== 'alla') p.set('b', st.b); if (st.st !== 'alla') p.set('st', st.st);
-    if (st.s !== 'mcap') p.set('s', st.s); if (st.d !== 'desc') p.set('d', st.d);
+    if (st.s !== sorts()[0][0]) p.set('s', st.s); if (st.d !== 'desc') p.set('d', st.d);
     history.replaceState(null, '', '/aktier' + (p.toString() ? '?' + p : ''));
   };
-  $('#ak-q').value = st.q; $('#ak-sort').value = st.s;
-  const tabs = () => document.querySelectorAll('[data-m]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.m === st.m)));
-  tabs();
+  const setup = () => {
+    document.querySelectorAll('[data-typ]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.typ === st.typ)));
+    $('#ak-m').innerHTML = T().m ? T().m.map((m) => `<button role="tab" data-m="${m}" aria-selected="${m === st.m}">${esc(UT_M[m])}</button>`).join('') : '';
+    $('#ak-m').hidden = !T().m;
+    $('#ak-sort').innerHTML = sorts().map(([k, t]) => `<option value="${k}">Sortera: ${esc(t)}</option>`).join(''); $('#ak-sort').value = st.s;
+    $('#ak-bransch-g').hidden = st.typ !== 'aktier';
+    $('#ak-storlek-g').hidden = !storl();
+    $('#ak-help').textContent = UT_HELP[st.typ];
+    $('#ak-q').value = st.q;
+  };
+  setup();
 
-  // Filtrera i tur och ordning. Bransch-räknaren visar hur många som finns med övriga filter.
+  // Filtrera i tur och ordning. Räknarna visar hur många som finns med övriga filter.
   const pass = (a, skip) => {
     if (st.q) { const q = st.q.toLowerCase(); if (!a.namn.toLowerCase().includes(q) && !a.sym.toLowerCase().includes(q)) return false; }
-    if (skip !== 'k' && !KATEGORIER.find((x) => x[0] === st.k)[2](a)) return false;
-    if (skip !== 'b' && st.b !== 'alla' && a.bransch !== st.b) return false;
-    if (skip !== 'st' && st.st !== 'alla') { const f = STORLEK[st.m].find((x) => x[0] === st.st)[2]; const v = akVal(a, 'mcap'); if (v == null || !f(v)) return false; }
+    if (skip !== 'k') { const k = kats().find((x) => x[0] === st.k); if (k && !k[2](a)) return false; }
+    if (skip !== 'b' && st.typ === 'aktier' && st.b !== 'alla' && a.bransch !== st.b) return false;
+    if (skip !== 'st' && st.st !== 'alla' && storl()) { const f = storl().find((x) => x[0] === st.st)?.[2]; const v = akVal(a, T().size || 'mcap'); if (f && (v == null || !f(v))) return false; }
     return true;
   };
   const sorted = (list) => {
@@ -2817,66 +3116,92 @@ function mountAktier(params) {
   };
 
   const drawChips = () => {
-    const base = data.aktier;
-    $('#ak-kat').innerHTML = KATEGORIER.map(([k, t]) => { const n = base.filter((a) => pass(a, 'k') && KATEGORIER.find((x) => x[0] === k)[2](a)).length; return `<button type="button" class="chip-btn" data-k="${k}" aria-pressed="${st.k === k}" ${n || st.k === k ? '' : 'disabled'}>${esc(t)} <span class="chip-n">${n}</span></button>`; }).join('');
-    const counts = {}; for (const a of base) if (pass(a, 'b')) counts[a.bransch] = (counts[a.bransch] || 0) + 1;
-    const all = [...new Set(base.map((a) => a.bransch))].sort((a, b) => a.localeCompare(b, 'sv'));
-    $('#ak-bransch').innerHTML = `<button type="button" class="chip-btn" data-b="alla" aria-pressed="${st.b === 'alla'}">Alla <span class="chip-n">${base.filter((a) => pass(a, 'b')).length}</span></button>` +
-      all.map((b) => `<button type="button" class="chip-btn" data-b="${esc(b)}" aria-pressed="${st.b === b}" ${counts[b] || st.b === b ? '' : 'disabled'}>${esc(b)} <span class="chip-n">${counts[b] || 0}</span></button>`).join('');
-    $('#ak-storlek').innerHTML = STORLEK[st.m].map(([k, t]) => `<button type="button" class="chip-btn" data-st="${k}" aria-pressed="${st.st === k}">${esc(t)}</button>`).join('');
+    const base = data.items;
+    $('#ak-kat').innerHTML = kats().map(([k, t, f]) => { const n = base.filter((a) => pass(a, 'k') && f(a)).length; return `<button type="button" class="chip-btn" data-k="${k}" aria-pressed="${st.k === k}" ${n || st.k === k ? '' : 'disabled'}>${esc(t)} <span class="chip-n">${n}</span></button>`; }).join('');
+    if (st.typ === 'aktier') {
+      const counts = {}; for (const a of base) if (pass(a, 'b')) counts[a.bransch] = (counts[a.bransch] || 0) + 1;
+      const all = [...new Set(base.map((a) => a.bransch))].sort((a, b) => a.localeCompare(b, 'sv'));
+      $('#ak-bransch').innerHTML = `<button type="button" class="chip-btn" data-b="alla" aria-pressed="${st.b === 'alla'}">Alla <span class="chip-n">${base.filter((a) => pass(a, 'b')).length}</span></button>` +
+        all.map((b) => `<button type="button" class="chip-btn" data-b="${esc(b)}" aria-pressed="${st.b === b}" ${counts[b] || st.b === b ? '' : 'disabled'}>${esc(b)} <span class="chip-n">${counts[b] || 0}</span></button>`).join('');
+    }
+    $('#ak-storlek').innerHTML = storl() ? storl().map(([k, t]) => `<button type="button" class="chip-btn" data-st="${k}" aria-pressed="${st.st === k}">${esc(t)}</button>`).join('') : '';
   };
 
   const th = (k, t, cls = '') => `<th scope="col" class="${cls}" aria-sort="${st.s === k ? (st.d === 'asc' ? 'ascending' : 'descending') : 'none'}"><button type="button" class="th-sort" data-sort="${k}">${t}${st.s === k ? (st.d === 'asc' ? ' ↑' : ' ↓') : ''}</button>${tip(t)}</th>`;
+  const arCell = (a) => (a.ar != null ? `<td class="r num hide-xs" style="color:var(--${tone(a.ar)})">${pct(a.ar, 0)}</td>` : `<td class="r num hide-xs faint">${ar.klar ? '–' : '…'}</td>`);
+  const d1Cell = (a) => `<td class="r"><span class="pill ${tone(a.d1)}">${a.d1 != null ? pct(a.d1, 1) : '–'}</span></td>`;
+  const star = (a, watch) => `<td class="r"><button type="button" class="star-btn" data-star="${esc(a.sym)}" data-namn="${esc(a.namn)}" aria-pressed="${watch.has(a.sym)}" aria-label="${watch.has(a.sym) ? 'Sluta bevaka' : 'Bevaka'} ${esc(a.namn)}">${svg('star', 18)}</button></td>`;
+  const nameCell = (a, sub) => `<td><a class="ak-name" href="/bolag/${encodeURIComponent(a.sym)}" data-link data-namn="${esc(a.namn)}">${av(a.sym, a.kod ? a.kod.slice(0, 4) : undefined)}<span><b>${esc(a.namn)}</b><span class="small muted">${sub}</span></span></a></td>`;
+  const pxTxt = (a) => (a.kurs != null ? esc(kr(a.kurs)) + ' ' + esc(cur(a.valuta)) : '–');
+  const ROWS = {
+    aktier: { head: () => `${th('namn', 'Bolag')}<th scope="col" class="hide-sm">Bransch</th>${th('d1', 'I dag', 'r')}${th('ar', '1 år', 'r hide-xs')}${th('pe', 'P/E', 'r hide-sm')}${th('utd', 'Utdelning', 'r hide-sm')}${th('mcap', 'Börsvärde', 'r hide-sm')}`,
+      row: (a) => `${nameCell(a, `${symFlag(a.sym, 'mob-ak')}${esc(a.sym)} · ${pxTxt(a)}`)}<td class="hide-sm small muted">${esc(a.bransch)}</td>${d1Cell(a)}${arCell(a)}<td class="r num hide-sm">${a.pe === -1 ? '<span class="small muted">Förlust</span>' : a.pe != null ? esc(nf(a.pe, 1)) : '–'}</td><td class="r num hide-sm">${a.utd ? esc(nf(a.utd, 1)) + ' %' : a.utd === 0 ? '0 %' : '–'}</td><td class="r num hide-sm">${a.mcap ? esc(mny(a.mcap, a.valuta)) : '–'}</td>` },
+    fonder: { head: () => `${th('namn', 'Fond')}${th('d1', 'I dag', 'r')}${th('ar', '1 år', 'r hide-xs')}${th('storlek', 'Fondförmögenhet', 'r hide-sm')}`,
+      row: (a) => `${nameCell(a, `${pxTxt(a)} · ${esc(when(a.tid))}`)}${d1Cell(a)}${arCell(a)}<td class="r num hide-sm">${a.storlek ? esc(mny(a.storlek, a.valuta)) : '–'}</td>` },
+    etf: { head: () => `${th('namn', 'ETF')}${th('d1', 'I dag', 'r')}${th('ar', '1 år', 'r hide-xs')}${th('storlek', 'Storlek', 'r hide-sm')}`,
+      row: (a) => `${nameCell(a, `${symFlag(a.sym, 'mob-ak')}${esc(a.sym)} · ${pxTxt(a)}`)}${d1Cell(a)}${arCell(a)}<td class="r num hide-sm">${a.storlek ? esc(mny(a.storlek, a.valuta)) : '–'}</td>` },
+    etp: { head: () => `${th('namn', 'Produkt')}<th scope="col" class="hide-sm">Typ</th>${th('d1', 'I dag', 'r')}${th('ar', '1 år', 'r hide-xs')}`,
+      row: (a) => `${nameCell(a, `${esc(a.sym)} · ${pxTxt(a)}`)}<td class="hide-sm small">${a.slag === 'havstang' ? '<span class="pill down">Hävstång</span>' : '<span class="pill">ETP</span>'}</td>${d1Cell(a)}${arCell(a)}` },
+    krypto: { head: () => `${th('namn', 'Kryptovaluta')}${th('kurs', 'Kurs', 'r hide-sm')}${th('d1', 'I dag', 'r')}${th('ar', '1 år', 'r hide-xs')}${th('mcap', 'Börsvärde', 'r hide-sm')}`,
+      row: (a) => `${nameCell(a, `${esc(a.kod)}${a.stable ? ' · stablecoin' : ''} · ${esc(kr(a.kurs))} $`)}<td class="r num hide-sm">${a.kursSek != null ? esc(kr(a.kursSek)) + ' kr' : '–'}</td>${d1Cell(a)}${arCell(a)}<td class="r num hide-sm">${a.mcapSek ? esc(mny(a.mcapSek, 'SEK')) : '–'}</td>` }
+  };
   const drawList = () => {
-    const list = sorted(data.aktier.filter((a) => pass(a)));
+    const list = sorted(data.items.filter((a) => pass(a)));
     const filtered = st.q || st.k !== 'alla' || st.b !== 'alla' || st.st !== 'alla';
-    $('#ak-count').textContent = `${list.length.toLocaleString(L)} ${list.length === 1 ? 'aktie' : 'aktier'}`;
+    $('#ak-count').textContent = `${list.length.toLocaleString(L)} ${list.length === 1 ? T().en : T().fler}`;
     $('[data-reset]').hidden = !filtered;
-    if (!list.length) { $('#ak-list').innerHTML = '<div class="empty">Inga aktier matchar filtren. Prova att ta bort något filter.</div>'; return; }
+    if (!list.length) { $('#ak-list').innerHTML = '<div class="empty">Inget matchar filtren. Prova att ta bort något filter.</div>'; return; }
     const watch = new Set(getWatch());
-    const show = list.slice(0, st.n);
-    $('#ak-list').innerHTML = `<div class="table-wrap"><table class="ak-table">
-      <thead><tr>${th('namn', 'Bolag')}<th scope="col" class="hide-sm">Bransch</th>${th('d1', 'I dag', 'r')}${th('ar', '1 år', 'r hide-xs')}${th('pe', 'P/E', 'r hide-sm')}${th('utd', 'Utdelning', 'r hide-sm')}${th('mcap', 'Börsvärde', 'r hide-sm')}<th scope="col" class="r"><span class="sr-only">Bevaka</span></th></tr></thead>
-      <tbody>${show.map((a) => `<tr>
-        <td><a class="ak-name" href="/bolag/${encodeURIComponent(a.sym)}" data-link data-namn="${esc(a.namn)}">${av(a.sym)}<span><b>${esc(a.namn)}</b><span class="small muted">${symFlag(a.sym, 'mob-ak')}${esc(a.sym)} · ${a.kurs != null ? esc(kr(a.kurs)) + ' ' + esc(cur(a.valuta)) : '–'}</span></span></a></td>
-        <td class="hide-sm small muted">${esc(a.bransch)}</td>
-        <td class="r"><span class="pill ${tone(a.d1)}">${a.d1 != null ? pct(a.d1, 1) : '–'}</span></td>
-        <td class="r num hide-xs" style="color:var(--${tone(a.ar)})">${a.ar != null ? pct(a.ar, 0) : '–'}</td>
-        <td class="r num hide-sm">${a.pe === -1 ? '<span class="small muted">Förlust</span>' : a.pe != null ? esc(nf(a.pe, 1)) : '–'}</td>
-        <td class="r num hide-sm">${a.utd ? esc(nf(a.utd, 1)) + ' %' : a.utd === 0 ? '0 %' : '–'}</td>
-        <td class="r num hide-sm">${a.mcap ? esc(mny(a.mcap, a.valuta)) : '–'}</td>
-        <td class="r"><button type="button" class="star-btn" data-star="${esc(a.sym)}" data-namn="${esc(a.namn)}" aria-pressed="${watch.has(a.sym)}" aria-label="${watch.has(a.sym) ? 'Sluta bevaka' : 'Bevaka'} ${esc(a.namn)}">${svg('star', 18)}</button></td>
-      </tr>`).join('')}</tbody></table></div>
+    const show = list.slice(0, st.n); const R = ROWS[st.typ];
+    $('#ak-list').innerHTML = `${st.s === 'ar' && !ar.klar ? '<p class="small faint" style="margin:6px 14px">1 år räknas fortfarande. Listan sorteras om när det är klart.</p>' : ''}<div class="table-wrap"><table class="ak-table">
+      <thead><tr>${R.head()}<th scope="col" class="r"><span class="sr-only">Bevaka</span></th></tr></thead>
+      <tbody>${show.map((a) => `<tr>${R.row(a)}${star(a, watch)}</tr>`).join('')}</tbody></table></div>
       ${list.length > show.length ? `<div style="display:flex;justify-content:center;padding:14px"><button class="btn ghost" type="button" data-more>Visa fler (${(list.length - show.length).toLocaleString(L)} kvar)</button></div>` : ''}`;
   };
   const draw = () => { if (!data) return; syncUrl(); drawChips(); drawList(); };
 
+  // 1 år: kursen för ett år sedan hämtas för 500 åt gången. Samma uträkning som på sidan för varje värdepapper.
+  const loadAr = async (key, items) => {
+    ar = { klar: false, lista: key };
+    const parts = Math.ceil(items.length / 500);
+    await Promise.all(Array.from({ length: parts }, (_, i) => api(`/api/ar?lista=${key}&del=${i}`, 3 * 3600e3).then((r) => {
+      if (ar.lista !== key || !r?.ref) return;
+      for (const a of items) { const ref = r.ref[a.sym]; if (ref && a.kurs) a.ar = Math.round((a.kurs / ref - 1) * 10000) / 100; }
+    }).catch(() => null)));
+    if (ar.lista !== key) return;
+    ar.klar = true; if ($('#ak-list') && data?.items === items) draw();
+  };
+
   const load = async () => {
     $('#ak-status').textContent = 'Hämtar listan …';
-    $('#ak-list').innerHTML = loading('Hämtar alla aktier …');
-    const m = st.m;
-    const d = await api('/api/aktier?m=' + m, 10 * 60e3);
-    if (!$('#ak-list') || m !== st.m) return;
-    if (!d || d.error || !d.aktier?.length) {
+    $('#ak-list').innerHTML = loading('Hämtar listan …');
+    const typ = st.typ; const m = st.m;
+    const d = await api(T().url(m), 10 * 60e3);
+    if (!$('#ak-list') || typ !== st.typ || m !== st.m) return;
+    const items = d?.aktier || d?.items;
+    if (!d || d.error || !items?.length) {
       $('#ak-status').textContent = 'Listan kunde inte hämtas';
-      $('#ak-count').textContent = 'Inga aktier';
+      $('#ak-count').textContent = 'Inget att visa';
       $('#ak-list').innerHTML = `<div class="empty">${esc(d?.error ? errText(d) : 'Datakällan svarade inte.')} Prova igen om en stund.</div>`;
       return;
     }
-    data = d;
-    if (st.b !== 'alla' && !d.aktier.some((a) => a.bransch === st.b)) st.b = 'alla';
-    $('#ak-status').textContent = `${d.aktier.length.toLocaleString(L)} aktier${d.urval ? ' (urval av de största)' : ''} · ${d.kalla} · hämtat kl ${clock(d.hamtad)}`;
+    items.forEach((a) => { a.ar = null; });
+    data = { ...d, items };
+    if (st.b !== 'alla' && !items.some((a) => a.bransch === st.b)) st.b = 'alla';
+    $('#ak-status').textContent = `${items.length.toLocaleString(L)} ${T().fler}${d.komplett === false ? ' (delar av listan saknas just nu)' : ''} · ${d.kalla} · hämtat kl ${clock(d.hamtad)}${typ === 'krypto' && d.usdsek ? ` · 1 $ = ${nf(d.usdsek, 2)} kr` : ''}`;
     draw();
+    loadAr(T().ar(m), items);
   };
 
   let qt;
   $('#ak-q').addEventListener('input', (e) => { clearTimeout(qt); qt = setTimeout(() => { st.q = e.target.value.trim(); st.n = PAGE; draw(); }, 150); });
   $('[data-akform]').addEventListener('submit', (e) => e.preventDefault());
-  $('#ak-sort').addEventListener('change', (e) => { st.s = e.target.value; st.d = st.s === 'namn' ? 'asc' : st.s === 'pe' ? 'asc' : 'desc'; st.n = PAGE; draw(); });
+  $('#ak-sort').addEventListener('change', (e) => { st.s = e.target.value; st.d = st.s === 'namn' || st.s === 'pe' ? 'asc' : 'desc'; st.n = PAGE; draw(); });
   $('.main').addEventListener('click', (e) => {
     const t = e.target.closest('button');
     if (!t) { const a = e.target.closest('.ak-name'); if (a) rememberName(decodeURIComponent(a.getAttribute('href').split('/').pop()), a.dataset.namn); return; }
-    if (t.dataset.m && t.dataset.m !== st.m) { st.m = t.dataset.m; st.b = 'alla'; st.st = 'alla'; st.n = PAGE; data = null; tabs(); syncUrl(); load(); return; }
+    if (t.dataset.typ && t.dataset.typ !== st.typ) { st.typ = t.dataset.typ; st.m = defM(); st.k = 'alla'; st.b = 'alla'; st.st = 'alla'; st.s = sorts()[0][0]; st.d = 'desc'; st.q = ''; st.n = PAGE; data = null; setup(); syncUrl(); load(); return; }
+    if (t.dataset.m && t.dataset.m !== st.m) { st.m = t.dataset.m; st.b = 'alla'; st.st = 'alla'; st.n = PAGE; data = null; setup(); syncUrl(); load(); return; }
     if (t.dataset.k) { st.k = t.dataset.k; st.n = PAGE; draw(); return; }
     if (t.dataset.b) { st.b = t.dataset.b; st.n = PAGE; draw(); return; }
     if (t.dataset.st) { st.st = t.dataset.st; st.n = PAGE; draw(); return; }
@@ -5412,7 +5737,7 @@ function route() {
   if (path === '/idag' || path === '/kalender') { const q = new URLSearchParams({ flik: path === '/idag' ? 'dagen' : 'kalender' }); if (path === '/idag' && params.get('dag')) q.set('dag', params.get('dag')); history.replaceState(null, '', '/portfolj?' + q); return route(); }
   if (path === '/ova') { history.replaceState(null, '', '/portfolj'); return route(); } // Övningsportföljen är borttagen
   if (path === '/fraga') { history.replaceState(null, '', '/'); return route(); }
-  if (path === '/aktier') return { active: 'aktier', title: 'Alla aktier', html: viewAktier(), mount: () => mountAktier(params) };
+  if (path === '/aktier') return { active: 'aktier', title: 'Utforska', html: viewAktier(), mount: () => mountAktier(params) };
   if (path === '/jamfor') return { active: 'jamfor', title: 'Jämför', html: viewJamfor(), mount: () => mountJamfor(params) };
   if (path === '/statistik') return ACC.user ? { active: 'statistik', title: 'Statistik', html: viewStatistik(), mount: mountStatistik } : { active: 'statistik', title: 'Statistik', html: `${topbar([['Statistik', '/statistik']], false)}<div class="empty">Logga in för att se statistiken.</div>` };
   if (path === '/konto') return { active: 'konto', title: ACC.user ? 'Mitt konto' : 'Logga in', html: viewKonto(), mount: mountKonto };
@@ -5431,7 +5756,7 @@ const META = {
   oversikt: ['Riskkoll för svenska och amerikanska aktier på enkel svenska. Insynshandel, blankning, nyheter och din portfölj på ett ställe. Gratis och utan köptips.', 'Risk check for Swedish and US stocks in plain language. Insider trading, short selling, news and your portfolio in one place. Free and without buy tips.'],
   nyheter: ['Börsnyheter om svenska bolag och från hela världen, med länk till källan.', 'Market news about Swedish companies and from around the world, with links to the source.'],
   sok: ['Sök på en aktie eller fond och få affärsidé, kursutveckling och en full riskkoll på enkel svenska.', 'Search for a stock or fund and get the business idea, price development and a full risk check in plain language.'],
-  aktier: ['Alla aktier på Stockholmsbörsen och de största i USA. Filtrera på bransch, storlek, P/E och utdelning.', 'All stocks on the Stockholm Stock Exchange and the largest in the US. Filter by sector, size, P/E and dividend.'],
+  aktier: ['Aktier i Sverige, Norden och USA, fonder, ETF:er, ETP:er och krypto. Filtrera och jämför med samma riskkoll.', 'Stocks in Sweden, the Nordics and the US, funds, ETFs, ETPs and crypto. Filter and compare with the same risk check.'],
   jamfor: ['Jämför två aktier sida vid sida: kurs, nyckeltal och riskkoll.', 'Compare two stocks side by side: price, key figures and risk check.'],
   om: ['Finanskollen drivs av Albin och finns för att alla ska känna sig trygga med aktier. Aldrig köptips, aldrig sålda uppgifter.', 'Finanskollen is run by Albin so that everyone can feel safe with stocks. Never buy tips, never sold data.'],
   integritet: ['Så hanterar Finanskollen dina uppgifter.', 'How Finanskollen handles your data.'],

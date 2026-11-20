@@ -1,5 +1,6 @@
 import { cached, fail, ApiError } from '../lib/finnhub.mjs';
 import { yScreen, yQuotes, raw } from '../lib/yahoo.mjs';
+import { isStock } from '../lib/klass.mjs';
 
 // GET /api/aktier?m=se|nord|us  →  alla aktier på marknaden med bransch, kurs och nyckeltal, för listsidan.
 // nord = Oslo, Helsingfors och Köpenhamn. Där räknas börsvärde och omsättning även om till kronor, så att listan går att jämföra.
@@ -16,9 +17,7 @@ const MARKETS = {
   us: { regions: ['us'], pages: 3, extra: [{ operator: 'gt', operands: ['intradaymarketcap', 2e9] }] }
 };
 // Certifikat, warranter, teckningsrätter, BTA och börshandlade produkter är inga aktier. Yahoo ger dem ingen bransch, så de rensas bara bland Övrigt.
-const JUNK_SYM = /^(BULL|BEAR|MINI|TURBO|LONG|SHORT)[-\s]|-AVA-\d|\d[LCPS]-?\d{2,}|-(BTU|BTA|BTB|TO\d*|TR|UR|IR)(\.|$)/i;
-const JUNK_NAME = /\b(ETP|ETF|ETN|ETC|UCITS|Tracker|Index|Xtrackers|iShares|21Shares|CoinShares|Virtune|Valour|WisdomTree|Bitcoin|Ethereum|Certifikat|Bull|Bear)\b/i;
-const isJunk = (a) => JUNK_SYM.test(a.sym) || JUNK_NAME.test(a.namn) || a.namn.toUpperCase() === a.sym;
+const isJunk = (a) => !isStock(a.sym, a.namn);
 const OTC = ['PNK', 'OQB', 'OQX', 'OEM', 'OGM', 'OBB', 'XXX'];
 
 export default async (req) => {
@@ -100,7 +99,6 @@ function row(q, bransch) {
     valuta: q.currency || null,
     kurs,
     d1: r2(raw(q.regularMarketChangePercent)),
-    ar: r2(raw(q.fiftyTwoWeekChangePercent)),
     pe: pe != null && pe > 0 && pe < 1000 ? r2(pe) : eps != null && eps < 0 ? -1 : null,
     utd: dy != null && dy > 0 && dy < 0.5 ? r2(dy * 100) : dy === 0 ? 0 : null,
     mcap: raw(q.marketCap),
