@@ -79,6 +79,10 @@ export default async (req) => {
         kategori: n.category || ''
       });
     }
+    // Källornas loggor och standardbilder ska inte visas som bild till nyheten. De känns igen på namnet,
+    // eller på att samma bild används till flera nyheter.
+    const n = {}; for (const x of items) if (x.bild) n[x.bild] = (n[x.bild] || 0) + 1;
+    for (const x of items) if (x.bild && (n[x.bild] >= 2 || /logo|yahoo_finance_|placeholder|default|\/rz\/stage\//i.test(x.bild))) x.bild = null;
     items.sort((a, z) => String(z.datum).localeCompare(String(a.datum)));
     return cached({ region: one ? null : region, items: items.slice(0, one ? 30 : 80), hamtad: new Date().toISOString() }, 900);
   } catch (e) { return fail(e); }

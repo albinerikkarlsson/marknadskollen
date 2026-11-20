@@ -1541,6 +1541,9 @@ function mountNyheter() {
     }
     if (r !== region || m !== mk) return;
     if (!list) { fail(err); return; }
+    // Samma bild på flera nyheter är en logga eller standardbild, inte en bild till nyheten
+    const cnt = {}; for (const it of list) if (it.bild) cnt[it.bild] = (cnt[it.bild] || 0) + 1;
+    for (const it of list) if (it.bild && (cnt[it.bild] >= 2 || /logo|yahoo_finance_|placeholder|default|\/rz\/stage\//i.test(it.bild))) it.bild = null;
     items = markOwn(list.sort(byTime)); hamtad = t || new Date().toISOString();
     if (!items.length && err) { fail(err); return; }
     draw();
