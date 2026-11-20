@@ -1,5 +1,5 @@
 import { finnhub, cached, fail, cleanSymbol, num, quoteOrNull, ApiError } from '../lib/finnhub.mjs';
-import { kindOf } from '../lib/klass.mjs';
+import { kindOf, STABLE } from '../lib/klass.mjs';
 import { ySummary, yChart, metricFromSummary, perfFromChart, raw } from '../lib/yahoo.mjs';
 import { buildFactors, perfFromMetric, riskScore, summarize, thinkAbout, money, blankFactor } from '../lib/risk.mjs';
 import { loadBlankning, findBlank } from '../lib/fi.mjs';
@@ -39,9 +39,11 @@ async function fromYahoo(sym) {
   const tidS = raw(price.regularMarketTime);
   const kursTid = c?.quote?.tid || (tidS ? new Date(tidS * 1000).toISOString() : null);
   const cur = price.currency || c?.meta?.currency || (sym.endsWith('.ST') ? 'SEK' : 'USD');
-  const namn = cleanTitle(price.longName || price.shortName || c?.meta?.longName || c?.meta?.shortName || fp?.name || sym);
+  const namn0 = cleanTitle(price.longName || price.shortName || c?.meta?.longName || c?.meta?.shortName || fp?.name || sym);
   const typ = price.quoteType || c?.meta?.instrumentType || '';
-  const bors = shortExchange(price.exchangeName || c?.meta?.fullExchangeName || c?.meta?.exchangeName || fp?.exchange);
+  // Yahoo kallar Bitcoin "Bitcoin USD". Valutan står redan vid kursen.
+  const namn = typ === 'CRYPTOCURRENCY' ? namn0.replace(/\s+USD$/i, '') : namn0;
+  const bors = typ === 'CRYPTOCURRENCY' ? null : shortExchange(price.exchangeName || c?.meta?.fullExchangeName || c?.meta?.exchangeName || fp?.exchange);
   const sektor = ap.sector ? (SECTOR_SV[ap.sector] || ap.sector) : fp?.finnhubIndustry ? (SECTOR_SV[fp.finnhubIndustry] || fp.finnhubIndustry) : null;
   const mcapM = num(m.marketCapitalization);
   const hi = num(m['52WeekHigh']) ?? (c?.points?.length ? Math.max(...c.points.map((p) => p[1])) : null);
@@ -56,7 +58,15 @@ async function fromYahoo(sym) {
     blankning = b ? { summa: b.summa, antal: b.positioner.length } : { summa: null, antal: 0 };
     faktorer.push(blankFactor(blankning.summa));
   }
-  const poang = faktorer.length >= 3 ? riskScore(faktorer) : null;
+  // Kryptovalutor har inget bolag, inga vinster och ingen tillsyn som aktier. Modellen för aktier
+  // skulle ge Bitcoin låg risk för att den är stor och handlas mycket, så krypto får alltid en egen del
+  // som är Hög och ett golv för riskkollen: 8 av 10, stablecoins 6 av 10.
+  const krypto = typ === 'CRYPTOCURRENCY';
+  const stable = krypto && STABLE.has(sym.replace(/-USD$/i, '').toUpperCase());
+  if (krypto) faktorer.unshift(stable
+    ? ['Tillgångsslag', 3, 'Stablecoin', 'Ska följa dollarn, men det håller bara så länge utgivaren har pengar i reserv. Ingen insättningsgaranti.']
+    : ['Tillgångsslag', 3, 'Kryptovaluta', 'Inget bolag eller några vinster står bakom. Priset styrs bara av köp och sälj och kan falla mer än hälften på kort tid.']);
+  const poang = faktorer.length >= 3 ? (krypto ? Math.max(riskScore(faktorer), stable ? 6 : 8) : riskScore(faktorer)) : null;
   const anst = raw(ap.fullTimeEmployees);
   const fakta = [
     ['Börsvärde', mcapM ? money(mcapM * 1e6, cur) : null],

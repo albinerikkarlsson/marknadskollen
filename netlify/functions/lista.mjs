@@ -1,5 +1,5 @@
 import { cached, fail, ApiError } from '../lib/finnhub.mjs';
-import { yScreen, yQuotes, raw } from '../lib/yahoo.mjs';
+import { yScreen, yQuotes, raw, dayChange } from '../lib/yahoo.mjs';
 import { kindOf, STABLE } from '../lib/klass.mjs';
 
 // GET /api/lista?typ=fonder              →  alla svenska fonder
@@ -32,7 +32,7 @@ const base = (q) => {
     valuta: q.currency || null,
     kurs,
     // Dagens förändring mot föregående stängning, som på bolagssidan
-    d1: kurs && prev ? r2((kurs / prev - 1) * 100) : r2(raw(q.regularMarketChangePercent)),
+    d1: dayChange(kurs, prev, raw(q.regularMarketChangePercent)),
     tid: t ? new Date(t * 1000).toISOString() : null,
     lista: q.fullExchangeName || q.exchange || ''
   };

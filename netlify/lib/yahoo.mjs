@@ -69,11 +69,22 @@ export const raw = (v) => {
 };
 
 /* ---------- Kurser ---------- */
+// Dagens förändring: senaste kurs mot föregående stängning, samma som på bolagssidan.
+// För krypto är Yahoos egen procentsats rörelsen på 24 timmar, inte sedan dagens början, så den används bara
+// som kontroll. Skiljer de sig mer än 15 procentenheter är föregående stängning troligen gammal, och då
+// visas förändringen som saknad hellre än fel.
+export function dayChange(kurs, prev, cp) {
+  if (!kurs) return null;
+  const calc = prev ? (kurs / prev - 1) * 100 : null;
+  if (calc == null) return cp ?? null;
+  if (cp != null && Math.abs(calc - cp) > 15) return null;
+  return Math.round(calc * 100) / 100;
+}
 const toQuote = (q) => {
   const kurs = raw(q.regularMarketPrice);
   if (!kurs) return null;
   const t = raw(q.regularMarketTime);
-  return { kurs, d1: raw(q.regularMarketChangePercent), prev: raw(q.regularMarketPreviousClose), tid: t ? new Date(t * 1000).toISOString() : null, namn: q.longName || q.shortName || null, valuta: q.currency || null };
+  return { kurs, d1: dayChange(kurs, raw(q.regularMarketPreviousClose), raw(q.regularMarketChangePercent)), prev: raw(q.regularMarketPreviousClose), tid: t ? new Date(t * 1000).toISOString() : null, namn: q.longName || q.shortName || null, valuta: q.currency || null };
 };
 
 // Senaste kurs för flera tickers. Returnerar { SYM: {kurs, d1, tid, namn, valuta} }.
@@ -117,23 +128,31 @@ export async function yChart(sym, range = '1y', interval = '1d') {
 }
 
 // Kursutveckling från dagliga stängningskurser
+// Tidpunkten för det senaste hoppet där kursen blir minst tre gånger så hög eller en tredjedel på en dag.
+// Det är nästan alltid en split eller sammanläggning som Yahoo inte har räknat om historiken för.
+// Förändringar som räknas från en kurs före hoppet blir fel och visas därför inte.
+export function splitJumpT(points) {
+  let t = null;
+  for (let i = 1; i < (points?.length || 0); i++) { const a = points[i - 1][1], b = points[i][1]; if (a > 0 && b > 0 && (b / a >= 3 || b / a <= 1 / 3)) t = points[i][0]; }
+  return t;
+}
 export function perfFromChart(points, kurs, d1) {
   if (!points?.length || !kurs) return d1 != null ? [['1 dag', d1]] : [];
   const lastT = points[points.length - 1][0];
-  const at = (sec) => { let v = null; for (const [t, c] of points) { if (t <= sec) v = c; else break; } return v; };
+  const jumpT = splitJumpT(points);
+  const at = (sec) => { let v = null; for (const p of points) { if (p[0] <= sec) v = p; else break; } return v; };
   const back = (days) => at(lastT - days * 86400);
   const now = new Date(lastT * 1000);
   const startOf = (y, mo) => Date.UTC(y, mo, 1) / 1000 - 1;
-  const before = (sec) => at(sec);
-  const ch = (base) => (base ? Math.round(((kurs / base) - 1) * 10000) / 100 : null);
-  const firstAfterYearAgo = points[0][0] <= lastT - 360 * 86400 ? points[0][1] : null;
+  const ch = (p) => (p && p[1] && !(jumpT && p[0] < jumpT) ? Math.round(((kurs / p[1]) - 1) * 10000) / 100 : null);
+  const firstAfterYearAgo = points[0][0] <= lastT - 360 * 86400 ? points[0] : null;
   const rows = [
     ['1 dag', d1],
-    ['5 dagar', points.length > 5 ? ch(points[points.length - 6][1]) : null],
-    ['Månaden', ch(before(startOf(now.getUTCFullYear(), now.getUTCMonth())))],
+    ['5 dagar', points.length > 5 ? ch(points[points.length - 6]) : null],
+    ['Månaden', ch(at(startOf(now.getUTCFullYear(), now.getUTCMonth())))],
     ['3 mån', ch(back(91))],
     ['6 mån', ch(back(182))],
-    ['I år', ch(before(startOf(now.getUTCFullYear(), 0)))],
+    ['I år', ch(at(startOf(now.getUTCFullYear(), 0)))],
     ['1 år', ch(back(365) ?? firstAfterYearAgo)]
   ];
   return rows.filter((r) => r[1] != null && Number.isFinite(r[1]));
@@ -218,9 +237,11 @@ export async function yScreen(operands, { size = 250, offset = 0, sortField = 'i
 export function yearAgoClose(points) {
   if (!points?.length) return null;
   const lastT = points[points.length - 1][0]; const lim = lastT - 365 * 86400;
-  let v = null; for (const [t, c] of points) { if (t <= lim) v = c; else break; }
-  if (v == null && points[0][0] <= lastT - 360 * 86400) v = points[0][1];
-  return v;
+  let v = null; for (const p of points) { if (p[0] <= lim) v = p; else break; }
+  if (v == null && points[0][0] <= lastT - 360 * 86400) v = points[0];
+  const jumpT = splitJumpT(points);
+  if (!v || (jumpT && v[0] < jumpT)) return null;
+  return v[1];
 }
 // Yahoo tar högst 20 tickers per anrop
 export async function ySpark(syms) {
