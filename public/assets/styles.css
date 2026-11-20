@@ -2050,3 +2050,8 @@ a.md-title:hover { text-decoration: underline; }
 .ut-spc { width: 84px; }
 .ut-spark { width: 76px; height: 22px; }
 @media (max-width: 1400px) { .ut-table .avatar { display: none; } }
+/* Alla filter syns på en gång, ingen egen rullning i kolumnen */
+.ut-side { position: static; max-height: none; overflow: visible; gap: 16px; padding-right: 0; }
+.ut-opts.many { max-height: none; overflow: visible; }
+.ut-chk { min-height: 24px; padding: 2px 0; font-size: 13px; }
+.ut-g { gap: 6px; }
