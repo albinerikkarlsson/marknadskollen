@@ -1776,7 +1776,7 @@ const bOnePerDay = (d) => { if (!d?.punkter?.length) return d; const m = new Map
 const bMA = (pts, k) => { const o = []; let s = 0; for (let i = 0; i < pts.length; i++) { s += pts[i][1]; if (i >= k) s -= pts[i - k][1]; o.push(i >= k - 1 ? s / k : null); } return o; };
 
 /* ---------- Kursdiagram med glidande medelvärden ---------- */
-const B_PER = [['1m', '1M', 31], ['3m', '3M', 92], ['6m', '6M', 183], ['1y', '1Å', 366], ['3y', '3Å', 1096], ['5y', '5Å', 1830]];
+const B_PER = [['1m', '1M', 31], ['3m', '3M', 91], ['6m', '6M', 182], ['1y', '1Å', 365], ['3y', '3Å', 1096], ['5y', '5Å', 1830]];
 // Ett hopp till minst tre gånger eller en tredjedel på en dag är nästan alltid en split som datakällan inte räknat om
 const bJump = (pts, from, to) => { for (let i = 1; i < (pts?.length || 0); i++) { const t = pts[i][0]; if (t <= from || t > to) continue; const q = pts[i][1] / pts[i - 1][1]; if (q >= 3 || q <= 1 / 3) return true; } return false; };
 const bJumpTxt = () => (EN ? 'Change missing: the price jumps in a way that is probably a split the data source has not adjusted for' : 'Förändring saknas: kursen hoppar på ett sätt som troligen är en split som datakällan inte har räknat om');
@@ -1790,7 +1790,8 @@ function bPriceChart(box, pts, { per = '1y', ma50 = true, ma200 = true, from = n
     if (to) { let k = -1; for (let i = pts.length - 1; i >= 0; i--) if (bKey(pts[i][0]) <= to) { k = i; break; } i1 = k < 0 ? 0 : k; }
   } else {
     const days = (B_PER.find((x) => x[0] === per) || B_PER[3])[2];
-    const k = pts.findIndex((p) => p[0] >= last - days * 86400); i0 = k < 0 ? 0 : k;
+    // Perioden börjar på sista stängningen före gränsen, samma regel som "1 år" i listor och på sidan
+    let k = -1; for (let i = 0; i < pts.length && pts[i][0] <= last - days * 86400; i++) k = i; i0 = k < 0 ? 0 : k;
   }
   if (i1 - i0 < 1) { box.innerHTML = '<p class="b-note">Det finns för få kurser mellan de datumen. Välj en längre period.</p>'; return null; }
   const P = pts.slice(i0, i1 + 1); const a = A.slice(i0, i1 + 1); const b = Bm.slice(i0, i1 + 1);

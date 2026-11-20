@@ -78,6 +78,8 @@ export function dayChange(kurs, prev, cp) {
   const calc = prev ? (kurs / prev - 1) * 100 : null;
   if (calc == null) return cp ?? null;
   if (cp != null && Math.abs(calc - cp) > 15) return null;
+  // Tre gånger så högt eller en tredjedel på en dag är nästan alltid en split som inte räknats om
+  if (kurs / prev >= 3 || kurs / prev <= 1 / 3) return null;
   return Math.round(calc * 100) / 100;
 }
 const toQuote = (q) => {
@@ -115,15 +117,13 @@ export async function yChart(sym, range = '1y', interval = '1d') {
   const points = ts.map((t, i) => [t, closes[i]]).filter((p) => Number.isFinite(p[1]));
   const kurs = raw(m.regularMarketPrice);
   // Dagens förändring räknas mot föregående stängning (näst sista dagen i serien)
-  let d1 = null;
   const prev = points.length > 1 ? points[points.length - 2][1] : raw(m.previousClose);
-  if (kurs && prev) d1 = (kurs / prev - 1) * 100;
-  else d1 = raw(m.regularMarketChangePercent);
+  const d1 = dayChange(kurs, prev, raw(m.regularMarketChangePercent));
   const t = raw(m.regularMarketTime);
   return {
     meta: m,
     points,
-    quote: kurs ? { kurs, d1: d1 == null ? null : Math.round(d1 * 100) / 100, prev: prev ?? null, tid: t ? new Date(t * 1000).toISOString() : null, namn: m.longName || m.shortName || null, valuta: m.currency || null } : null
+    quote: kurs ? { kurs, d1, prev: prev ?? null, tid: t ? new Date(t * 1000).toISOString() : null, namn: m.longName || m.shortName || null, valuta: m.currency || null } : null
   };
 }
 

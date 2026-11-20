@@ -1,6 +1,6 @@
 import { finnhub, cached, fail, cleanSymbol, num, quoteOrNull, ApiError } from '../lib/finnhub.mjs';
 import { kindOf, STABLE } from '../lib/klass.mjs';
-import { ySummary, yChart, metricFromSummary, perfFromChart, raw } from '../lib/yahoo.mjs';
+import { ySummary, yChart, metricFromSummary, perfFromChart, splitJumpT, raw } from '../lib/yahoo.mjs';
 import { buildFactors, perfFromMetric, riskScore, summarize, thinkAbout, money, blankFactor } from '../lib/risk.mjs';
 import { loadBlankning, findBlank } from '../lib/fi.mjs';
 
@@ -46,11 +46,13 @@ async function fromYahoo(sym) {
   const bors = typ === 'CRYPTOCURRENCY' ? null : shortExchange(price.exchangeName || c?.meta?.fullExchangeName || c?.meta?.exchangeName || fp?.exchange);
   const sektor = ap.sector ? (SECTOR_SV[ap.sector] || ap.sector) : fp?.finnhubIndustry ? (SECTOR_SV[fp.finnhubIndustry] || fp.finnhubIndustry) : null;
   const mcapM = num(m.marketCapitalization);
-  const hi = num(m['52WeekHigh']) ?? (c?.points?.length ? Math.max(...c.points.map((p) => p[1])) : null);
-  const lo = num(m['52WeekLow']) ?? (c?.points?.length ? Math.min(...c.points.map((p) => p[1])) : null);
+  // Högsta och lägsta från diagrammet bara om kurshistoriken inte har ett hopp som vid en split
+  const pts = c?.points?.length && !splitJumpT(c.points) ? c.points : null;
+  const hi = num(m['52WeekHigh']) ?? (pts ? Math.max(...pts.map((p) => p[1])) : null);
+  const lo = num(m['52WeekLow']) ?? (pts ? Math.min(...pts.map((p) => p[1])) : null);
   if (hi && lo && m['52WeekHigh'] == null) { m['52WeekHigh'] = hi; m['52WeekLow'] = lo; }
 
-  const faktorer = buildFactors({ m, price: kurs, cur, mcapM });
+  const faktorer = buildFactors({ m, price: kurs, cur, mcapM, krypto: typ === 'CRYPTOCURRENCY' });
   // Blankning blir en sjunde del när registret svarar och det gäller en aktie
   let blankning = null;
   if (br.status === 'fulfilled' && br.value && (price.quoteType || 'EQUITY') === 'EQUITY') {

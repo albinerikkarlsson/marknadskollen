@@ -16,7 +16,8 @@ export function money(n, cur = '') {
 const val = (v) => (v === null || v === undefined || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null);
 
 // m = metric-objektet från Finnhub, price = senaste kurs, cur = valuta, mcapM = börsvärde i miljoner
-export function buildFactors({ m = {}, price, cur, mcapM }) {
+// krypto: Yahoo anger kryptovalutors volym i dollar, inte i antal, så den ska inte gångras med kursen
+export function buildFactors({ m = {}, price, cur, mcapM, krypto = false }) {
   const out = [];
   const beta = val(m.beta);
   const hi = val(m['52WeekHigh']); const lo = val(m['52WeekLow']);
@@ -58,7 +59,7 @@ export function buildFactors({ m = {}, price, cur, mcapM }) {
 
   const volM = val(m['10DayAverageTradingVolume']) ?? val(m['3MonthAverageTradingVolume']);
   if (volM != null && price) {
-    const t = volM * 1e6 * price; const l = t >= 50e6 ? 1 : t >= 5e6 ? 2 : 3;
+    const t = volM * 1e6 * (krypto ? 1 : price); const l = t >= 50e6 ? 1 : t >= 5e6 ? 2 : 3;
     out.push(['Handel', l, `Omsätter ca ${money(t, cur)} per dag`, l === 1 ? 'Lätt att köpa och sälja.' : l === 2 ? 'Går att handla, men stora affärer kan påverka priset.' : 'Liten handel. Det kan vara svårt att sälja när man vill.', t]);
   }
 
