@@ -205,7 +205,7 @@ export function newsFromSearch(d, sym, keyword = '') {
   const relevant = (n) => {
     const rel = (n.relatedTickers || []).map((t) => String(t).toUpperCase());
     if (base && rel.includes(base)) return true;
-    if (kw.length >= 3 && new RegExp(`(^|[^A-Za-zÅÄÖåäö])${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-zåäö])`).test(n.title)) return true;
+    if (kw.length >= 3 && new RegExp(`(^|[^A-Za-zÅÄÖåäö])${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-zÅÄÖåäö0-9])`).test(n.title)) return true;
     return false;
   };
   return (d?.news || []).filter((n) => n?.title && n?.link && relevant(n)).map((n) => ({
