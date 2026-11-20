@@ -2836,6 +2836,7 @@ async function klFill(ctx) {
   const d = await ctx.get.px().catch(() => null); if (!$('#ov-kl')) return;
   const P = (d?.punkter || []).filter((p) => p[1] > 0);
   if (P.length < 60) { box.innerHTML = `<p class="b-note">${EN ? 'Too short price history.' : 'För kort kurshistorik.'}</p>`; return; }
+  if (bJump(P, P[0][0], P[P.length - 1][0])) { box.innerHTML = `<p class="b-note">${EN ? 'Price position not shown: the price jumps in a way that is probably a split the data source has not adjusted for.' : 'Kursläget visas inte: kursen hoppar på ett sätt som troligen är en split som datakällan inte har räknat om.'}</p>`; return; }
   const last = P[P.length - 1]; const yr = P.filter((p) => p[0] >= last[0] - 365 * 86400).map((p) => p[1]);
   const hi = Math.max(...yr); const lo = Math.min(...yr); const pos = hi > lo ? ((last[1] - lo) / (hi - lo)) * 100 : 50;
   const ma = (n) => (P.length >= n ? P.slice(-n).reduce((a, p) => a + p[1], 0) / n : null);
@@ -3173,7 +3174,7 @@ function mountAktier(params) {
   const loadAr = async (key, items) => {
     ar = { klar: false, lista: key };
     const parts = Math.ceil(items.length / 500);
-    await Promise.all(Array.from({ length: parts }, (_, i) => api(`/api/ar?lista=${key}&del=${i}`, 3 * 3600e3).then((r) => {
+    await Promise.all(Array.from({ length: parts }, (_, i) => api(`/api/ar?lista=${key}&del=${i}&v=2`, 3 * 3600e3).then((r) => {
       if (ar.lista !== key || !r?.ref) return;
       for (const a of items) { const ref = r.ref[a.sym]; if (ref && a.kurs) a.ar = Math.round((a.kurs / ref - 1) * 10000) / 100; }
     }).catch(() => null)));

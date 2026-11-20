@@ -46,8 +46,11 @@ async function fromYahoo(sym) {
   const bors = typ === 'CRYPTOCURRENCY' ? null : shortExchange(price.exchangeName || c?.meta?.fullExchangeName || c?.meta?.exchangeName || fp?.exchange);
   const sektor = ap.sector ? (SECTOR_SV[ap.sector] || ap.sector) : fp?.finnhubIndustry ? (SECTOR_SV[fp.finnhubIndustry] || fp.finnhubIndustry) : null;
   const mcapM = num(m.marketCapitalization);
-  // Högsta och lägsta från diagrammet bara om kurshistoriken inte har ett hopp som vid en split
-  const pts = c?.points?.length && !splitJumpT(c.points) ? c.points : null;
+  // Har kurshistoriken ett hopp som vid en split som inte räknats om stämmer inte årets högsta och lägsta,
+  // varken från diagrammet eller från Yahoos egna fält. Då visas de inte.
+  const hopp = c?.points?.length ? splitJumpT(c.points) : null;
+  if (hopp) { delete m['52WeekHigh']; delete m['52WeekLow']; }
+  const pts = c?.points?.length && !hopp ? c.points : null;
   const hi = num(m['52WeekHigh']) ?? (pts ? Math.max(...pts.map((p) => p[1])) : null);
   const lo = num(m['52WeekLow']) ?? (pts ? Math.min(...pts.map((p) => p[1])) : null);
   if (hi && lo && m['52WeekHigh'] == null) { m['52WeekHigh'] = hi; m['52WeekLow'] = lo; }
