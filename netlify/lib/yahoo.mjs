@@ -116,10 +116,15 @@ export async function yChart(sym, range = '1y', interval = '1d') {
   const closes = r.indicators?.quote?.[0]?.close || [];
   const points = ts.map((t, i) => [t, closes[i]]).filter((p) => Number.isFinite(p[1]));
   const kurs = raw(m.regularMarketPrice);
-  // Dagens förändring räknas mot föregående stängning (näst sista dagen i serien)
-  const prev = points.length > 1 ? points[points.length - 2][1] : raw(m.previousClose);
+  // Dagens förändring räknas mot föregående stängning: sista stängningen från en tidigare handelsdag än den senaste kursen.
+  // Saknas en dag i serien (det händer hos Yahoo) blir det annars fel dag. Yahoos egen uppgift går först när den finns.
+  const t0 = raw(m.regularMarketTime); const tz = m.exchangeTimezoneName || 'UTC';
+  const dayOf = (t) => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(t * 1000)); } catch { return new Date(t * 1000).toISOString().slice(0, 10); } };
+  const lastDay = t0 ? dayOf(t0) : points.length ? dayOf(points[points.length - 1][0]) : null;
+  let prevPt = null; for (let i = points.length - 1; i >= 0; i--) { if (lastDay && dayOf(points[i][0]) < lastDay) { prevPt = points[i][1]; break; } }
+  const prev = raw(m.regularMarketPreviousClose) ?? (range === '1d' ? raw(m.previousClose) : null) ?? prevPt ?? raw(m.previousClose) ?? null;
   const d1 = dayChange(kurs, prev, raw(m.regularMarketChangePercent));
-  const t = raw(m.regularMarketTime);
+  const t = t0;
   return {
     meta: m,
     points,
