@@ -284,6 +284,7 @@ function sidebar(active) {
             ${svg(it.icon)}<span>${it.id === 'konto' && ACC.user ? 'Mitt konto' : it.label}</span>${it.badge && watchCount && !locked() ? `<span class="nav-badge">${watchCount}</span>` : ''}
           </a>`).join('')}
       </div>`).join('')}
+    <button type="button" class="nav-install" data-installapp ${canInstall() ? '' : 'hidden'}>${svg('plus', 16)}<span>${EN ? 'Install the app' : 'Installera appen'}</span></button>
     ${isAdmin() ? `<div class="nav-group"><span class="nav-label">Ägare</span><a class="nav-link" href="/statistik" data-link ${active === 'statistik' ? 'aria-current="page"' : ''}>${svg('chart')}<span>Statistik</span></a></div>` : ''}
   </nav>`;
 }
@@ -4124,13 +4125,39 @@ function mountValkommen() {
 
 /* ================= Lägg till på hemskärmen ================= */
 let installEvt = null;
-window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; document.querySelectorAll('[data-install]').forEach((b) => { b.hidden = false; }); });
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; document.querySelectorAll('[data-install],[data-installapp]').forEach((b) => { b.hidden = false; }); });
+window.addEventListener('appinstalled', () => { installEvt = null; document.querySelectorAll('[data-installapp],.inst-banner').forEach((b) => { b.hidden = true; }); });
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isAndroid = () => /android/i.test(navigator.userAgent);
+// Kan visas som app: Chrome och Edge ger en egen fråga, på iPhone och Android visar vi hur man gör
+const canInstall = () => !isStandalone() && (!!installEvt || isIOS() || isAndroid());
+function installSheet() {
+  const ios = isIOS(); const d = document.createElement('div'); d.className = 'modal-back';
+  const step = (n, t, s) => `<div class="inst-step"><span class="inst-n">${n}</span><span><b>${t}</b><span class="small muted">${s}</span></span></div>`;
+  d.innerHTML = `<div class="modal card inst-m" role="dialog" aria-modal="true" aria-labelledby="inst-h">
+    <div class="inst-top"><span class="inst-ic"><img src="/icons/icon-192.png" alt="" width="56" height="56"></span><div><h2 class="section" id="inst-h" style="font-size:21px;margin:0">${EN ? 'Finanskollen as an app' : 'Finanskollen som app'}</h2><span class="small muted">${EN ? 'Opens in its own window, without the browser bar' : 'Öppnas i ett eget fönster, utan webbläsarens fält'}</span></div></div>
+    ${ios ? step(1, EN ? 'Tap Share' : 'Tryck på Dela', EN ? 'The square with an arrow, at the bottom or top of Safari' : 'Fyrkanten med en pil, längst ner eller uppe i Safari') + step(2, EN ? 'Choose Add to Home Screen' : 'Välj Lägg till på hemskärmen', EN ? 'Scroll down in the list if you do not see it' : 'Scrolla ner i listan om du inte ser det') + step(3, EN ? 'Tap Add' : 'Tryck på Lägg till', EN ? 'Finanskollen now sits among your apps' : 'Nu ligger Finanskollen bland dina appar')
+      : step(1, EN ? 'Open the browser menu' : 'Öppna webbläsarens meny', EN ? 'The three dots in the corner' : 'De tre prickarna i hörnet') + step(2, EN ? 'Choose Install app or Add to Home screen' : 'Välj Installera app eller Lägg till på startskärmen', '') + step(3, EN ? 'Confirm' : 'Bekräfta', EN ? 'Finanskollen now sits among your apps' : 'Nu ligger Finanskollen bland dina appar')}
+    <ul class="inst-why small"><li>${EN ? 'Starts straight on your overview' : 'Startar direkt på din översikt'}</li><li>${EN ? 'Notifications for reports, dividends and your week' : 'Notiser om rapporter, utdelningar och din vecka'}${ios ? (EN ? ' (iPhone needs the app on the home screen)' : ' (på iPhone krävs att appen ligger på hemskärmen)') : ''}</li><li>${EN ? 'Nothing to download from an app store' : 'Inget att ladda ner från en appbutik'}</li></ul>
+    <div class="chips" style="justify-content:flex-end"><button class="btn" type="button" data-close>${EN ? 'Got it' : 'Jag förstår'}</button></div></div>`;
+  document.body.append(d);
+  const close = () => d.remove(); d.addEventListener('click', (e) => { if (e.target === d || e.target.closest('[data-close]')) close(); });
+  document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } });
+  d.querySelector('[data-close]').focus();
+}
+async function installApp() {
+  if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice.catch(() => null); if (r?.outcome === 'accepted') toast(EN ? 'Finanskollen is installed' : 'Finanskollen är installerad', EN ? 'You find it among your apps.' : 'Du hittar den bland dina appar.'); installEvt = null; document.querySelectorAll('[data-installapp]').forEach((b) => { b.hidden = !canInstall(); }); return; }
+  installSheet();
+}
+document.addEventListener('click', (e) => { if (e.target.closest?.('[data-installapp]')) { e.preventDefault(); installApp(); } const x = e.target.closest?.('[data-instclose]'); if (x) { writeLS('mk-inst-dold', Date.now()); x.closest('.inst-banner')?.remove(); } });
+// Liten ruta på mobilen: lägg appen på hemskärmen. Visas igen tidigast efter 30 dagar om man stänger den.
+const installBanner = () => (canInstall() && matchMedia('(max-width: 900px)').matches && Date.now() - (readLS('mk-inst-dold', 0) || 0) > 30 * 864e5
+  ? `<div class="inst-banner"><img src="/icons/icon-192.png" alt="" width="40" height="40"><span><b>${EN ? 'Put Finanskollen on your home screen' : 'Lägg Finanskollen på hemskärmen'}</b><span class="small muted">${EN ? 'Opens like an app, with notifications' : 'Öppnas som en app, med notiser'}</span></span><button type="button" class="btn small" data-installapp>${EN ? 'Show how' : 'Visa hur'}</button><button type="button" class="inst-x" data-instclose aria-label="${EN ? 'Close' : 'Stäng'}">×</button></div>` : '');
 function installHTML() {
   if (isStandalone()) return '';
   if (isIOS()) return `<div class="install-tip">${svg('plus', 16)}<span class="small">Lägg Finanskollen på hemskärmen: tryck på <b>Dela</b> och välj <b>Lägg till på hemskärmen</b>. Då fungerar prislarmen som notiser.</span></div>`;
-  return `<button class="btn ghost small" type="button" data-install ${installEvt ? '' : 'hidden'}>${svg('plus', 14)} Installera som app</button>`;
+  return `<button class="btn ghost small" type="button" data-installapp ${canInstall() ? '' : 'hidden'}>${svg('plus', 14)} ${EN ? 'Install the app' : 'Installera appen'}</button>`;
 }
 document.addEventListener('click', async (e) => {
   if (!e.target.closest?.('[data-install]') || !installEvt) return;
@@ -5656,17 +5683,19 @@ async function mountKonto() {
       <p class="small muted" style="margin:0">Din bevakning och dina larm sparas på kontot och syns när du loggar in på mobilen eller datorn.</p>
       <div class="chips"><a class="btn" href="/bevakning" data-link>Till bevakningen</a><button class="btn ghost" type="button" data-logout>Logga ut</button>${installHTML()}</div></div>
     <div class="card stack" style="gap:12px;padding:22px 26px;margin-top:16px">
-      <span class="label-up">Veckobrev</span>
-      ${ACC.table ? `<label class="imp-opt"><input type="checkbox" data-veckobrev ${ACC.veckobrev ? 'checked' : ''}> Skicka ett mejl varje måndag morgon om hur mina aktier har gått och vad som händer veckan som kommer</label><p class="small muted" style="margin:0" data-vbmsg>Mejlet går till ${esc(ACC.user.email)}. Du kan stänga av det när du vill.</p>` : '<p class="small muted" style="margin:0">Veckobrevet går att slå på så snart det är aktiverat på sidan.</p>'}
+      <span class="label-up">Veckobrev och notiser</span>
+      ${ACC.table ? `<label class="imp-opt"><input type="checkbox" data-veckobrev ${ACC.veckobrev ? 'checked' : ''}> Skicka ett mejl varje fredag kl 18 om hur min vecka har gått och vad som händer veckan som kommer</label><p class="small muted" style="margin:0" data-vbmsg>Mejlet går till ${esc(ACC.user.email)}. Du kan stänga av det när du vill.</p>` : '<p class="small muted" style="margin:0">Veckobrevet går att slå på så snart det är aktiverat på sidan.</p>'}
+      ${kollSettings()}<div class="notify-bar">${svg('bell', 18)}<span class="grow small" data-knst>${notifyState() === 'granted' ? 'Notiser är på i den här webbläsaren.' : notifyState() === 'denied' ? 'Notiser är blockerade i webbläsaren. Du kan tillåta dem i webbläsarens inställningar för sidan.' : notifyState() === 'unsupported' ? 'Den här webbläsaren stöder inte notiser. På iPhone fungerar de när Finanskollen ligger på hemskärmen.' : 'Slå på notiser så säger vi till direkt.'}</span>${notifyState() === 'default' ? '<button class="btn small" type="button" data-knotify>Slå på notiser</button>' : ''}</div>
     </div>
     <div class="card stack" style="gap:10px;padding:22px 26px;margin-top:16px">
       <span class="label-up">Dina uppgifter</span>
       <p class="small muted" style="margin:0">Vi sparar din e-post, ditt namn, din bevakning, dina prislarm och dina portföljer. <a href="/integritet" data-link>Läs mer</a></p>
       <button class="linkbtn small danger-link" type="button" data-delete>Radera mitt konto</button>
     </div>`;
+    box.querySelector('[data-knotify]')?.addEventListener('click', async (e) => { const r = await askNotify(); e.target.remove(); box.querySelector('[data-knst]').textContent = r === 'granted' ? 'Notiser är på i den här webbläsaren.' : 'Notiserna slogs inte på.'; });
     box.querySelector('[data-veckobrev]')?.addEventListener('change', async (e) => {
       const on = e.target.checked; const m = box.querySelector('[data-vbmsg]');
-      try { await setVeckobrev(on); m.textContent = on ? `Klart! Första mejlet kommer på måndag till ${ACC.user.email}.` : 'Veckobrevet är avstängt.'; }
+      try { await setVeckobrev(on); m.textContent = on ? `Klart! Första mejlet kommer på fredag kl 18 till ${ACC.user.email}.` : 'Veckobrevet är avstängt.'; }
       catch { e.target.checked = !on; m.textContent = 'Det gick inte att spara just nu. Prova igen om en stund.'; }
     });
     box.querySelector('[data-delete]').addEventListener('click', () => confirmDelete(async () => {
@@ -5823,10 +5852,28 @@ async function drawKoll(quotes) {
 
 // Notiser för aktier man bevakar eller äger: insynsaffärer, blankning, ändrad riskkoll och rapportdag.
 // Kollas i webbläsaren när sidan är öppen (strax efter start och sedan var 30:e minut), så det kostar inga extra serveranrop på schema.
-const KOLL_T = [['insyn', 'insynLarm', 'Ledningen köper eller säljer', 'The management buys or sells'], ['blank', 'blankLarm', 'Blankningen ökar', 'Short selling increases'], ['risk', 'riskLarm', 'Riskkollen ändras', 'The risk check changes'], ['rapport', 'rapportLarm', 'Rapportdag, dagen före och samma dag', 'Report day, the day before and the same day']];
+const KOLL_T = [['insyn', 'insynLarm', 'Ledningen köper eller säljer', 'The management buys or sells'], ['blank', 'blankLarm', 'Blankningen ökar', 'Short selling increases'], ['risk', 'riskLarm', 'Riskkollen ändras', 'The risk check changes'], ['rapport', 'rapportLarm', 'Rapportdag, dagen före och samma dag', 'Report day, the day before and the same day'], ['utd', 'utdLarm', 'Utdelning, dagen före x-dagen', 'Dividend, the day before the ex-date'], ['veckan', 'veckanLarm', 'Din vecka, fredag efter kl 18', 'Your week, Friday after 6 pm']];
 const KOLL_MIN = [0, 50000, 250000, 1000000];
 const kollOn = (k, sym, t) => { const g = KOLL_T.find((x) => x[0] === t); return k[g[1]] !== false && k.per?.[sym]?.[t] !== false; };
 let kollRunning = false;
+// Veckonyckel, t.ex. 2026-48 (ISO-vecka)
+const weekKey = (d = new Date()) => { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const n = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - n); const y = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return `${t.getUTCFullYear()}-${Math.ceil(((t - y) / 864e5 + 1) / 7)}`; };
+// Portföljen nu mot för en vecka sedan, med dagens växelkurs, och vilken aktie som påverkade mest
+async function weekSummary() {
+  const port = getPort(); if (!port.length) return null;
+  const per = {}; for (const b of port) per[b.sym] = (per[b.sym] || 0) + b.antal;
+  const syms = Object.keys(per); const cut = Date.now() / 1000 - 7 * 86400;
+  const [q, cs, oc] = await Promise.all([getQuotes(syms), Promise.all(syms.map((x) => api(`/api/chart?s=${encodeURIComponent(x)}&r=1m`, 30 * 60e3).catch(() => null))), api(`/api/chart?s=${encodeURIComponent('^OMX')}&r=1m`, 30 * 60e3).catch(() => null)]);
+  const fx = await fxToSek(syms.map((x) => q[x]?.valuta || 'SEK'));
+  const before = (c) => { const pts = c?.punkter || []; let v = null; for (const [t, x] of pts) { if (t <= cut) v = x; else break; } return v; };
+  let nu = 0, fore = 0; const rows = [];
+  syms.forEach((x, i) => { const k = q[x]?.kurs; const b = before(cs[i]); const f = fx[q[x]?.valuta === 'GBp' || q[x]?.valuta === 'GBX' ? 'GBP' : q[x]?.valuta || 'SEK'] * (q[x]?.valuta === 'GBp' || q[x]?.valuta === 'GBX' ? 0.01 : 1); if (k == null || b == null || !f) return;
+    nu += per[x] * k * f; fore += per[x] * b * f; rows.push({ sym: x, kr: per[x] * (k - b) * f }); });
+  if (!fore) return null;
+  const ob = before(oc), on = oc?.punkter?.length ? oc.punkter[oc.punkter.length - 1][1] : null;
+  rows.sort((a, b) => Math.abs(b.kr) - Math.abs(a.kr));
+  return { diff: nu - fore, pct: (nu / fore - 1) * 100, top: rows[0] || null, omx: ob && on ? (on / ob - 1) * 100 : null };
+}
 async function checkKoll() {
   if (kollRunning || locked() || ACC.cfg === undefined || !ACC.user) return; kollRunning = true;
   try {
@@ -5836,7 +5883,7 @@ async function checkKoll() {
     const [fi, st, kal] = await Promise.all([
       Promise.all(se.map((x) => getFI(x).catch(() => null))).then((r) => r.filter(Boolean)),
       Promise.all(all.map((x) => getStock(x).catch(() => null))),
-      KOLL_T.some(([t, g]) => t === 'rapport' && k[g] !== false) ? getKalender(all).catch(() => []) : []
+      KOLL_T.some(([t, g]) => (t === 'rapport' || t === 'utd') && k[g] !== false) ? getKalender(all).catch(() => []) : []
     ]);
     const seen = new Set(k.sett || []); const firstRun = !k.sett; const blank = { ...(k.blank || {}) }; const risk = { ...(k.risk || {}) };
     const min = Number(k.insynMin ?? 50000); const since = isoDay(Date.now() - 7 * dayMs); const nyaSett = [];
@@ -5864,6 +5911,18 @@ async function checkKoll() {
       const id = ['rapport', c.sym, c.rapport, c.rapport === today ? 'd' : 'f'].join('|'); nyaSett.push(id);
       if (!seen.has(id)) showNotice(`${ovName(c.sym)} lämnar rapport ${c.rapport === today ? 'i dag' : 'i morgon'}`, `${c.rapportUppskattad ? 'Datumet är preliminärt. ' : ''}Kursen brukar röra sig mer än vanligt runt rapporter.`, go(c.sym) + '?flik=kalender');
     }
+    const owned = new Set(getPort().map((x) => x.sym));
+    for (const c of kal) {
+      if (!c.exUtdelning || c.exUtdelning !== tomorrow || !owned.has(c.sym) || !kollOn(k, c.sym, 'utd')) continue;
+      const id = ['utd', c.sym, c.exUtdelning].join('|'); nyaSett.push(id);
+      if (!seen.has(id)) showNotice(`Utdelning i ${ovName(c.sym)} i morgon`, `I morgon handlas ${ovName(c.sym)} utan utdelning${c.utdelningPerAktie ? ` (${bn(c.utdelningPerAktie, 2)} ${cur(c.valuta)} per aktie och år)` : ''}. Du äger aktien.`, go(c.sym) + '?flik=kalender');
+    }
+    // Din vecka: en gång per vecka, fredag efter kl 18 till söndag
+    const wk = weekKey(); const now = new Date(); const sthlm = localHm('Europe/Stockholm', now);
+    if (k.veckanLarm !== false && owned.size && k.veckaSett !== wk && ((sthlm.wd === 'Fri' && sthlm.hm >= '18:00') || sthlm.wd === 'Sat' || sthlm.wd === 'Sun')) {
+      const w = await weekSummary().catch(() => null);
+      if (w) { showNotice(`Din vecka: ${krDiff(w.diff)} (${pctDiff(w.pct)})`, [w.top ? `Mest: ${ovName(w.top.sym)} ${krDiff(w.top.kr)}` : '', w.omx != null ? `OMXS30 ${pctDiff(w.omx)}` : ''].filter(Boolean).join('. ') + '.', '/portfolj'); writeLS(KKEY, { ...getKoll(), veckaSett: wk }); }
+    }
     writeLS(KKEY, { ...getKoll(), sett: [...new Set([...nyaSett, ...seen])].slice(0, 400), blank, risk });
   } finally { kollRunning = false; }
 }
@@ -5879,7 +5938,7 @@ function kollPerHTML(sym, namn) {
   const k = getKoll(); const mine = mySyms().all.includes(sym);
   return `<div class="kp" role="dialog" aria-label="${EN ? 'Notifications' : 'Notiser'}"><b>${EN ? 'Notifications for' : 'Notiser för'} ${esc(ovName(sym))}</b>
     ${!mine ? `<span class="small muted">${EN ? 'Notifications apply to stocks you watch or own.' : 'Notiser gäller aktier du bevakar eller äger.'}</span><button type="button" class="btn small" data-kpwatch="${esc(sym)}" data-namn="${esc(namn)}">${EN ? 'Watch and get notifications' : 'Bevaka och få notiser'}</button>` : ''}
-    ${KOLL_T.filter(([t]) => isSwedish(sym) || (t !== 'insyn' && t !== 'blank')).map(([t, g, sv, en]) => { const off = k[g] === false; return `<label class="${off ? 'faint' : ''}"><input type="checkbox" data-kollper="${t}" data-sym="${esc(sym)}" ${k.per?.[sym]?.[t] !== false ? 'checked' : ''} ${off || !mine ? 'disabled' : ''}> ${EN ? en : sv}${off ? ` <span class="small">(${EN ? 'off for all' : 'av för alla'})</span>` : ''}</label>`; }).join('')}
+    ${KOLL_T.filter(([t]) => t !== 'veckan' && (isSwedish(sym) || (t !== 'insyn' && t !== 'blank'))).map(([t, g, sv, en]) => { const off = k[g] === false; return `<label class="${off ? 'faint' : ''}"><input type="checkbox" data-kollper="${t}" data-sym="${esc(sym)}" ${k.per?.[sym]?.[t] !== false ? 'checked' : ''} ${off || !mine ? 'disabled' : ''}> ${EN ? en : sv}${off ? ` <span class="small">(${EN ? 'off for all' : 'av för alla'})</span>` : ''}</label>`; }).join('')}
     ${notifyState() === 'default' ? `<button type="button" class="btn ghost small" data-notify-kp>${EN ? 'Also show as browser notification' : 'Visa även som notis i webbläsaren'}</button>` : notifyState() === 'granted' ? `<span class="small faint">${EN ? 'Shown here and as a browser notification while the site is open.' : 'Visas här och som notis i webbläsaren när sidan är öppen.'}</span>` : `<span class="small faint">${EN ? 'Shown here on the site while it is open.' : 'Visas här på sidan när den är öppen.'}</span>`}
     <a class="small" href="/bevakning" data-link>${EN ? 'Settings for all stocks →' : 'Inställningar för alla aktier →'}</a></div>`;
 }
@@ -6439,6 +6498,7 @@ function viewOversiktMin() {
     <span class="n-pill ${b.kod}" id="c2-bors"><i></i>${esc(b.bors)} ${b.kod === 'oppen' ? (EN ? 'open' : 'öppen') : '· ' + esc(b.txt)}</span>
   </div>
   ${guestBar()}
+  ${installBanner()}
   <div class="c2">
     <div class="c2-left">
     <section class="b-card c2-bal">

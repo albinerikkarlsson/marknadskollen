@@ -2,7 +2,7 @@ import { SUPA } from '../lib/supa.mjs';
 import { yChart } from '../lib/yahoo.mjs';
 import kalenderHandler from './kalender.mjs';
 
-// Veckobrevet: varje måndag morgon får de som valt det ett mejl om hur deras aktier har gått.
+// Veckobrevet: varje fredag kväll får de som valt det ett mejl om hur deras aktier har gått.
 // Kräver tre saker i Netlify (Project configuration → Environment variables):
 //   VECKOBREV_NYCKEL  nyckeln som SQL-skriptet i supabase/anvandardata.sql visar
 //   RESEND_API_KEY    nyckel från resend.com, som skickar mejlen
@@ -76,25 +76,38 @@ export async function buildLetter(m, cache = new Map()) {
   ev.sort((a, b) => a[0].localeCompare(b[0]));
   const fornamn = String(m.namn || '').split(' ')[0];
   const diff = nu - fore;
-  const subject = ok ? `Din vecka på börsen: ${diff >= 0 ? '+' : '−'}${kr(Math.abs(diff))} (${pctTxt(fore ? (diff / fore) * 100 : 0)})` : 'Din vecka på börsen';
-  const color = (n) => (n >= 0 ? '#1E7A47' : '#C0392B');
-  const row = (a, b, c = '') => `<tr><td style="padding:8px 0;border-top:1px solid #EEEFF1">${a}</td><td style="padding:8px 0;border-top:1px solid #EEEFF1;text-align:right;${c}">${b}</td></tr>`;
-  const html = `<!doctype html><html><body style="margin:0;background:#ECEDEF;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111214">
-  <div style="max-width:560px;margin:0 auto;padding:28px 16px">
-    <p style="margin:0 0 18px;font-size:15px"><b>Finanskollen</b> · Veckobrev</p>
-    <div style="background:#fff;border-radius:20px;padding:26px">
-      <h1 style="margin:0 0 6px;font-size:24px;font-weight:500">Hej${fornamn ? ' ' + esc(fornamn) : ''}!</h1>
-      <p style="margin:0 0 20px;color:#5A5E66">Så här har dina aktier gått den senaste veckan.</p>
-      ${ok ? `<p style="margin:0;color:#5A5E66;font-size:14px">Din portfölj</p><p style="margin:2px 0 4px;font-size:30px">${kr(nu)}</p><p style="margin:0 0 20px;color:${color(diff)};font-size:16px">${diff >= 0 ? '+' : '−'}${kr(Math.abs(diff))} (${pctTxt(fore ? (diff / fore) * 100 : 0)}) på en vecka</p>` : ''}
-      ${veckan.length ? `<p style="margin:0 0 4px;font-weight:500">Veckan för dina aktier</p><table style="width:100%;border-collapse:collapse;font-size:15px">${veckan.slice(0, 12).map((x) => row(esc(namn(x.s)), pctTxt(x.p), `color:${color(x.p)}`)).join('')}</table>` : ''}
-      ${ev.length ? `<p style="margin:22px 0 4px;font-weight:500">Kommande vecka</p><table style="width:100%;border-collapse:collapse;font-size:15px">${ev.map((e) => row(`${esc(e[1])}<br><span style="color:#5A5E66;font-size:13px">${esc(e[2])}</span>`, esc(new Date(e[0] + 'T12:00:00Z').toLocaleDateString('sv-SE', { weekday: 'short', day: 'numeric', month: 'short' })))).join('')}</table>` : ''}
-      <p style="margin:24px 0 0"><a href="${SITE}/" style="display:inline-block;background:#111214;color:#fff;text-decoration:none;padding:12px 20px;border-radius:999px">Öppna Finanskollen</a></p>
+  const subject = ok ? `Din vecka: ${diff >= 0 ? '+' : '−'}${kr(Math.abs(diff))} (${pctTxt(fore ? (diff / fore) * 100 : 0)})` : 'Din vecka på Finanskollen';
+  // Bidrag i kronor per aktie och OMXS30 samma vecka
+  const bidrag = Object.entries(per).map(([s, antal]) => { const w = W[s]; return w?.now && w.before && w.fx ? { s, kr: antal * (w.now - w.before) * w.fx, p: (w.now / w.before - 1) * 100 } : null; }).filter(Boolean).sort((a, b) => Math.abs(b.kr) - Math.abs(a.kr));
+  const omx = await weekOf('^OMX', cache); const omxP = omx?.now && omx.before ? (omx.now / omx.before - 1) * 100 : null;
+  const pct = fore ? (diff / fore) * 100 : 0;
+  const G = '#4CC38A', R = '#F07167', C = (n) => (n >= 0 ? G : R); const sgn = (n) => (n >= 0 ? '+' : '−');
+  // Tre saker att veta
+  const tre = [];
+  if (ok && bidrag[0]) { const t = bidrag[0]; const share = diff ? Math.abs(t.kr / diff) * 100 : 0; tre.push([`${namn(t.s)} ${t.kr >= 0 ? 'drog upp' : 'drog ner'} mest`, `${pctTxt(t.p)} och ${sgn(t.kr)}${kr(Math.abs(t.kr))}${share >= 25 && Math.sign(t.kr) === Math.sign(diff) ? `, ungefär ${nf(Math.round(share / 5) * 5)} % av veckans resultat` : ''}.`]); }
+  if (ev.length) { const e = ev[0]; const dag = new Date(e[0] + 'T12:00:00Z').toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Stockholm' }); tre.push([`${e[2] === 'Rapport' ? 'Rapport' : e[2].startsWith('X-dag') ? 'Utdelning' : 'Utbetalning'} ${dag}`, `${e[1]}: ${e[2].toLowerCase()}.${ev.length > 1 ? ` Och ${ev.length - 1} till nästa vecka.` : ''}`]); }
+  if (ok && bidrag.length > 1) { const w = bidrag.slice().sort((a, b) => a.p - b.p)[0]; if (w.s !== bidrag[0].s) tre.push([`${namn(w.s)} ${w.p < 0 ? 'gick sämst' : 'steg minst'}`, `${pctTxt(w.p)} under veckan, ${sgn(w.kr)}${kr(Math.abs(w.kr))}.`]); }
+  if (!ok && veckan[0]) tre.push([`${namn(veckan[0].s)} gick bäst av dina aktier`, `${pctTxt(veckan[0].p)} under veckan.`]);
+  const box = (k, v, c = '#E8EAED') => `<td style="width:33%;padding:0 4px"><div style="background:#15171C;border:1px solid #23262D;border-radius:12px;padding:12px"><div style="font-size:11px;color:#8B919B">${k}</div><div style="font-size:16px;font-weight:700;color:${c};white-space:nowrap">${v}</div></div></td>`;
+  const html = `<!doctype html><html><head><meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark"></head><body style="margin:0;background:#050608;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#E8EAED">
+  <div style="max-width:600px;margin:0 auto;padding:24px 12px">
+   <div style="background:#0B0C10;border:1px solid #1E2026;border-radius:22px;overflow:hidden">
+    <div style="padding:22px 26px 26px;background:#0B0C10;background-image:radial-gradient(120% 140% at 100% 0%,rgba(255,90,0,.35),rgba(255,90,0,0) 60%)">
+      <table style="width:100%;border-collapse:collapse"><tr><td style="font-size:15px;font-weight:800;letter-spacing:-.02em;color:#E8EAED">FINANSKOLLEN<span style="color:#FF5A00">.</span></td><td style="text-align:right;font-size:12px;color:#C9CDD4">${esc(new Date().toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Stockholm' }))}</td></tr></table>
+      <p style="margin:22px 0 2px;font-size:15px;color:#C9CDD4">Din vecka${fornamn ? ', ' + esc(fornamn) : ''}</p>
+      ${ok ? `<p style="margin:0;font-size:44px;font-weight:800;letter-spacing:-.03em;color:${C(diff)}">${pctTxt(pct)} <span style="font-size:18px;font-weight:600">${sgn(diff)}${kr(Math.abs(diff))}</span></p>` : `<p style="margin:0;font-size:22px;font-weight:700">Så gick dina aktier</p>`}
+      ${omxP != null ? `<p style="margin:4px 0 0;font-size:13px;color:#C9CDD4">OMXS30 gick ${pctTxt(omxP)} samma vecka</p>` : ''}
     </div>
-    <p style="margin:18px 4px 0;color:#8A8E96;font-size:12px;line-height:1.5">Kurser från Yahoo Finance, utländska aktier räknade med dagens växelkurs. Historisk utveckling säger inget om framtiden, och det här är inget råd om att köpa eller sälja. Du får mejlet för att du har valt veckobrevet. Du stänger av det under <a href="${SITE}/konto" style="color:#8A8E96">Mitt konto</a>.</p>
+    ${tre.length ? `<div style="padding:18px 26px;border-top:1px solid #1E2026"><p style="margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8B919B">${tre.length === 3 ? 'Tre saker att veta' : 'Att veta'}</p>
+      <table style="width:100%;border-collapse:collapse">${tre.map(([t, s2], i) => `<tr><td style="width:44px;padding:12px 0;vertical-align:top;${i ? 'border-top:1px solid #1E2026' : ''}"><div style="width:32px;height:32px;line-height:32px;text-align:center;border-radius:10px;background:#2A1A10;color:#FF9A5C;font-weight:800">${i + 1}</div></td><td style="padding:12px 0;${i ? 'border-top:1px solid #1E2026' : ''}"><div style="font-size:15px;font-weight:700">${esc(t)}</div><div style="font-size:13px;color:#8B919B;margin-top:2px">${esc(s2)}</div></td></tr>`).join('')}</table></div>` : ''}
+    ${ok ? `<div style="padding:18px 22px;border-top:1px solid #1E2026"><table style="width:100%;border-collapse:collapse"><tr>${box('Värde nu', kr(nu))}${box('Veckan', `${sgn(diff)}${kr(Math.abs(diff))}`, C(diff))}${box('OMXS30', omxP != null ? pctTxt(omxP) : '–', omxP != null ? C(omxP) : '#E8EAED')}</tr></table></div>` : ''}
+    <div style="padding:24px 26px;border-top:1px solid #1E2026;text-align:center"><a href="${SITE}/portfolj" style="display:inline-block;background:#FF5A00;color:#fff;text-decoration:none;padding:13px 26px;border-radius:12px;font-weight:700;font-size:15px">Se hela veckan</a></div>
+    <div style="padding:16px 26px 20px;border-top:1px solid #1E2026;font-size:12px;line-height:1.6;color:#6B717B">Varje fredag kl 18 · <a href="${SITE}/konto" style="color:#8B919B">Ändra eller avsluta</a><br>Kurser från Yahoo Finance, utländska aktier räknade med dagens växelkurs. Inget här är ett råd om att köpa eller sälja.</div>
+   </div>
   </div></body></html>`;
-  const text = [`Hej${fornamn ? ' ' + fornamn : ''}!`, '', ok ? `Din portfölj: ${kr(nu)}, ${diff >= 0 ? '+' : '−'}${kr(Math.abs(diff))} på en vecka.` : '', ...veckan.slice(0, 12).map((x) => `${namn(x.s)}: ${pctTxt(x.p)}`), '', ev.length ? 'Kommande vecka:' : '', ...ev.map((e) => `${e[0]} ${e[1]}: ${e[2]}`), '', `Öppna Finanskollen: ${SITE}/`, `Stäng av veckobrevet under Mitt konto: ${SITE}/konto`].filter((x, i, a) => x !== '' || a[i - 1] !== '').join('\n');
+  const text = [`Din vecka${fornamn ? ', ' + fornamn : ''}`, '', ok ? `Portföljen: ${sgn(diff)}${kr(Math.abs(diff))} (${pctTxt(pct)}), värde nu ${kr(nu)}.` : '', omxP != null ? `OMXS30: ${pctTxt(omxP)}.` : '', '', ...tre.map(([t, s2], i) => `${i + 1}. ${t}: ${s2}`), '', `Se hela veckan: ${SITE}/portfolj`, '', 'Inget här är ett råd om att köpa eller sälja. Ändra eller avsluta: ' + SITE + '/konto'].filter((x, i, arr) => x !== '' || arr[i - 1] !== '').join('\n');
   return { subject, html, text };
 }
 
-// Måndagar kl 07.00 UTC, alltså 08.00 svensk vintertid och 09.00 sommartid
-export const config = { schedule: '0 7 * * 1' };
+// Fredagar kl 17.00 UTC, alltså 18.00 svensk vintertid och 19.00 sommartid
+export const config = { schedule: '0 17 * * 5' };

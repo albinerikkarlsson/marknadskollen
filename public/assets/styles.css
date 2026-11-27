@@ -2579,3 +2579,20 @@ a.c2-nc:hover { border-color: var(--acc-line); }
 .c2-left .c2-ncards { grid-template-columns: 1fr; gap: 8px; }
 .c2-left .c2-nc { min-height: 0; padding: 10px 12px; gap: 5px; }
 .c2-left .c2-nt { -webkit-line-clamp: 2; font-size: 13px; }
+/* ---------- Installera som app ---------- */
+.nav-install { display: flex; align-items: center; gap: 10px; margin: 4px 0 0; padding: 9px 12px; border-radius: 11px; border: 1px dashed var(--acc-line); background: rgba(255,122,51,0.06); color: #FF9A5C; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; text-align: left; }
+.nav-install:hover { background: rgba(255,122,51,0.12); }
+.nav-install[hidden] { display: none; }
+.inst-banner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin: 0 0 14px; border-radius: 16px; background: linear-gradient(160deg, rgba(255,122,51,0.16), rgba(255,255,255,0.03)); border: 1px solid var(--acc-line); }
+.inst-banner img { border-radius: 11px; flex: none; }
+.inst-banner > span { display: flex; flex-direction: column; flex: 1; min-width: 0; } .inst-banner b { font-size: 14px; }
+.inst-banner .btn { flex: none; }
+.inst-banner[hidden] { display: none; }
+.inst-x { flex: none; width: 30px; height: 30px; border-radius: 9px; border: 0; background: rgba(255,255,255,0.06); color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; }
+.inst-m { max-width: 440px; display: flex; flex-direction: column; gap: 14px; }
+.inst-top { display: flex; align-items: center; gap: 14px; } .inst-ic img { border-radius: 14px; display: block; }
+.inst-step { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 14px; background: rgba(255,255,255,0.035); border: 1px solid var(--line-soft); }
+.inst-step > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.inst-n { flex: none; width: 28px; height: 28px; border-radius: 9px; background: rgba(255,122,51,0.14); color: #FF9A5C; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.inst-why { margin: 0; padding-left: 18px; color: var(--ink-2); display: flex; flex-direction: column; gap: 4px; }
+@media (display-mode: standalone) { .nav-install, .inst-banner { display: none !important; } }
