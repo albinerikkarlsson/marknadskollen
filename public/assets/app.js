@@ -6451,6 +6451,7 @@ function viewOversiktMin() {
       <div class="c2-hilo small" id="c2-hilo"></div>
     </section>
     <section class="b-card c2-next" id="c2-next"><div class="b-ch"><h2 class="b-lbl">${EN ? 'Next event' : 'Nästa händelse'}</h2><a class="b-more" href="/portfolj?flik=kalender" data-link>${EN ? 'Calendar' : 'Kalender'}</a></div><div id="c2-nextb">${loading()}</div></section>
+    <section class="b-card c2-news"><div class="b-ch"><h2 class="b-lbl">${EN ? 'News about your stocks' : 'Nyheter om dina aktier'}</h2><a class="b-more" href="/nyheter" data-link>${EN ? 'All news' : 'Alla nyheter'}</a></div><div class="c2-ncards" id="c2-news">${loading(EN ? 'Loading news …' : 'Hämtar nyheter …')}</div></section>
     </div>
     <div class="c2-right">
       <div class="c2-toph"><h2 class="b-lbl">${EN ? 'Largest holdings' : 'Största innehav'}</h2><a class="b-more" href="/portfolj?flik=innehav" data-link id="c2-all">${EN ? 'Show all' : 'Visa alla'}</a></div>
@@ -6463,7 +6464,6 @@ function viewOversiktMin() {
           <div id="c2-qbox">${loading()}</div>
           <div class="c2-qmine" id="c2-qmine"></div></section>
       </div>
-    <section class="b-card c2-news"><div class="b-ch"><h2 class="b-lbl">${EN ? 'News about your stocks' : 'Nyheter om dina aktier'}</h2><a class="b-more" href="/nyheter" data-link>${EN ? 'All news' : 'Alla nyheter'}</a></div><div class="c2-ncards" id="c2-news">${loading(EN ? 'Loading news …' : 'Hämtar nyheter …')}</div></section>
     </div>
   </div>
   ${footer()}`;

@@ -2574,3 +2574,8 @@ a.c2-nc:hover { border-color: var(--acc-line); }
 .c2-bal .c2-chart { flex: none; min-height: 0; height: 230px; }
 .c2-bal .c2-chart > .n-plot { flex: none; height: 230px !important; min-height: 0; }
 @media (max-width: 560px) { .c2-bal .c2-chart, .c2-bal .c2-chart > .n-plot { height: 200px !important; } }
+/* Översikt C2: lägre kurva, nyheterna under nästa händelse */
+.c2-bal .c2-chart, .c2-bal .c2-chart > .n-plot { height: 160px !important; }
+.c2-left .c2-ncards { grid-template-columns: 1fr; gap: 8px; }
+.c2-left .c2-nc { min-height: 0; padding: 10px 12px; gap: 5px; }
+.c2-left .c2-nt { -webkit-line-clamp: 2; font-size: 13px; }
