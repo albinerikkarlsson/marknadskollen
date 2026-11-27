@@ -2361,7 +2361,7 @@ body.nav-off .b2-sticky { --b2-left: 52px; }
 .c2-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin: 4px 0 14px; }
 .c2-head h1 { font-size: 26px; letter-spacing: -0.025em; margin: 0; }
 .c2-head .n-pill { border-radius: 999px; }
-.c2 { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); gap: 14px; align-items: stretch; }
+.c2:not(.b-quick) { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); gap: 14px; align-items: stretch; }
 .c2-bal { display: flex; flex-direction: column; background: linear-gradient(165deg, rgba(255,122,51,0.13), rgba(255,255,255,0.02) 42%) !important; }
 .c2-hidebtn { font: inherit; font-size: 12px; color: var(--ink-2); background: rgba(255,255,255,0.04); border: 1px solid var(--line-soft); border-radius: 9px; padding: 4px 10px; cursor: pointer; }
 .c2-val { display: flex; align-items: baseline; gap: 8px; margin-top: 6px; }
@@ -2434,7 +2434,7 @@ a.c2-nc:hover { border-color: var(--acc-line); }
 .c2-nt { font-size: 13.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .c2-ns { margin-top: auto; color: var(--acc); }
 @media (max-width: 1250px) { .c2-top { grid-template-columns: repeat(2, minmax(0, 1fr)); } .c2-mid { grid-template-columns: 1fr; } }
-@media (max-width: 980px) { .c2 { grid-template-columns: 1fr; } .c2-ncards { grid-template-columns: 1fr; } .c2-nc { min-height: 0; } }
+@media (max-width: 980px) { .c2:not(.b-quick) { grid-template-columns: 1fr; } .c2-ncards { grid-template-columns: 1fr; } .c2-nc { min-height: 0; } }
 @media (max-width: 520px) { .c2-val b { font-size: 36px; } .c2-stats { grid-template-columns: 1fr 1fr; } .c2-stats > div:last-child { grid-column: 1 / -1; } .c2-mrow { grid-template-columns: minmax(0, 1fr) 70px 92px; } .c2-head { flex-direction: column; align-items: flex-start; } }
 
 /* ---------- Min portfölj: huvud A ---------- */
@@ -2569,7 +2569,7 @@ a.c2-nc:hover { border-color: var(--acc-line); }
 .w-tr b { white-space: nowrap; flex: none; }
 .w-det { max-height: calc(100% - 130px); overflow: auto; scrollbar-width: none; } .w-det::-webkit-scrollbar { display: none; }
 /* Översikt C2: kurvan med fast höjd, saldo och nästa händelse till vänster, nyheter till höger */
-.c2 { align-items: start; }
+.c2:not(.b-quick) { align-items: start; }
 .c2-left { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .c2-bal .c2-chart { flex: none; min-height: 0; height: 230px; }
 .c2-bal .c2-chart > .n-plot { flex: none; height: 230px !important; min-height: 0; }
