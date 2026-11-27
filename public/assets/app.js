@@ -93,6 +93,12 @@ function newsLand(n, region, sym) {
 }
 
 const ICON = {
+  scale: 'M12 4v16M5 8h14M5 8l-3 6a3 3 0 0 0 6 0zM19 8l-3 6a3 3 0 0 0 6 0zM8 20h8',
+  users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M17 11a3 3 0 1 0 0-6M22 21a6 6 0 0 0-5-6',
+  build: 'M4 20V8l6-4 6 4v12M16 12h4v8M8 10h4M8 14h4',
+  line: 'M3 17l5-6 4 3 8-9',
+  sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+  bars: 'M4 20V10M10 20V4M16 20v-8M22 20H2',
   note: 'M6 4h9l4 4v12H6zM14 4v5h5M9 13h7M9 16h5',
   home: 'M4 11l8-7 8 7v9H4z',
   search: 'M11 5a6 6 0 1 0 0.01 0M20 20l-4.5-4.5',
@@ -771,26 +777,32 @@ function viewOversiktMin() {
   return `
   ${topbar([['Översikt', '/oversikt']])}
   <div class="n-head">
-    <div class="n-hl"><h1>${esc(nGreet())}${locked() && isDemo() ? ' <span class="pill outline ov-expill">Exempel</span>' : ''}</h1><span class="small muted" id="market-status">${EN ? 'Fetching the market …' : 'Hämtar marknaden …'}</span></div>
+    <div class="n-hl"><h1>${esc(nGreet())}${locked() && isDemo() ? ' <span class="pill outline ov-expill">Exempel</span>' : ''}</h1><div class="n-story a5-story" id="n-story"></div><span class="small muted" id="market-status">${EN ? 'Fetching the market …' : 'Hämtar marknaden …'}</span></div>
     <div class="n-bors" id="n-bors">${['VOLV-B.ST', 'AAPL'].map((s) => { const b = borsStatus(s); return `<span class="n-pill ${b.kod}"><i></i>${esc(b.bors)} · ${esc(b.txt)}</span>`; }).join('')}</div>
   </div>
   <div class="n-ticker" id="ov-market" aria-label="${EN ? 'Markets' : 'Marknaden'}"><div class="n-track">${[0, 1].map((k) => N_TICK.map((m) => `<span class="n-tk" ${k ? 'aria-hidden="true"' : ''}><span class="muted">${esc(m.namn)}</span><b class="num" data-q="${m.sym}">…</b><span class="num small" data-qd="${m.sym}"></span><svg viewBox="0 0 56 18" class="n-spark" aria-hidden="true"><path data-qs="${m.sym}" d="" fill="none" stroke-width="1.4"></path></svg></span>`).join('')).join('')}</div></div>
   ${guestBar()}
-  <div class="n-kpis">
-    <section class="n-story" id="n-story"><span class="muted">${EN ? 'Calculating your portfolio …' : 'Räknar på din portfölj …'}</span></section>
-    <section class="b-card n-kpi"><span class="n-k">${EN ? 'Value now' : 'Värde nu'}</span><b class="num" id="k-tot">–</b><span class="small faint" id="k-tot-s"></span></section>
-    <section class="b-card n-kpi"><span class="n-k" id="k-day-l">${EN ? 'Today' : 'I dag'}</span><b class="num" id="k-day">–</b><span class="small num" id="k-day-s"></span></section>
-    <section class="b-card n-kpi"><span class="n-k">${EN ? 'Since purchase' : 'Sedan köp'}</span><b class="num" id="k-since">–</b><span class="small num" id="k-since-s"></span></section>
-  </div>
-  <div class="b-grid n-grid">
-    <section class="b-card c8 n-curve"><div class="b-ch"><div class="b-chl"><h2 class="b-lbl">${EN ? 'The portfolio' : 'Portföljen'}</h2><span class="small" id="n-chg"></span></div>
-      <div class="b-segc" role="tablist" aria-label="Period">${N_PER.map(([k, l]) => `<button type="button" role="tab" data-nper="${k}" aria-selected="${k === '1d'}">${l}</button>`).join('')}</div></div>
-      <div id="n-chart" class="n-chart">${loading('Hämtar kurser …')}</div><div class="b-xt num" id="n-axis"></div></section>
-    <section class="b-card c4"><div class="b-ch"><h2 class="b-lbl">Vad drev dagen</h2><span class="small faint" id="n-drv-s"></span></div><div id="n-drv">${loading()}</div></section>
-    <section class="b-card c4"><div class="b-ch"><h2 class="b-lbl">Att hålla koll på</h2><a class="b-more" href="/portfolj?flik=kalender" data-link>Kalender →</a></div><div id="n-todo">${loading()}</div></section>
-    <section class="b-card c4"><div class="b-ch"><h2 class="b-lbl">Viktigast för dig</h2><a class="b-more" href="/nyheter" data-link>Alla nyheter →</a></div><div id="n-news">${loading('Hämtar nyheter …')}</div></section>
-    <section class="b-card c4"><div class="b-ch"><h2 class="b-lbl">Riskläge${tip('Riskkoll')}</h2><a class="b-more" href="/portfolj" data-link>Detaljer →</a></div><div id="n-risk">${loading()}</div></section>
-    ${borsenCard('b-card c12')}
+  <div class="a5">
+    <aside class="a5-col">
+      <section class="b-card"><div class="b-ch"><h2 class="b-lbl">${EN ? 'My holdings' : 'Mina innehav'} <span class="a5-n num" id="n-holdn"></span></h2><a class="b-more" href="/portfolj" data-link>${EN ? 'My portfolio' : 'Min portfölj'} →</a></div><div id="n-hold">${loading()}</div></section>
+      <section class="b-card"><div class="b-ch"><h2 class="b-lbl">${EN ? 'Allocation' : 'Fördelning'}</h2><span class="small faint">${EN ? 'by sector' : 'bransch'}</span></div><div id="n-alloc">${loading()}</div></section>
+      <section class="b-card a5-grow"><div class="b-ch"><h2 class="b-lbl">${EN ? 'Things to watch' : 'Att hålla koll på'}</h2><a class="b-more" href="/portfolj?flik=kalender" data-link>${EN ? 'Calendar' : 'Kalender'} →</a></div><div id="n-todo">${loading()}</div></section>
+    </aside>
+    <section class="a5-col">
+      <div class="a5-kpis">
+        <section class="b-card n-kpi"><span class="n-k">${EN ? 'Value now' : 'Värde nu'}</span><b class="num" id="k-tot">–</b><span class="small faint" id="k-tot-s"></span><span class="small num a5-since"><span class="faint">${EN ? 'Since purchase' : 'Sedan köp'}</span> <b class="num" id="k-since">–</b> <span id="k-since-s"></span></span></section>
+        <section class="b-card n-kpi"><span class="n-k" id="k-day-l">${EN ? 'Today' : 'I dag'}</span><b class="num" id="k-day">–</b><span class="small num" id="k-day-s"></span><div class="a5-bars" id="k-bars"></div></section>
+        <section class="b-card n-kpi"><span class="n-k">${EN ? 'Portfolio risk check' : 'Riskkoll för portföljen'}${tip('Riskkoll')}</span><div id="n-risk">${loading()}</div></section>
+      </div>
+      <section class="b-card n-curve a5-grow"><div class="b-ch"><div class="b-chl"><h2 class="b-lbl">${EN ? 'Portfolio value' : 'Portföljens värde'}</h2><span class="small" id="n-chg"></span></div>
+        <div class="b-segc" role="tablist" aria-label="Period">${N_PER.map(([k, l]) => `<button type="button" role="tab" data-nper="${k}" aria-selected="${k === '1d'}">${l}</button>`).join('')}</div></div>
+        <div id="n-chart" class="n-chart">${loading('Hämtar kurser …')}</div><div class="b-xt num" id="n-axis"></div></section>
+      <div hidden><div id="n-drv"></div><span id="n-drv-s"></span></div>
+    </section>
+    <aside class="a5-col">
+      <section class="b-card a5-grow"><div class="b-ch"><h2 class="b-lbl">${EN ? 'Most important for you' : 'Viktigast för dig'}</h2><a class="b-more" href="/nyheter" data-link>${EN ? 'All news' : 'Alla nyheter'} →</a></div><div id="n-news">${loading('Hämtar nyheter …')}</div></section>
+      ${borsenCard('b-card')}
+    </aside>
   </div>
   ${footer()}`;
 }
@@ -825,6 +837,7 @@ async function mountOversiktMin() {
     $('#n-chart').innerHTML = `<p class="b-note">${EN ? 'The chart shows the value of your portfolio when you have added purchases.' : 'Kurvan visar värdet på din portfölj när du har lagt in köp.'}</p>`;
     $('#n-drv').innerHTML = `<p class="b-note">${EN ? 'Shows which of your stocks moved the most today.' : 'Här ser du vilka av dina aktier som rörde sig mest i dag.'}</p>`;
     $('#n-risk').innerHTML = `<p class="b-note">${EN ? 'Shows the risk in your whole portfolio when you have added purchases.' : 'Här ser du risken i hela portföljen när du har lagt in köp.'}</p>`;
+    $('#n-hold').innerHTML = `<p class="b-note">${EN ? 'Your stocks show up here when you have added purchases.' : 'Dina aktier visas här när du har lagt in köp.'}</p>`; $('#n-alloc').innerHTML = `<p class="b-note">${EN ? 'Shows how your money is spread.' : 'Här ser du hur pengarna är fördelade.'}</p>`;
     return;
   }
   let pd;
@@ -922,8 +935,49 @@ async function mountOversiktMin() {
     dayCurve(m).then((c) => { curve = c; if (per === '1d') draw(); }).catch(() => { curve = { error: 'fetch' }; if (per === '1d') draw(); });
   }
 
-  /* ---- Riskläge ---- */
-  nRisk(pd);
+  /* ---- Riskläge, innehav, fördelning och staplar för dagen ---- */
+  nRisk5(pd); nHold(pd); nAlloc(pd); nBars(rows, notYet);
+}
+
+
+/* ---- Översikt A5: innehav, fördelning, dagens staplar och riskkoll i liten form ---- */
+function nHold(pd) {
+  const el = $('#n-hold'); if (!el) return;
+  const hv = pd.hold.filter((h) => !h.missing).sort((a, b) => (b.varde || 0) - (a.varde || 0)); const tot = pd.tot || 0;
+  const nEl = $('#n-holdn'); if (nEl) nEl.textContent = pd.hold.length;
+  if (!hv.length) { el.innerHTML = `<p class="b-note">${EN ? 'Prices are missing right now.' : 'Kurserna saknas just nu.'}</p>`; return; }
+  el.innerHTML = hv.slice(0, 7).map((h) => `<a class="a5-hold" href="/bolag/${encodeURIComponent(h.sym)}" data-link><span class="n-av">${esc(short(h.sym))}${symFlag(h.sym, 'on-avatar')}</span>
+    <span class="a5-hn"><b>${esc(ovName(h.sym))}</b><span class="num">${esc(short(h.sym))}${tot && h.varde ? ' · ' + nf((h.varde / tot) * 100, 1) + ' %' : ''}</span></span>
+    <span class="a5-hv"><b class="num">${h.varde != null ? sekBig(h.varde) : '–'}</b><span class="num ${h.raknas && h.d1Dag != null ? tone(h.d1Dag) : 'faint'}">${h.raknas && h.d1Dag != null ? pct(h.d1Dag, 1) : (EN ? 'not traded' : 'ingen handel')}</span></span></a>`).join('')
+    + (hv.length > 7 ? `<a class="b-more" href="/portfolj" data-link>${EN ? `All ${hv.length}` : `Alla ${hv.length}`} →</a>` : '');
+}
+function nAlloc(pd) {
+  const el = $('#n-alloc'); if (!el) return;
+  const hv = pd.hold.filter((h) => h.varde); const tot = hv.reduce((a, h) => a + h.varde, 0); if (!tot) { el.innerHTML = `<p class="b-note">${EN ? 'Missing' : 'Saknas'}</p>`; return; }
+  const grp = (f) => { const m = {}; for (const h of hv) { const k = f(h) || (EN ? 'Other' : 'Övrigt'); m[k] = (m[k] || 0) + h.varde; } return Object.entries(m).sort((a, b) => b[1] - a[1]); };
+  const C = ['#FF7A33', '#FFB27A', '#C9CDD4', '#8B919B', '#9A4A1F', '#5F6570'];
+  const br = grp((h) => h.bransch); const land = grp((h) => (isSwedish(h.sym) ? (EN ? 'Sweden' : 'Sverige') : (FLAG[landOf(h.sym)]?.[EN ? 'en' : 'sv'] || (EN ? 'Other' : 'Övrigt')))); const val = grp((h) => h.valuta);
+  const p = (v) => `${nf((v / tot) * 100, 0)} %`; const line = (rows) => rows.slice(0, 3).map(([k, v]) => `${esc(k)} ${p(v)}`).join(' · ');
+  el.innerHTML = `<div class="a5-stack">${br.map(([, v], i) => `<i style="flex:${v};background:${C[i % C.length]}"></i>`).join('')}</div>
+    <div class="a5-leg">${br.slice(0, 5).map(([k, v], i) => `<span><i style="background:${C[i % C.length]}"></i>${esc(k)} ${p(v)}</span>`).join('')}</div>
+    <div class="r6-kv"><span>${EN ? 'Country' : 'Land'}</span><b>${line(land)}</b></div><div class="r6-kv"><span>${EN ? 'Currency' : 'Valuta'}</span><b>${line(val)}</b></div>`;
+}
+function nBars(rows, notYet) {
+  const el = $('#k-bars'); if (!el) return;
+  const st = rows.filter((r) => !r.fx); const all = [...st, ...notYet.map((h) => ({ sym: h.sym, idag: 0, none: true }))].slice(0, 7);
+  if (!all.length) { el.innerHTML = ''; return; }
+  const mx = Math.max(1, ...all.map((r) => Math.abs(r.idag)));
+  el.innerHTML = all.map((r) => `<span title="${esc(ovName(r.sym))}: ${r.none ? (EN ? 'not traded' : 'inte handlad') : krDiff(r.kr ?? r.idag)}"><i class="${r.none ? 'none' : tone(r.idag)}" style="height:${r.none ? 4 : Math.max(4, (Math.abs(r.idag) / mx) * 48).toFixed(0)}px"></i><em>${esc(short(r.sym))}</em></span>`).join('');
+}
+function nRisk5(pd) {
+  const el = $('#n-risk'); if (!el) return;
+  const { hold, tot, risk } = pd; const hv = hold.filter((h) => h.varde);
+  if (!hv.length || !tot || risk == null) { el.innerHTML = `<p class="b-note">${EN ? 'Too little data' : 'För lite data'}</p>`; return; }
+  const lv = lvlOf(Math.round(risk)); const C = 2 * Math.PI * 40; const top = [...hv].sort((a, b) => b.varde - a.varde)[0];
+  const msg = hv.length > 1 && top.varde / tot > 0.25 ? (EN ? `${ovName(top.sym)} is ${nf((top.varde / tot) * 100, 0)} % of the portfolio.` : `${ovName(top.sym)} är ${nf((top.varde / tot) * 100, 0)} % av portföljen.`) : (EN ? 'Good spread, no single stock dominates.' : 'Bra spridning, inget bolag dominerar.');
+  el.innerHTML = `<div class="a5-rk"><svg viewBox="0 0 100 100" class="a5-ring" aria-hidden="true"><circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="9"/><circle cx="50" cy="50" r="40" fill="none" stroke="var(--acc)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(C * Math.min(1, risk / 10)).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 50 50)"/></svg>
+    <div class="a5-rv"><b class="num">${nf(risk, 1)}</b><span>${EN ? 'of 10' : 'av 10'}</span></div>
+    <div class="a5-rt"><b style="color:var(--${LV[lv].c})">${LV[lv].t} risk</b><span>${esc(msg)}</span><a class="b-more" href="/portfolj?flik=risk" data-link>${EN ? 'Details' : 'Detaljer'} →</a></div></div>`;
 }
 
 // Kurvan: en linje med yta, streckad nivå (början av dagen eller insatta pengar), nyhetsprickar och värde när man håller över
@@ -1657,7 +1711,7 @@ function aboutHTML(a, s) {
    kurser och rapportsiffror från Yahoo Finance, insyn och blankning från Finansinspektionen.
    Det vi räknar fram själva (riskmått, medelvärden, marginaler) räknas från de siffrorna i webbläsaren.
    Saknas något skriver sidan det, inget fylls i. */
-const B_TABS = [['oversikt', 'Översikt'], ['kurs', 'Kurs och diagram'], ['dagen', 'Dagen'], ['risk', 'Riskanalys'], ['rapporter', 'Rapporter och nyckeltal'], ['insyn', 'Insyn och blankning'], ['kalender', 'Kalender'], ['nyheter', 'Nyheter'], ['om', 'Om bolaget']];
+const B_TABS = [['oversikt', 'Översikt'], ['kurs', 'Kurs och diagram'], ['dagen', 'Dagen'], ['risk', 'Riskkoll'], ['rapporter', 'Rapporter och nyckeltal'], ['insyn', 'Insyn och blankning'], ['kalender', 'Kalender'], ['nyheter', 'Nyheter'], ['om', 'Om bolaget']];
 const B_MON = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 const B_MON_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const bMon = (i) => (EN ? B_MON_EN : B_MON)[i];
@@ -1893,57 +1947,93 @@ function viewBolag(sym) {
   ${footer()}`;
 }
 
+const B_TAB_IC = { oversikt: 'home', kurs: 'line', dagen: 'sun', risk: 'scale', rapporter: 'bars', insyn: 'users', kalender: 'calendar', nyheter: 'news', om: 'build' };
+// 52 veckor ur faktarutan, t.ex. "276,50–374,50"
+const b52 = (s) => { const hi = s.fakta?.find((x) => x[0] === '52 veckor')?.[1]; const m = /^([\d\s.,]+)–([\d\s.,]+)$/.exec(hi || ''); if (!m) return null; const p = (x) => Number(x.replace(/\s/g, '').replace(',', '.')); const lo = p(m[1]); const h = p(m[2]); if (!(h > lo)) return null; return { lo, h }; };
+const b2Rng = (lo, h, v) => (lo != null && h > lo && v != null ? `<span class="b2-rng"><i style="left:${Math.min(100, Math.max(0, ((v - lo) / (h - lo)) * 100)).toFixed(1)}%"></i></span><span class="b2-rngl num"><span>${kr(lo)}</span><span>${kr(h)}</span></span>` : `<b>${bMiss(null)}</b>`);
+// Huvudet på bolagssidan (prototyp B2): stor kurs, knappar med Anteckna, nyckeltal på en rad och flikar med ikoner.
+// En kompakt rad med kurs, flikar och knappar fastnar överst när man scrollar förbi huvudet.
 function bHead(s, tabs, active) {
   const watched = getWatch().includes(s.sym);
-  const hi = s.fakta?.find((x) => x[0] === '52 veckor')?.[1];
-  const rng = (() => { const m = /^([\d\s.,]+)–([\d\s.,]+)$/.exec(hi || ''); if (!m) return null; const p = (x) => Number(x.replace(/\s/g, '').replace(',', '.')); const lo = p(m[1]); const h = p(m[2]); if (!(h > lo) || s.kurs == null) return null; return { lo, h, f: Math.min(100, Math.max(0, ((s.kurs - lo) / (h - lo)) * 100)) }; })();
+  const r52 = b52(s);
   const nt = Object.fromEntries((s.nyckeltal || []).map(([k, v]) => [k, v]));
-  const eq = !s.typ || s.typ === 'Aktie'; const pf = (k) => { const v = s.perf?.find((x) => x[0] === k)?.[1]; return v == null ? null : pct(v); };
-  const stats = !eq ? [
-    ['Typ', s.typ, null],
-    [EN ? 'Year to date' : 'Hittills i år', pf('I år'), null],
-    [EN ? '1 year' : '1 år', pf('1 år'), null],
-    ['Riskkoll', s.poang != null ? `${s.poang} / 10` : null, 'Riskkoll'],
-    ['Beta', s.beta != null ? bn(s.beta, 2) : null, 'Beta']
-  ] : [
-    ['Börsvärde', s.fakta?.find((x) => x[0] === 'Börsvärde')?.[1] ?? null, 'Börsvärde'],
-    ['P/E', nt['P/E'] ?? null, 'P/E'],
-    ['Direktavkastning', nt.Direktavkastning ?? null, 'Direktavkastning'],
-    ['Riskkoll', s.poang != null ? `${s.poang} / 10` : null, 'Riskkoll'],
-    ['Beta', s.beta != null ? bn(s.beta, 2) : null, 'Beta']
-  ];
+  const eq = !s.typ || s.typ === 'Aktie';
+  const pf = (k) => { const v = s.perf?.find((x) => x[0] === k)?.[1]; return v == null ? null : pct(v); };
+  const av = esc(/^0P/.test(s.kort || '') ? String(s.namn).split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() : s.kort);
+  const lvl = lvlOf(s.poang);
+  const stat = (k, v, t, id) => `<div><span class="k">${esc(k)}${t ? tip(t) : ''}</span><b class="num"${id ? ` id="${id}"` : ''}>${bMiss(v)}</b></div>`;
+  const live = !s.typ || s.typ !== 'Fond';
+  const day = live ? `${stat(EN ? 'Open' : 'Öppning', null, null, 'b2-open')}${stat(EN ? 'High' : 'Högst', null, null, 'b2-hi')}${stat(EN ? 'Low' : 'Lägst', null, null, 'b2-lo')}${stat(EN ? 'Prev. close' : 'Föreg. stängning', null, null, 'b2-prev')}` : '';
+  const facts = eq ? `${stat('Börsvärde', s.fakta?.find((x) => x[0] === 'Börsvärde')?.[1] ?? null, 'Börsvärde')}${stat('P/E', nt['P/E'] ?? null, 'P/E')}${stat(EN ? 'Dividend yield' : 'Direktavk.', nt.Direktavkastning ?? null, 'Direktavkastning')}${stat('Beta', s.beta != null ? bn(s.beta, 2) : null, 'Beta')}`
+    : `${stat('Typ', s.typ)}${stat(EN ? 'Year to date' : 'I år', pf('I år'))}${stat(EN ? '1 year' : '1 år', pf('1 år'))}${stat('Beta', s.beta != null ? bn(s.beta, 2) : null, 'Beta')}`;
+  const ex = s.sym.endsWith('.ST') ? 'Nasdaq Stockholm' : (s.lista || '');
   return `
-  <section class="b-card b-top">
-    <div class="b-top-row">
-      <div class="b-id">
-        <span class="b-av">${esc(/^0P/.test(s.kort || '') ? String(s.namn).split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() : s.kort)}${symFlag(s.sym, 'on-avatar')}</span>
-        <div style="min-width:0">
-          <h1 class="b-name">${esc(s.namn)}</h1>
-          <div class="b-chips"><span>${esc(s.sym)}</span>${!eq ? `<span>${esc(s.typ)}</span>` : ''}${s.lista && s.typ !== 'Fond' ? `<span>${esc(s.lista)}</span>` : ''}${s.aktieslag ? `<span>${esc(s.aktieslag)}${tip('Aktieslag')}</span>` : ''}</div>
-        </div>
+  <section class="b-card b-top" id="b2-head">
+    <div class="b2-row">
+      <span class="b2-logo">${av}${symFlag(s.sym, 'on-avatar')}</span>
+      <div style="min-width:0">
+        <div class="b2-crumb"><a href="/sok" data-link>${EN ? 'Companies' : 'Bolag'}</a><span>/</span>${s.bransch || s.fakta?.find((x) => x[0] === 'Bransch')?.[1] ? `<span>${esc(s.fakta?.find((x) => x[0] === 'Bransch')?.[1] || '')}</span><span>/</span>` : ''}<span style="color:var(--ink-2)">${esc(s.sym)}${s.aktieslag ? ' · ' + esc(s.aktieslag) : ''}${!eq ? ' · ' + esc(s.typ) : ''}</span></div>
+        <div class="b2-title"><h1>${esc(ovName(s.sym) || s.namn)}</h1>
+          <span class="b2-px num" id="b2-px">${s.kurs != null ? kr(s.kurs) : '–'}<small>${esc(cur(s.valuta) === 'kr' ? 'SEK' : cur(s.valuta))}</small></span>
+          <span class="b2-chg num ${tone(s.d1)}" id="b2-chg">${s.d1 != null ? esc(pct(s.d1)) + (EN ? ' today' : ' i dag') : `<span class="faint small">${EN ? 'Change missing' : 'Förändring saknas'}</span>`}</span></div>
+        <span class="b2-time"><i class="b-live" aria-hidden="true"></i>${esc(ex)}${ex ? ' · ' : ''}${esc(when(s.kursTid || s.hamtad))}${s.typ === 'Fond' ? (EN ? ' · fund price once a day' : ' · fondkurs en gång per dag') : s.sym.endsWith('.ST') ? (EN ? ' · delayed 15 min' : ' · fördröjd 15 min') : ''}</span>
       </div>
-      <div class="b-px">
-        <div class="b-px-main"><span class="num b-px-v">${s.kurs != null ? kr(s.kurs) : '–'}</span><span class="muted">${esc(cur(s.valuta))}</span></div>
-        ${s.d1 != null ? `<span class="num b-px-d ${tone(s.d1)}">${esc(pct(s.d1))} ${EN ? 'today' : 'i dag'}</span>` : '<span class="faint small">Dagens förändring saknas</span>'}
-        <span class="b-px-t"><i class="b-live" aria-hidden="true"></i>${esc(EN ? 'Latest price' : 'Senaste kurs')} ${esc(when(s.kursTid || s.hamtad))}${s.typ === 'Fond' ? (EN ? ' · fund price once a day' : ' · fondkurs en gång per dag') : s.sym.endsWith('.ST') ? (EN ? ' · delayed 15 min' : ' · fördröjd 15 min') : ''}</span>
-      </div>
-      <div class="b-acts">
-        <button class="btn small ${watched ? 'ghost' : ''}" type="button" data-watch="${esc(s.sym)}" data-namn="${esc(s.namn)}" aria-pressed="${watched}">${watched ? 'Bevakas ✓' : 'Bevaka'}</button>
-        <span class="kp-host"><button type="button" class="btn small ghost" data-kollbtn="${esc(s.sym)}" data-namn="${esc(s.namn)}" aria-label="${EN ? 'Notifications' : 'Notiser'}" title="${EN ? 'Notifications' : 'Notiser'}">${svg('bell', 14)}</button></span>
-        <button type="button" class="btn small ghost" data-notes="${esc(s.sym)}" data-namn="${esc(ovName(s.sym))}" data-kurs="${s.kurs ?? ''}" data-valuta="${esc(s.valuta || '')}" aria-expanded="false">${svg('note', 14)} ${EN ? 'Notes' : 'Anteckningar'}<span class="nt-n num">${ACC.user && noteCount(s.sym) ? noteCount(s.sym) : ''}</span></button>
-        <a class="btn small ghost" href="/jamfor?a=${encodeURIComponent(s.sym)}" data-link>${svg('compare', 14)} Jämför</a>
-        <button type="button" class="btn small ghost" data-share>${svg('share', 14)} Dela</button>
+      <div class="b2-acts">
+        <button class="btn small ghost" type="button" data-watch="${esc(s.sym)}" data-namn="${esc(s.namn)}" aria-pressed="${watched}">${svg('star', 15)}<span>${watched ? (EN ? 'Watching' : 'Bevakas') : (EN ? 'Watch' : 'Bevaka')}</span></button>
+        <span class="kp-host"><button type="button" class="btn small ghost" data-kollbtn="${esc(s.sym)}" data-namn="${esc(s.namn)}">${svg('bell', 15)}${EN ? 'Alerts' : 'Larm'}</button></span>
+        <a class="btn small ghost" href="/jamfor?a=${encodeURIComponent(s.sym)}" data-link>${svg('compare', 15)}${EN ? 'Compare' : 'Jämför'}</a>
+        <button type="button" class="btn small ghost note" data-notes="${esc(s.sym)}" data-namn="${esc(ovName(s.sym))}" data-kurs="${s.kurs ?? ''}" data-valuta="${esc(s.valuta || '')}" aria-expanded="false">${svg('note', 15)}${EN ? 'Notes' : 'Anteckna'}<span class="nt-n num">${ACC.user && noteCount(s.sym) ? noteCount(s.sym) : ''}</span></button>
+        <button type="button" class="btn small ghost" data-share aria-label="${EN ? 'Share' : 'Dela'}" title="${EN ? 'Share' : 'Dela'}">${svg('share', 15)}</button>
+        <a class="btn small" href="/portfolj?flik=kop&lagg=${encodeURIComponent(s.sym)}" data-link>${svg('plus', 15)}${EN ? 'Add purchase' : 'Lägg till köp'}</a>
       </div>
     </div>
-    <div class="b-stats">
-      ${stats.map(([k, v, t]) => `<div><span class="b-stat-k">${esc(k)}${t ? tip(t) : ''}</span><b class="num">${bMiss(v)}</b></div>`).join('')}
-      <div class="b-52"><span class="b-stat-k">52 veckor${tip('52 veckor')}</span>${rng ? `<span class="b-52-bar"><i style="width:${rng.f.toFixed(0)}%"></i><b style="left:${rng.f.toFixed(0)}%"></b></span><span class="b-52-l num"><span>${kr(rng.lo)}</span><span>${kr(rng.h)}</span></span>` : `<b>${bMiss(null)}</b>`}</div>
+    <div class="b2-stats">
+      <div><span class="k">Riskkoll${tip('Riskkoll')}</span><b class="num">${s.poang != null ? `<span style="display:inline-flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:50%;background:var(--${LV[lvl].c})"></i>${s.poang} ${EN ? 'of' : 'av'} 10</span>` : bMiss(null)}</b></div>
+      ${day}${facts}
+      <div class="b2-52"><span class="k">52 ${EN ? 'weeks' : 'veckor'}${tip('52 veckor')}</span>${r52 ? b2Rng(r52.lo, r52.h, s.kurs) : `<b>${bMiss(null)}</b>`}</div>
     </div>
     <div class="b-tabs" role="tablist" aria-label="Delar av bolagssidan">
-      ${tabs.map(([k, t]) => `<button role="tab" type="button" data-btab="${k}" aria-selected="${k === active}">${esc(t)}</button>`).join('')}
+      ${tabs.map(([k, t]) => `<button role="tab" type="button" data-btab="${k}" aria-selected="${k === active}">${svg(B_TAB_IC[k] || 'news', 15)}${esc(t)}<span data-tbadge="${k}"></span></button>`).join('')}
     </div>
   </section>
+  <div class="b2-sticky" id="b2-sticky" aria-hidden="true">
+    <span class="b2-logo">${av}</span>
+    <span class="nm"><b>${esc(ovName(s.sym) || s.namn)}</b><span>${esc(s.sym)}</span></span>
+    <span class="px num" id="b2s-px">${s.kurs != null ? kr(s.kurs) : '–'}</span><span class="num small ${tone(s.d1)}" id="b2s-chg" style="font-weight:700">${s.d1 != null ? esc(pct(s.d1)) : ''}</span>
+    <svg class="spark" width="90" height="26" viewBox="0 0 90 26" aria-hidden="true"><path id="b2s-sp" d="" fill="none" stroke-width="1.6"></path></svg>
+    <nav>${tabs.map(([k, t]) => `<button type="button" data-btab="${k}" tabindex="-1" aria-selected="${k === active}">${esc(t)}</button>`).join('')}</nav>
+    <span class="end"><button type="button" class="btn small ghost" data-notes="${esc(s.sym)}" data-namn="${esc(ovName(s.sym))}" data-kurs="${s.kurs ?? ''}" data-valuta="${esc(s.valuta || '')}" title="${EN ? 'Notes' : 'Anteckna'}" tabindex="-1">${svg('note', 15)}</button><a class="btn small" href="/portfolj?flik=kop&lagg=${encodeURIComponent(s.sym)}" data-link tabindex="-1">${svg('plus', 15)}${EN ? 'Buy' : 'Köp'}</a></span>
+  </div>
   <div id="b-panel" role="tabpanel"></div>`;
+}
+// Fyller huvudet med dagens kurser: öppning, högsta, lägsta och föregående stängning.
+// Dagens förändring räknas mot föregående stängning från dagens kurser, så att en saknad dag i historiken inte ger fel procent.
+async function bHeadDay(ctx) {
+  const { s, get } = ctx; if (s.typ === 'Fond') return;
+  let d; try { d = await get.today(); } catch { d = null; }
+  if (!$('#b2-head')) return;
+  const pts = (d?.punkter || []).map((p) => p[1]).filter((v) => v != null);
+  const prev = d?.prevClose ?? null; const now = d?.kurs ?? s.kurs;
+  const set = (id, v) => { const el = $('#' + id); if (el) el.innerHTML = v == null ? bMiss(null) : esc(kr(v)); };
+  // Öppning, högsta och lägsta räknas från dagens kurser var femte minut, bara om det är dagens handel
+  const today = d?.kursTid && dayKey(new Date(d.kursTid)) === dayKey(new Date());
+  set('b2-open', today && pts.length ? pts[0] : null); set('b2-hi', today && pts.length ? Math.max(...pts, now ?? -Infinity) : null); set('b2-lo', today && pts.length ? Math.min(...pts, now ?? Infinity) : null); set('b2-prev', prev);
+  if (prev && now != null) {
+    const d1 = (now / prev - 1) * 100; s.d1 = d1; s.kurs = now;
+    const c = $('#b2-chg'); if (c) { c.className = 'b2-chg num ' + tone(d1); c.textContent = `${pct(d1)} (${now - prev >= 0 ? '+' : '−'}${kr(Math.abs(now - prev))}) ${EN ? 'today' : 'i dag'}`; }
+    const px = $('#b2-px'); if (px) px.firstChild.textContent = kr(now);
+    const sp = $('#b2s-px'); if (sp) sp.textContent = kr(now);
+    const sc = $('#b2s-chg'); if (sc) { sc.textContent = pct(d1); sc.className = 'num small ' + tone(d1); }
+  }
+  const p = $('#b2s-sp'); if (p && pts.length > 1) { const lo = Math.min(...pts, prev ?? Infinity), hi = Math.max(...pts, prev ?? -Infinity); p.setAttribute('d', pts.map((v, i) => `${i ? 'L' : 'M'}${((i / Math.max(pts.length - 1, 1)) * 90).toFixed(1)} ${(2 + (1 - (v - lo) / ((hi - lo) || 1)) * 22).toFixed(1)}`).join(' ')); p.setAttribute('stroke', `var(--${prev && now < prev ? 'down' : 'up'})`); }
+}
+// Den kompakta raden visas när huvudet har scrollats ur bild
+function bSticky() {
+  const head = $('#b2-head'); const bar = $('#b2-sticky'); if (!head || !bar || !('IntersectionObserver' in window)) return;
+  const io = new IntersectionObserver(([e]) => { const on = !e.isIntersecting && e.boundingClientRect.top < 0; bar.classList.toggle('on', on); bar.setAttribute('aria-hidden', String(!on)); bar.querySelectorAll('button,a').forEach((x) => { x.tabIndex = on ? 0 : -1; }); }, { threshold: 0 });
+  io.observe(head);
+  const sb = $('#sidebar'); const fix = () => { const r = sb?.getBoundingClientRect(); bar.style.setProperty('--b2-left', ((r && r.width > 10 ? r.right : 0) + 14) + 'px'); }; fix();
+  document.addEventListener('mk-navigate', () => io.disconnect(), { once: true });
 }
 
 async function mountBolag(sym) {
@@ -1976,6 +2066,7 @@ async function mountBolag(sym) {
   const params = new URLSearchParams(location.search);
   let active = tabs.some((t) => t[0] === params.get('flik')) ? params.get('flik') : 'oversikt';
   el.innerHTML = bHead(s, tabs, active);
+  // (bHeadDay och bSticky startas när ctx finns)
 
   // Data hämtas en gång per sidvisning och delas mellan flikarna
   const C = {};
@@ -2005,6 +2096,7 @@ async function mountBolag(sym) {
   };
   ctx.go = (k) => { show(k); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   show(active);
+  bHeadDay(ctx); bSticky();
 
   el.addEventListener('click', async (e) => {
     const t = e.target.closest('[data-btab]'); if (t) { show(t.dataset.btab); return; }
@@ -2013,7 +2105,7 @@ async function mountBolag(sym) {
     const w = e.target.closest('[data-watch]'); if (!w) return;
     if (askLogin()) return;
     const on = toggleWatch(w.dataset.watch, w.dataset.namn);
-    w.textContent = on ? 'Bevakas ✓' : 'Bevaka'; w.setAttribute('aria-pressed', String(on)); w.classList.toggle('ghost', on);
+    const sp = w.querySelector('span'); if (sp) sp.textContent = on ? (EN ? 'Watching' : 'Bevakas') : (EN ? 'Watch' : 'Bevaka'); else w.textContent = on ? 'Bevakas ✓' : 'Bevaka'; w.setAttribute('aria-pressed', String(on));
     refreshNav('sok');
   });
   el.querySelector('.b-tabs').addEventListener('keydown', (e) => {
@@ -2126,7 +2218,7 @@ function bRiskMini(s) {
   return `<div class="b-ch">${bLabel('Riskkoll', 'Riskkoll')}<span class="faint small">${EN ? 'Updated' : 'Uppdaterad'} ${esc(when(s.hamtad))}</span></div>
     <div class="b-rk">${bGauge(s.poang)}<div>${lvl ? bLevel(lvl) : '<span class="faint">För lite data</span>'}<p class="small muted" style="margin:6px 0 0">${esc(s.faktorer?.length ? `${s.faktorer.length} ${EN ? 'parts weighed together' : 'delar vägda samman'}` : '')}</p></div></div>
     ${s.faktorer?.length ? `<div class="b-frows">${s.faktorer.map(([n, l, v]) => `<div title="${esc(v)}"><span>${esc(n)}${tip(n)}</span>${bSeg(l)}<span class="${LV[l].c}">${LV[l].t}</span></div>`).join('')}</div>` : '<p class="b-note">Datakällan har för få nyckeltal för en riskkoll.</p>'}
-    <div class="b-foot">${bLink('risk', 'Hela riskanalysen')}<a class="b-more" href="/metod" data-link>${EN ? 'How it is calculated' : 'Så räknas den'}</a></div>`;
+    <div class="b-foot">${bLink('risk', 'Hela riskkollen')}<a class="b-more" href="/metod" data-link>${EN ? 'How it is calculated' : 'Så räknas den'}</a></div>`;
 }
 function bKeyMini(s) {
   const nt = (s.nyckeltal || []).filter(([k]) => ['P/E', 'P/S', 'Vinst per aktie (EPS)', 'Direktavkastning', 'Försäljningstillväxt', 'Vinstmarginal', 'Rörelsemarginal', 'Avkastning på eget kapital', 'Ägs av insiders'].includes(k));
@@ -2135,41 +2227,89 @@ function bKeyMini(s) {
 }
 
 /* ---------- Kurs och diagram ---------- */
+// Tekniska mått räknade från dagliga stängningskurser
+function kInd(pts) {
+  const c = pts.map((p) => p[1]); const n = c.length; const out = { rsi: new Array(n).fill(null), macd: [], sig: [], ma20: new Array(n).fill(null), bu: new Array(n).fill(null), bl: new Array(n).fill(null) };
+  const ema = (arr, k) => { const a = 2 / (k + 1); const o = []; arr.forEach((v, i) => o.push(i ? v * a + o[i - 1] * (1 - a) : v)); return o; };
+  const e12 = ema(c, 12), e26 = ema(c, 26); out.macd = c.map((_, i) => e12[i] - e26[i]); out.sig = ema(out.macd, 9);
+  if (n > 15) { let g = 0, l = 0; for (let i = 1; i <= 14; i++) { const d = c[i] - c[i - 1]; if (d > 0) g += d; else l -= d; } g /= 14; l /= 14; out.rsi[14] = l ? 100 - 100 / (1 + g / l) : 100;
+    for (let i = 15; i < n; i++) { const d = c[i] - c[i - 1]; g = (g * 13 + Math.max(d, 0)) / 14; l = (l * 13 + Math.max(-d, 0)) / 14; out.rsi[i] = l ? 100 - 100 / (1 + g / l) : 100; } }
+  for (let i = 19; i < n; i++) { const w = c.slice(i - 19, i + 1); const m = w.reduce((x, y) => x + y, 0) / 20; const sd = Math.sqrt(w.reduce((x, y) => x + (y - m) ** 2, 0) / 20); out.ma20[i] = m; out.bu[i] = m + 2 * sd; out.bl[i] = m - 2 * sd; }
+  return out;
+}
+// Ett litet fält under kursen: RSI eller MACD för samma period som diagrammet
+function kPane(box, pts, ind, from, to, kind) {
+  const ix = pts.map((p, i) => [p[0], i]).filter(([t]) => t >= from && t <= to).map((x) => x[1]); if (ix.length < 2) { box.innerHTML = ''; return; }
+  const W = 1000, H = kind === 'rsi' ? 80 : 90; const X = (k) => (k / (ix.length - 1)) * W;
+  let svgIn = ''; let ax = ''; let leg = '';
+  if (kind === 'rsi') { const Y = (v) => 4 + (100 - v) / 100 * (H - 8); const v = ix.map((i) => ind.rsi[i]);
+    svgIn = `<rect x="0" y="${Y(70)}" width="${W}" height="${Y(30) - Y(70)}" fill="#B48CF2" fill-opacity=".06"/><line x1="0" x2="${W}" y1="${Y(70)}" y2="${Y(70)}" stroke="rgba(255,255,255,.16)" stroke-dasharray="3 4" vector-effect="non-scaling-stroke"/><line x1="0" x2="${W}" y1="${Y(30)}" y2="${Y(30)}" stroke="rgba(255,255,255,.16)" stroke-dasharray="3 4" vector-effect="non-scaling-stroke"/>
+      <path d="${v.map((y, k) => (y == null ? '' : `${k && v[k - 1] != null ? 'L' : 'M'}${X(k).toFixed(1)} ${Y(y).toFixed(1)}`)).join(' ')}" fill="none" stroke="#B48CF2" stroke-width="1.4" vector-effect="non-scaling-stroke"/>`;
+    const last = v[v.length - 1]; ax = `<span style="top:${Y(70) / H * 100}%">70</span><span style="top:${Y(30) / H * 100}%">30</span>`; leg = `RSI 14 <b style="color:#B48CF2">${last != null ? nf(last, 0) : '–'}</b>`; }
+  else { const m = ix.map((i) => ind.macd[i]), sg = ix.map((i) => ind.sig[i]); const mx = Math.max(1e-9, ...m.map(Math.abs), ...sg.map(Math.abs)); const Y = (v) => H / 2 - (v / mx) * (H / 2 - 4); const bw = Math.max(1, W / ix.length * 0.6);
+    svgIn = `<line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" stroke="rgba(255,255,255,.12)" vector-effect="non-scaling-stroke"/>${m.map((v, k) => { const h = v - sg[k]; return `<rect x="${(X(k) - bw / 2).toFixed(1)}" y="${Math.min(Y(h), Y(0)).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.abs(Y(h) - Y(0)).toFixed(1)}" fill="var(--${h >= 0 ? 'up' : 'down'})" opacity=".5"/>`; }).join('')}
+      <path d="${m.map((y, k) => `${k ? 'L' : 'M'}${X(k).toFixed(1)} ${Y(y).toFixed(1)}`).join(' ')}" fill="none" stroke="#5B8DEF" stroke-width="1.4" vector-effect="non-scaling-stroke"/><path d="${sg.map((y, k) => `${k ? 'L' : 'M'}${X(k).toFixed(1)} ${Y(y).toFixed(1)}`).join(' ')}" fill="none" stroke="#FF7A33" stroke-width="1.2" vector-effect="non-scaling-stroke"/>`;
+    leg = `MACD 12, 26, 9 <b style="color:#5B8DEF">${bn(m[m.length - 1], 2)}</b> <b style="color:#FF7A33">${bn(sg[sg.length - 1], 2)}</b>`; }
+  box.innerHTML = `<div class="k-pane"><span class="k-leg">${leg}</span><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px">${svgIn}</svg><span class="k-ax num">${ax}</span></div>`;
+}
 function bKurs(panel, ctx) {
   const { s, st, get } = ctx;
-  const max = Math.max(...(s.perf || []).map((p) => Math.abs(p[1])), 1);
-  panel.innerHTML = `<div class="b-grid">
-    ${bCard('c12', `<div class="b-ch"><div class="b-chl">${bLabel(ctx.isEq ? 'Aktiekurs' : (EN ? 'Price' : 'Kurs'))}<span class="small num" id="k-chg"></span></div>${bChartControls(st, { dates: true })}</div>${drBar()}<div id="k-chart">${loading('Hämtar kurser …')}</div><p class="b-src" id="k-src"></p>`)}
-    ${bCard('c4', `${bLabel('Utveckling')}<div class="stack" style="gap:10px;margin-top:6px">${(s.perf || []).map(([label, v]) => { const w = (Math.abs(v) / max) * 50; return `<div class="perf-row"><span class="muted">${esc(label)}</span><div class="perf-track" role="img" aria-label="${esc(label)} ${pct(v)}"><span class="zero"></span><span class="perf-bar ${v < 0 ? 'neg' : ''}" style="${v < 0 ? `right:50%;width:${w}%` : `left:50%;width:${w}%`}"></span></div><span class="num ${tone(v)}" style="text-align:right">${pct(v)}</span></div>`; }).join('') || '<p class="b-note">Datakällan har ingen kursutveckling för det här värdepappret.</p>'}</div><p class="b-src">Historisk utveckling säger inget om framtiden.</p>`)}
-    ${bCard('c4', `${bLabel('Medelvärden just nu', 'MA200')}<div id="k-ma">${loading()}</div>`)}
-    ${bCard('c4', `${bLabel('Välj ett datum')}<label class="b-dl">Datum <input type="date" id="k-date"></label><div id="k-dres"><p class="b-note">Välj ett datum för att se kursen då, och hur 10 000 ${esc(cur(s.valuta))} hade utvecklats sedan dess.</p></div>`)}
-  </div>`;
-  let pts = null;
+  if (st.rsi == null) { st.rsi = true; st.macd = true; }
+  const U = cur(s.valuta);
+  panel.innerHTML = `<div class="k-pro">
+    <section class="b-card k-main"><div class="b-ch"><div class="b-chl">${bLabel(ctx.isEq ? 'Aktiekurs' : (EN ? 'Price' : 'Kurs'))}<span class="small num" id="k-chg"></span></div>${bChartControls(st, { dates: true })}</div>
+      <div class="k-tools">${drBar()}<span class="k-ind"><button type="button" class="b-tog" data-kind="rsi" aria-pressed="${st.rsi}">RSI</button><button type="button" class="b-tog" data-kind="macd" aria-pressed="${st.macd}">MACD</button></span></div>
+      <div id="k-chart">${loading('Hämtar kurser …')}</div><div id="k-rsi"></div><div id="k-macd"></div>
+      <p class="b-src" id="k-src"></p></section>
+    <aside class="b-card k-side">
+      <div class="k-sec"><span class="b-lbl">${EN ? 'Price' : 'Kurs'}</span><div id="k-kurs">${loading()}</div></div>
+      <div class="k-sec"><span class="b-lbl">${EN ? 'Return' : 'Avkastning'}</span><div class="k-perf">${(s.perf || []).map(([l, v]) => `<div class="tile"><span>${esc(l)}</span><b class="num ${tone(v)}">${pct(v, Math.abs(v) < 10 ? 2 : 1)}</b></div>`).join('')}<span id="k-perf2" style="display:contents"></span></div></div>
+      <div class="k-sec"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="b-lbl">${EN ? 'Technical levels' : 'Tekniska nivåer'}</span><span class="small faint">${EN ? 'facts, no signals' : 'fakta, inga signaler'}</span></div><div id="k-ma">${loading()}</div></div>
+      <div class="k-sec"><span class="b-lbl">${EN ? 'Movements' : 'Rörelser'}</span><div id="k-mov">${loading()}</div></div>
+      <div class="k-sec"><span class="b-lbl">${EN ? 'Pick a date' : 'Välj ett datum'}</span><label class="b-dl">${EN ? 'Date' : 'Datum'} <input type="date" id="k-date"></label><div id="k-dres"><p class="b-note">${EN ? `See the price then and what 10 000 ${esc(U)} would be worth now.` : `Se kursen då och vad 10 000 ${esc(U)} hade varit värt i dag.`}</p></div></div>
+    </aside></div>`;
+  let pts = null; let ind = null;
+  const kv = (k, v, c) => `<div class="b-kv"><span>${k}</span><b class="num"${c ? ` style="color:${c}"` : ''}>${v}</b></div>`;
   const draw = async () => {
     const d = await get.px(); const box = $('#k-chart'); if (!box) return;
     if (!d || d.error || !d.punkter?.length) { box.innerHTML = bErr(d, 'Det finns inget kursdiagram för det här värdepappret.'); return; }
-    pts = d.punkter;
-    const r = bPriceChart(box, d.punkter, { per: st.per, ma50: st.ma50, ma200: st.ma200, from: st.from, to: st.to, valuta: d.valuta, h: 360 });
+    pts = d.punkter; ind ||= kInd(pts);
+    const r = bPriceChart(box, d.punkter, { per: st.per, ma50: st.ma50, ma200: st.ma200, from: st.from, to: st.to, valuta: d.valuta, h: 420 });
     drawLayer(box, s.sym, r);
+    if (r) { st.rsi ? kPane($('#k-rsi'), pts, ind, r.from, r.to, 'rsi') : ($('#k-rsi').innerHTML = ''); st.macd ? kPane($('#k-macd'), pts, ind, r.from, r.to, 'macd') : ($('#k-macd').innerHTML = ''); }
     const c = $('#k-chg'); if (c && r) { const j = bJump(d.punkter, r.from, r.to); c.textContent = j ? bJumpTxt() : `${pct(r.chg)} ${EN ? 'from' : 'från'} ${bDate(bKey(r.from))} ${EN ? 'to' : 'till'} ${bDate(bKey(r.to))}`; c.className = `small num ${j ? 'faint' : tone(r.chg)}`; }
     const first = bKey(d.punkter[0][0]); const lastK = bKey(d.punkter[d.punkter.length - 1][0]);
     panel.querySelectorAll('[data-from],[data-to],#k-date').forEach((i) => { i.min = first; i.max = lastK; });
-    $('#k-src').textContent = `Stängningskurser per dag i ${cur(d.valuta)} från ${bDate(first)}. MA50 och MA200 är snittet av de senaste 50 och 200 börsdagarnas stängningskurser. Källa: Yahoo Finance.`;
-    const ma = $('#k-ma'); const last = d.punkter[d.punkter.length - 1][1];
-    if (ma && r) {
-      const row = (n, v) => `<div class="b-kv"><span>${n}</span><b class="num">${v == null ? '<span class="faint">För kort historik</span>' : `${kr(v)} <span class="${tone(last - v)}">(${EN ? 'price' : 'kursen'} ${bSign((last / v - 1) * 100)})</span>`}</b></div>`;
-      ma.innerHTML = `${row('MA50' + tip('MA50'), r.ma50)}${row('MA200' + tip('MA200'), r.ma200)}<p class="b-src">Ligger kursen över medelvärdet har den gått bättre än snittet för perioden. Det säger inget om vad som händer sen.</p>`;
-    }
+    $('#k-src').textContent = EN ? `Daily closing prices in ${cur(d.valuta)} from ${bDate(first)}. Indicators calculated by Finanskollen from the closing prices. No buy or sell signals. Source: Yahoo Finance.` : `Stängningskurser per dag i ${cur(d.valuta)} från ${bDate(first)}. Indikatorerna räknas av Finanskollen från stängningskurserna och är inga köp- eller säljsignaler. Källa: Yahoo Finance.`;
+    const n = pts.length - 1; const last = s.kurs ?? pts[n][1];
+    const rel = (v) => (v == null ? '' : ` <span class="faint">· ${EN ? 'price' : 'kursen'} ${bSign((last / v - 1) * 100)}</span>`);
+    const ma = $('#k-ma'); if (ma && r) ma.innerHTML = kv('MA 20', ind.ma20[n] != null ? kr(ind.ma20[n]) + rel(ind.ma20[n]) : '–') + kv('MA 50' + tip('MA50'), r.ma50 != null ? kr(r.ma50) + rel(r.ma50) : '–', 'var(--b-ma50)') + kv('MA 200' + tip('MA200'), r.ma200 != null ? kr(r.ma200) + rel(r.ma200) : '–', 'var(--b-ma200)')
+      + kv('Bollinger 20, 2', ind.bu[n] != null ? `${kr(ind.bl[n])} – ${kr(ind.bu[n])}` : '–', 'var(--b-blue)') + kv('RSI 14', ind.rsi[n] != null ? `${nf(ind.rsi[n], 0)} <span class="faint">· ${ind.rsi[n] > 70 ? (EN ? 'above 70' : 'över 70') : ind.rsi[n] < 30 ? (EN ? 'below 30' : 'under 30') : (EN ? 'between 30 and 70' : 'mellan 30 och 70')}</span>` : '–')
+      + kv('MACD', `${bn(ind.macd[n], 2)} <span class="faint">· signal ${bn(ind.sig[n], 2)}</span>`);
   };
-  bWireChart(panel.querySelector('.c12'), ctx, draw); draw();
+  get.stats().then((stt) => { const el = $('#k-mov'); if (!el) return;
+    el.innerHTML = kv(EN ? 'Volatility 30 days' : 'Volatilitet 30 dagar', stt?.vol30 != null ? bPct(stt.vol30) : '–') + kv(EN ? 'Volatility 1 year' : 'Volatilitet 1 år', stt?.vol1 != null ? bPct(stt.vol1) : '–') + kv('Beta', s.beta != null ? bn(s.beta, 2) : '–')
+      + kv(EN ? 'Best day, 1 year' : 'Bästa dag, 1 år', stt?.best ? pct(stt.best.v, 1) : '–', 'var(--up)') + kv(EN ? 'Worst day, 1 year' : 'Sämsta dag, 1 år', stt?.worst ? pct(stt.worst.v, 1) : '–', 'var(--down)') + kv(EN ? 'Up days, 1 year' : 'Uppdagar, 1 år', stt?.upDays != null ? nf(stt.upDays, 0) + ' %' : '–'); });
+  // Kursen i huvudet: dagens kurser om de finns
+  get.today().then((t) => { const el = $('#k-kurs'); if (!el) return; const now = t?.kurs ?? s.kurs; const prev = t?.prevClose ?? null; const r52 = b52(s);
+    el.innerHTML = kv(EN ? 'Last' : 'Senast', now != null ? `${kr(now)} ${esc(U)}` : '–') + kv(EN ? 'Previous close' : 'Föregående stängning', prev != null ? kr(prev) : '–') + (prev && now != null ? kv(EN ? 'Change' : 'Förändring', `${now - prev >= 0 ? '+' : '−'}${kr(Math.abs(now - prev))} (${pct((now / prev - 1) * 100)})`, `var(--${tone(now - prev)})`) : '')
+      + (r52 ? `<div class="small muted" style="margin-top:8px">52 ${EN ? 'weeks' : 'veckor'}</div>${b2Rng(r52.lo, r52.h, now)}` : ''); }).catch(() => {});
+  // Tre och fem år räknas från fem års kurser om de inte redan finns
+  get.px().then((d) => { const el = $('#k-perf2'); if (!el || !d?.punkter?.length) return; const P = d.punkter; const tN = P[P.length - 1][0]; const last = P[P.length - 1][1];
+    const at = (sec) => { let v = null; for (const p of P) { if (p[0] <= sec) v = p[1]; else break; } return v; };
+    const have = new Set((s.perf || []).map((x) => x[0])); const add = [];
+    for (const [k, y] of [['3 år', 3], ['5 år', 5]]) { if (have.has(k)) continue; const v0 = at(tN - y * 365.25 * 86400); if (v0 && P[0][0] <= tN - (y * 365 - 10) * 86400 && !bJump(P, tN - y * 365 * 86400, tN)) add.push([EN ? `${y} years` : k, (last / v0 - 1) * 100]); }
+    el.innerHTML = add.map(([l, v]) => `<div class="tile"><span>${esc(l)}</span><b class="num ${tone(v)}">${pct(v, 1)}</b></div>`).join(''); });
+  bWireChart(panel.querySelector('.k-main'), ctx, draw); draw();
+  panel.querySelector('.k-ind').addEventListener('click', (e) => { const b = e.target.closest('[data-kind]'); if (!b) return; st[b.dataset.kind] = !st[b.dataset.kind]; b.setAttribute('aria-pressed', String(st[b.dataset.kind])); draw(); });
   panel.querySelector('#k-date').addEventListener('change', (e) => {
     const box = $('#k-dres'); const v = e.target.value; if (!pts || !v) return;
     let k = -1; for (let i = pts.length - 1; i >= 0; i--) if (bKey(pts[i][0]) <= v) { k = i; break; }
     if (k < 0) { box.innerHTML = `<p class="b-note">Vi har kurser från ${esc(bDate(bKey(pts[0][0])))}. Välj ett senare datum.</p>`; return; }
     const p0 = pts[k][1]; const p1 = pts[pts.length - 1][1]; const ch = (p1 / p0 - 1) * 100; const same = bKey(pts[k][0]) === v;
-    box.innerHTML = `<div class="b-kv"><span>Stängning ${esc(bDate(bKey(pts[k][0])))}${same ? '' : ` <span class="faint">(${EN ? 'closest trading day before' : 'närmaste börsdag före'})</span>`}</span><b class="num">${kr(p0)} ${esc(cur(s.valuta))}</b></div>
+    box.innerHTML = `<div class="b-kv"><span>Stängning ${esc(bDate(bKey(pts[k][0])))}${same ? '' : ` <span class="faint">(${EN ? 'closest trading day before' : 'närmaste börsdag före'})</span>`}</span><b class="num">${kr(p0)} ${esc(U)}</b></div>
       <div class="b-kv"><span>Sedan dess</span><b class="num ${tone(ch)}">${pct(ch)}</b></div>
-      <div class="b-kv"><span>10 000 ${esc(cur(s.valuta))} då är värt i dag</span><b class="num ${tone(ch)}">${nf(10000 * p1 / p0, 0)} ${esc(cur(s.valuta))}</b></div>
+      <div class="b-kv"><span>10 000 ${esc(U)} då är värt i dag</span><b class="num ${tone(ch)}">${nf(10000 * p1 / p0, 0)} ${esc(U)}</b></div>
       <p class="b-src">Räknat på kursen, utan utdelningar och avgifter. Historik säger inget om framtiden.</p>`;
   });
 }
@@ -2292,7 +2432,202 @@ const bFinVal = {
   bl: (b) => bRatio(b.omsTillg, b.kortSkuld),
   pay: (b, f) => (f.netto != null && f.utd ? f.netto / Math.abs(f.utd) : null)
 };
+
+/* ---------- Riskkoll (prototyp v6): översikt som instrumentpanel ----------
+   Totalbetyg med bolagsrisk och kursrisk, närmast en förändring, kursen mot index i kronor och tre saker att veta.
+   Under panelen ligger fördjupningen (den tidigare riskanalysen). */
+const R6_B = ['Skulder', 'Lönsamhet', 'Värdering', 'Storlek'];
+const R6_K = ['Kurssvängningar', 'Handel', 'Blankning'];
+const R6_IC = { Skulder: 'build', Lönsamhet: 'chart', Värdering: 'scale', Storlek: 'build', Kurssvängningar: 'line', Handel: 'bars', Blankning: 'arrow' };
+// Samma uträkning som riskkollen på servern (netlify/lib/risk.mjs)
+const r6Score = (ls) => { if (!ls.length) return null; const m = ls.reduce((a, c) => a + c, 0) / ls.length; let p = Math.round(((m - 1) / 2) * 9 + 1); if (ls.includes(3)) p = Math.max(p, 4); return p; };
+function bRiskParts(s) {
+  const f = s.faktorer || [];
+  const rows = f.map(([n, l, v, t, raw]) => { const c = B_SCALE[n]; const ok = c && raw != null && Number.isFinite(raw);
+    const pos = ok ? bPos(raw, c) : (l - 0.5) / 3; const same = ok && (pos < 1 / 3 - 1e-9 ? 1 : pos <= 2 / 3 + 1e-9 ? 2 : 3) === l;
+    const vs = !ok ? String(v).split(' · ')[0] : n === 'Skulder' && raw >= 0 ? `${EN ? 'Debt/equity' : 'Skuld/EK'} ${bn(raw, 2)}` : n === 'Handel' ? `${mny(raw, 'SEK')} ${EN ? 'a day' : 'per dag'}` : n === 'Blankning' ? (raw > 0 ? `${bn(raw, 2)} % ${EN ? 'shorted' : 'blankat'}` : (EN ? 'None reported' : 'Ingen anmäld')) : n === 'Storlek' ? mny(raw, 'SEK') : String(v).split(' · ')[0];
+    return { n, l, v: vs, t, raw, c, pos: same || !ok ? pos : (l - 0.5) / 3, same }; });
+  // Närmast en ändring: den gräns som ligger närmast, uppåt eller nedåt
+  const near = rows.filter((r) => r.same).map((r) => {
+    const up = r.l < 3 ? r.l / 3 - r.pos : 9; const dn = r.l > 1 ? r.pos - (r.l - 1) / 3 : 9; const toUp = up <= dn; const dist = Math.min(up, dn); if (dist > 1) return null;
+    const lim = r.c.a[toUp ? r.l : r.l - 1]; const asc = r.c.a[3] > r.c.a[0]; const over = toUp === asc;
+    const fm = (x) => (r.c.money ? mny(x, 'SEK') : (r.c.b || r.c.f)(x));
+    return { n: r.n, v: r.v, toUp, dist, w: Math.max(4, (1 - dist / (1 / 3)) * 100), rule: `${EN ? ['', 'Low', 'Medium', 'High'][toUp ? r.l + 1 : r.l - 1] : LV[toUp ? r.l + 1 : r.l - 1].t} ${over ? (EN ? 'above' : 'över') : (EN ? 'below' : 'under')} ${fm(lim)}`, left: `${r.c.money ? mny(Math.abs(r.raw - lim), 'SEK') : r.c.f(Math.abs(r.raw - lim))} ${EN ? 'left' : 'kvar'}` };
+  }).filter(Boolean).sort((a, b) => a.dist - b.dist);
+  return { rows, near };
+}
+function r6Gauge(p) {
+  const r = 62, cx = 75, cy = 72; const A = (t) => [cx + r * Math.cos(Math.PI * (1 - t)), cy - r * Math.sin(Math.PI * (1 - t))];
+  const arc = (t0, t1, c, o) => { const [x0, y0] = A(t0); const [x1, y1] = A(t1); return `<path d="M${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="${c}" stroke-width="11" opacity="${o}"/>`; };
+  const l = lvlOf(p); const t = p == null ? null : (p - 0.5) / 10; const dot = t == null ? '' : (() => { const [x, y] = A(t); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="8.5" fill="#0B0D11" stroke="#fff" stroke-width="3"/>`; })();
+  return `<div class="r6-gauge"><svg viewBox="0 0 150 84" width="170" height="96" aria-hidden="true">${arc(0, 0.296, 'var(--up)', l === 1 ? 0.95 : 0.35)}${arc(0.304, 0.596, 'var(--warn)', l === 2 ? 0.95 : 0.35)}${arc(0.604, 1, 'var(--down)', l === 3 ? 0.95 : 0.35)}${dot}</svg>
+    <div class="r6-gv"><b class="num">${p ?? '–'}</b><span>/10</span></div><div class="r6-gl"><span>${EN ? 'Low' : 'Låg'}</span><span>${EN ? 'High' : 'Hög'}</span></div></div>`;
+}
+const r6Tag = (l, t) => `<span class="r6-tag" style="--c:var(--${LV[l].c})"><i></i>${esc(t)}</span>`;
 function bRisk(panel, ctx) {
+  panel.innerHTML = `<div id="r6"></div><section class="r6-deep"><div class="r6-deeph"><h2>${EN ? 'In depth' : 'Fördjupning'}</h2><span class="small muted">${EN ? 'All the measures behind the risk check' : 'Alla mått bakom riskkollen'}</span></div><div id="r-old"></div></section>`;
+  bRiskOld($('#r-old'), ctx);
+  bRisk6($('#r6'), ctx);
+}
+function bRisk6(box, ctx) {
+  const { s, get, idxName, se } = ctx;
+  const { rows, near } = bRiskParts(s);
+  const lv = Object.fromEntries(rows.map((r) => [r.n, r.l]));
+  const gB = R6_B.filter((n) => lv[n]); const gK = R6_K.filter((n) => lv[n]);
+  const sB = r6Score(gB.map((n) => lv[n])); const sK = r6Score(gK.map((n) => lv[n]));
+  const all = rows.map((r) => r.l);
+  const row = (r) => `<div class="r6-row">${svg(R6_IC[r.n] || 'info', 15)}<span class="r6-n">${esc(r.n)}${tip(r.n)}</span><span class="r6-v num">${esc(r.v)}</span>${bSeg(r.l)}<span class="r6-l" style="color:var(--${LV[r.l].c})">${LV[r.l].t}</span></div>`;
+  const sub = (p, t, sub2) => `<div class="tile r6-sub"><span>${esc(t)}</span><span><b class="num" style="color:var(--${p ? LV[lvlOf(p)].c : 'muted'})">${p ?? '–'}</b><small>/10 · ${esc(sub2)}</small></span></div>`;
+  // Närmast en förändring, med vad betyget blir om delen byter nivå
+  const nearH = near.filter((x) => x.dist < 0.3).slice(0, 5).map((x, i) => { const r = rows.find((y) => y.n === x.n); const ls = rows.map((y) => (y.n === x.n ? y.l + (x.toUp ? 1 : -1) : y.l)); const ns = r6Score(ls);
+    const c = x.toUp ? 'var(--down)' : 'var(--up)';
+    return `<div class="r6-near"><div class="r6-nh"><span><span class="num faint">${i + 1}</span> <b>${esc(x.n)}</b> <em>${R6_B.includes(x.n) ? (EN ? 'Company' : 'Bolag') : (EN ? 'Price' : 'Kurs')}</em></span><span style="color:${c}">${x.toUp ? (EN ? '↑ higher risk' : '↑ högre risk') : (EN ? '↓ lower risk' : '↓ lägre risk')}</span></div>
+      <span class="r6-nbar"><i style="width:${x.w.toFixed(0)}%;background:linear-gradient(90deg,rgba(255,255,255,.12),${c})"></i></span>
+      <div class="r6-ns"><span>${esc(r.v)} · ${esc(x.rule)} · ${esc(x.left)}</span><span>${EN ? 'score' : 'betyget'} → <b>${ns}${ns === s.poang ? (EN ? ' (same)' : ' (kvar)') : ''}</b></span></div></div>`; }).join('');
+  const lvlNow = lvlOf(s.poang);
+  box.innerHTML = `<div class="r6">
+    <aside class="r6-col">
+      <section class="b-card r6-score"><div class="b-ch">${bLabel('Riskkoll', 'Riskkoll')}<a class="b-more" href="/metod" data-link>${EN ? 'How it works' : 'Så räknas den'} →</a></div>
+        ${r6Gauge(s.poang)}
+        <div style="text-align:center">${lvlNow ? r6Tag(lvlNow, (EN ? ['', 'LOW RISK', 'MEDIUM RISK', 'HIGH RISK'] : ['', 'LÅG RISK', 'MEDEL RISK', 'HÖG RISK'])[lvlNow]) : ''}<div class="small faint" style="margin-top:6px">${EN ? 'Updated' : 'Uppdaterad'} ${esc(when(s.hamtad))}</div></div>
+        <div class="r6-subs">${sub(sB, EN ? 'Company risk' : 'Bolagsrisk', sB ? LV[lvlOf(sB)].t.toLowerCase() : '')}${sub(sK, EN ? 'Price risk' : 'Kursrisk', sK ? LV[lvlOf(sK)].t.toLowerCase() : '')}</div></section>
+      <section class="b-card r6-nearc"><div class="b-ch">${bLabel(EN ? 'Closest to a change' : 'Närmast en förändring')}<span class="small faint">${EN ? 'how close to the limit' : 'hur nära gränsen'}</span></div>
+        ${nearH || `<p class="b-note">${EN ? 'No part is close to a limit.' : 'Ingen del ligger nära en gräns.'}</p>`}</section>
+    </aside>
+    <div class="r6-col">
+      <div class="r6-groups">
+        <section class="b-card"><div class="r6-gh"><div><h3>${EN ? 'Company risk' : 'Bolagsrisk'}</h3><span class="small muted">${EN ? 'how strong the company is' : 'hur starkt bolaget är'}</span></div><span class="r6-gs num" style="color:var(--${sB ? LV[lvlOf(sB)].c : 'muted'})">${sB ?? '–'}<small>/10</small></span></div>
+          ${rows.filter((r) => R6_B.includes(r.n)).map(row).join('') || `<p class="b-note">${EN ? 'Missing' : 'Saknas'}</p>`}<div class="r6-chips" id="r6-bchips"></div></section>
+        <section class="b-card"><div class="r6-gh"><div><h3>${EN ? 'Price risk' : 'Kursrisk'}</h3><span class="small muted">${EN ? 'how much the stock moves' : 'hur mycket aktien rör sig'}</span></div><span class="r6-gs num" style="color:var(--${sK ? LV[lvlOf(sK)].c : 'muted'})">${sK ?? '–'}<small>/10</small></span></div>
+          ${rows.filter((r) => R6_K.includes(r.n)).map(row).join('') || `<p class="b-note">${EN ? 'Missing' : 'Saknas'}</p>`}<div class="r6-chips" id="r6-kchips"></div></section>
+      </div>
+      <section class="b-card r6-big"><div class="b-ch"><div><h3 class="r6-h">${EN ? 'How it has felt to own the stock' : 'Så har det känts att äga aktien'}</h3><span class="small muted" id="r6-bigs">${loading()}</span></div>
+        <div class="b-segc" role="tablist">${[['kurs', EN ? 'Price' : 'Kursen'], ['vinst', EN ? 'Earnings' : 'Vinsten'], ['kassa', EN ? 'Cash flow' : 'Kassaflödet']].map(([k, t], i) => `<button type="button" role="tab" data-r6v="${k}" aria-selected="${i === 0}">${t}</button>`).join('')}</div></div>
+        <div id="r6-chart"></div><div class="r6-tiles" id="r6-tiles"></div></section>
+    </div>
+    <aside class="r6-col">
+      <section class="b-card"><div class="b-ch">${bLabel(EN ? 'Three things to know' : 'Tre saker att veta')}</div><div id="r6-three">${loading()}</div></section>
+      <section class="b-card" id="r6-val"></section>
+      <section class="b-card"><div class="b-ch">${bLabel(EN ? 'Coming up' : 'Kommande')}</div><div id="r6-next">${loading()}</div></section>
+    </aside></div>`;
+
+  const U = cur(s.valuta); const money = (v, sign) => `${sign && v > 0 ? '+' : v < 0 ? '−' : sign ? '±' : ''}${nf(Math.abs(v), 0)} ${U}`;
+  const three = []; let vol = null;
+  const drawThree = (done) => { const el = $('#r6-three'); if (!el) return;
+    const list = three.sort((a, b) => a.p - b.p).slice(0, 3);
+    if (!list.length && done) { el.innerHTML = `<p class="b-note">${esc(s.sammanfattning || (EN ? 'Nothing stands out.' : 'Inget sticker ut.'))}</p>`; return; }
+    el.innerHTML = list.map((x) => `<div class="r6-three"><span class="r6-ic" style="--c:var(--${x.c})">${svg(x.ic, 16)}</span><div><b>${esc(x.t)}</b><span>${esc(x.s)}</span></div></div>`).join('') + (done ? '' : loading()); };
+  // Rapporter: bolagsriskens tal och vinsten
+  let rep = null;
+  get.rep().then((r) => { rep = r?.ar?.length ? r : null; if (!$('#r6')) return;
+    const chips = []; if (rep) {
+      const t = rep.ttm || rep.ar[rep.ar.length - 1]; const ar = rep.ar;
+      if (t.fcf > 0 && t.utd != null && t.utd < 0) { const p = (-t.utd / t.fcf) * 100; chips.push([EN ? 'To dividends' : 'Till utdelning', `${nf(p, 0)} %`, p > 100 ? 'warn' : 'up']); if (p > 100) three.push({ p: 2, c: 'warn', ic: 'chart', t: EN ? 'Dividends exceed cash flow' : 'Utdelningen är större än kassaflödet', s: EN ? `${nf(p, 0)} % of free cash flow, last 12 months` : `${nf(p, 0)} % av det fria kassaflödet senaste 12 mån` }); }
+      if (t.rorelse != null && t.ranta > 0) { const c = t.rorelse / t.ranta; chips.push([EN ? 'Interest covered' : 'Räntor täcks', `${nf(c, c < 10 ? 1 : 0)}×`, c >= 5 ? 'up' : c >= 2 ? 'warn' : 'down']); }
+      if (ar.length >= 2 && ar[ar.length - 1].eps != null && ar[ar.length - 2].eps > 0) { const a1 = ar[ar.length - 2], a2 = ar[ar.length - 1]; const ch = (a2.eps / a1.eps - 1) * 100; const y = (d) => String(d.datum).slice(0, 4);
+        chips.push([`${EN ? 'Earnings' : 'Vinst'} ${y(a1)}→${y(a2).slice(2)}`, pct(ch, 0), ch >= 0 ? 'up' : 'down']);
+        if (Math.abs(ch) >= 15) three.push({ p: 1, c: ch < 0 ? 'warn' : 'up', ic: 'line', t: ch < 0 ? (EN ? 'Earnings swing with the economy' : 'Vinsten svänger') : (EN ? 'Earnings are growing' : 'Vinsten växer'), s: `${EN ? 'Earnings per share' : 'Vinst per aktie'} ${pct(ch, 0)} ${y(a1)} → ${y(a2)}` }); }
+    }
+    const el = $('#r6-bchips'); if (el) el.innerHTML = chips.map(([k, v, c]) => `<div class="tile"><span>${esc(k)}</span><b class="num" style="color:var(--${c})">${esc(v)}</b></div>`).join('');
+    valCard(); drawThree(false); if (view !== 'kurs') drawBig(); });
+  // Värdering: P/E på en skala, och vad P/E blir med den lägsta vinsten de senaste åren
+  const pe = (() => { const v = (s.nyckeltal || []).find((x) => x[0] === 'P/E')?.[1]; const n = v ? Number(String(v).replace(/\s/g, '').replace(',', '.')) : null; return Number.isFinite(n) && n > 0 ? n : null; })();
+  const valCard = () => { const el = $('#r6-val'); if (!el) return; const l = lv['Värdering'];
+    if (!pe) { el.innerHTML = `<div class="b-ch">${bLabel(EN ? 'Valuation' : 'Värdering', 'P/E')}</div><p class="b-note">${EN ? 'P/E is missing, usually because the company has no profit.' : 'P/E saknas, oftast för att bolaget inte går med vinst.'}</p>`; return; }
+    const eps = rep?.ttm?.eps ?? rep?.ar?.[rep.ar.length - 1]?.eps; const minEps = rep?.ar?.length ? Math.min(...rep.ar.map((a) => a.eps).filter((x) => x > 0)) : null;
+    const peLow = eps > 0 && minEps > 0 && minEps < eps ? pe * (eps / minEps) : null; const X = (v) => Math.min(100, (v / 40) * 100);
+    el.innerHTML = `<div class="b-ch">${bLabel(EN ? 'Valuation' : 'Värdering', 'P/E')}${l ? r6Tag(l, LV[l].t.toUpperCase()) : ''}</div>
+      <div><b class="num r6-pe">P/E ${bn(pe, 1)}</b> <span class="small muted">${EN ? `${nf(pe, 0)} ${U} per ${U} of yearly profit` : `${nf(pe, 0)} kr per krona i vinst`}</span></div>
+      <div class="r6-scale"><span class="z"><i style="width:50%;background:var(--up)"></i><i style="width:37.5%;background:var(--warn)"></i><i style="width:12.5%;background:var(--down)"></i></span>
+        ${peLow ? `<b class="o" style="left:${X(peLow).toFixed(1)}%"></b>` : ''}<b class="m" style="left:${X(pe).toFixed(1)}%"></b></div>
+      <div class="r6-scl num"><span>0</span><span style="left:50%">20</span><span style="left:87.5%">35</span></div>
+      ${peLow ? `<p class="small muted" style="margin:10px 0 0"><span class="r6-o"></span>${EN ? 'With the lowest earnings of recent years' : 'Med de senaste årens lägsta vinst'}: P/E <b class="num" style="color:var(--${peLow >= 35 ? 'down' : peLow >= 20 ? 'warn' : 'up'})">${bn(peLow, 1)}</b></p>` : ''}`; };
+  valCard();
+  // Kursen mot index senaste året, i kronor
+  let view = 'kurs'; let ser = null;
+  const drawBig = () => { const el = $('#r6-chart'); if (!el) return;
+    if (view === 'kurs') { if (!ser) { el.innerHTML = loading('Hämtar kurser …'); return; } if (ser.error) { el.innerHTML = `<p class="b-note">${EN ? 'The prices could not be fetched.' : 'Kurserna kunde inte hämtas.'}</p>`; return; } r6Line(el, ser, U, idxName); return; }
+    if (!rep) { el.innerHTML = `<p class="b-note">${EN ? 'Reports are missing for this security.' : 'Rapporter saknas för det här värdepappret.'}</p>`; return; }
+    const ar = [...rep.ar, ...(rep.ttm ? [{ ...rep.ttm, datum: '12m' }] : [])].slice(-5); const lab = (d) => (d.datum === '12m' ? (EN ? '12 mo' : '12 mån') : String(d.datum).slice(0, 4));
+    if (view === 'vinst') r6Bars(el, ar.map((a) => [lab(a), [[a.eps, 'var(--acc)']]]), (v) => bn(v, 2), EN ? 'Earnings per share' : 'Vinst per aktie, ' + U);
+    else r6Bars(el, ar.map((a) => [lab(a), [[a.fcf != null ? a.fcf / 1e9 : null, 'var(--up)'], [a.utd != null ? -a.utd / 1e9 : null, 'var(--acc)']]]), (v) => bn(v, 1), EN ? `Free cash flow (green) and dividends paid (orange), bn ${U}` : `Fritt kassaflöde (grönt) och utbetald utdelning (orange), mdr ${U}`);
+  };
+  $('.r6-big').addEventListener('click', (e) => { const b = e.target.closest('[data-r6v]'); if (!b) return; view = b.dataset.r6v; $('.r6-big').querySelectorAll('[data-r6v]').forEach((x) => x.setAttribute('aria-selected', String(x === b))); drawBig(); });
+  Promise.all([get.px(), get.idx(), get.stats()]).then(([p, ix, stt]) => {
+    if (!$('#r6')) return;
+    const P = p?.punkter || []; if (P.length < 30) { ser = { error: true }; drawBig(); $('#r6-bigs').textContent = ''; return; }
+    const tEnd = P[P.length - 1][0]; const y1 = P.filter((x) => x[0] >= tEnd - 365 * 86400);
+    const im = new Map((ix?.punkter || []).map(([t, c]) => [bKey(t), c])); let li = null;
+    const both = y1.map(([t, c]) => { const v = im.get(bKey(t)); if (v != null) li = v; return [t, c, li]; }).filter((x) => x[2] != null);
+    const a0 = both[0]?.[1], i0 = both[0]?.[2];
+    ser = { pts: both.map(([t, c, i]) => [t, (10000 * c) / a0, (10000 * i) / i0]) };
+    // Största fallet senaste året
+    let pk = y1[0][1], pkT = y1[0][0], dd = 0, ddA = null, ddB = null; for (const [t, c] of y1) { if (c > pk) { pk = c; pkT = t; } const d = c / pk - 1; if (d < dd) { dd = d; ddA = pkT; ddB = t; } }
+    ser.dd = { v: dd * 100, a: ddA, b: ddB };
+    const ratio = stt?.vol1 && stt?.idxVol1 ? stt.vol1 / stt.idxVol1 : null; vol = ratio;
+    $('#r6-bigs').innerHTML = `10 000 ${esc(U)} ${EN ? 'over the last year' : 'senaste året'}${ratio ? ` · ${EN ? 'moves' : 'svänger'} <b style="color:var(--${ratio >= 1.3 ? 'warn' : 'ink'})">${bn(ratio, 1)} ${EN ? 'times as much as' : 'gånger så mycket som'}</b> ${esc(idxName)}` : ''}`;
+    const last = ser.pts[ser.pts.length - 1];
+    $('#r6-tiles').innerHTML = [[EN ? 'Value after a year' : 'Värde efter ett år', money(last[1]), `${idxName} ${money(last[2])}`, 'ink'],
+      [EN ? 'Normal swing in a year' : 'Normal svängning på ett år', stt?.vol1 ? '± ' + money(stt.vol1 * 100) : '–', stt?.idxVol1 ? `${idxName} ± ${money(stt.idxVol1 * 100)}` : '', 'warn'],
+      [EN ? 'Worst day' : 'Sämsta dagen', stt?.worst ? money(stt.worst.v * 100) : '–', stt?.worst ? dayShort(new Date(stt.worst.t * 1000).toISOString()) : '', 'down'],
+      ['Beta', s.beta != null ? bn(s.beta, 2) : '–', s.beta != null ? (s.beta < 0.8 ? (EN ? 'calmer than the market' : 'lugnare än börsen') : s.beta <= 1.3 ? (EN ? 'follows the market' : 'följer börsen') : (EN ? 'stronger than the market' : 'starkare än börsen')) : '', 'ink']]
+      .map(([k, v, sb, c]) => `<div class="tile"><span>${esc(k)}</span><b class="num" style="color:var(--${c})">${esc(v)}</b><small class="num">${esc(sb)}</small></div>`).join('');
+    const kc = [[EN ? 'Biggest fall' : 'Största fall', pct(ser.dd.v, 1), 'down'], ...(ratio ? [[EN ? 'Vs the market' : 'Mot börsen', `${bn(ratio, 1)}×`, ratio >= 1.3 ? 'warn' : 'up']] : []), ...(stt?.worst ? [[EN ? 'Worst day' : 'Sämsta dag', pct(stt.worst.v, 1), 'down']] : [])];
+    const ke = $('#r6-kchips'); if (ke) ke.innerHTML = kc.map(([k, v, c]) => `<div class="tile"><span>${esc(k)}</span><b class="num" style="color:var(--${c})">${esc(v)}</b></div>`).join('');
+    if (ratio >= 1.3) three.push({ p: 3, c: 'warn', ic: 'line', t: EN ? 'Moves more than the market' : 'Svänger mer än börsen', s: EN ? `${bn(ratio, 1)} times as much as ${idxName} last year` : `${bn(ratio, 1)} gånger så mycket som ${idxName} senaste året` });
+    else if (ratio && ratio <= 0.8) three.push({ p: 3, c: 'up', ic: 'line', t: EN ? 'Calmer than the market' : 'Lugnare än börsen', s: EN ? `${bn(ratio, 1)} times the swings of ${idxName}` : `${bn(ratio, 1)} gånger svängningarna i ${idxName}` });
+    drawThree(false); drawBig();
+  }).catch(() => { ser = { error: true }; drawBig(); });
+  // Insyn, blankning och nästa rapport
+  Promise.all([get.insyn().catch(() => null), get.kal().catch(() => null)]).then(([ins, kal]) => {
+    if (!$('#r6')) return;
+    const k = ins?.kop?.antal ?? null, sl = ins?.salj?.antal ?? null;
+    if (k != null && sl != null && k + sl >= 3) { if (k >= sl * 2) three.push({ p: 4, c: 'up', ic: 'users', t: EN ? 'Insiders are buying' : 'Ledningen köper', s: EN ? `${k} buys and ${sl} sells in 12 months` : `${k} köp och ${sl} sälj på 12 mån` }); else if (sl >= k * 2) three.push({ p: 4, c: 'warn', ic: 'users', t: EN ? 'Insiders are selling' : 'Ledningen säljer', s: EN ? `${sl} sells and ${k} buys in 12 months` : `${sl} sälj och ${k} köp på 12 mån` }); }
+    if (near[0] && near[0].toUp && near[0].dist < 0.05) three.push({ p: 5, c: 'warn', ic: 'scale', t: EN ? `${near[0].n} close to the limit` : `${near[0].n} nära gränsen`, s: near[0].rule });
+    drawThree(true);
+    const nx = $('#r6-next'); if (!nx) return;
+    const rows2 = [];
+    if (kal?.rapport) { const d = new Date(kal.rapport + 'T12:00:00'); const days = Math.round((d - new Date()) / 864e5); if (days >= 0) rows2.push(`<div class="r6-ev"><span class="n-date"><span>${esc(bMon(d.getMonth()))}</span><b class="num">${d.getDate()}</b></span><div><b>${EN ? 'Next report' : 'Nästa rapport'}${kal.rapportUppskattad ? (EN ? ' (prel.)' : ' (prel.)') : ''}</b><span>${EN ? `in ${days} days` : `om ${days} dagar`} · ${EN ? 'new figures for earnings and debt' : 'nya siffror för vinst och skulder'}</span></div></div>`); }
+    if (se && ins) rows2.push(`<div class="r6-kv"><span>${EN ? 'Insider trades, 12 mo' : 'Insyn, 12 mån'}</span><b class="num"><span class="up">${k ?? 0} ${EN ? 'buys' : 'köp'}</span> · ${sl ?? 0} ${EN ? 'sells' : 'sälj'}</b></div>`);
+    if (lv['Blankning']) { const r = rows.find((y) => y.n === 'Blankning'); rows2.push(`<div class="r6-kv"><span>${EN ? 'Short selling' : 'Blankning'}</span><b>${esc(r.v)}</b></div>`); }
+    nx.innerHTML = rows2.join('') || `<p class="b-note">${EN ? 'Nothing scheduled.' : 'Inget inplanerat.'}</p>`;
+  });
+}
+// Linjediagram: 10 000 i aktien mot index, med största fallet markerat och värden när man håller över
+function r6Line(el, ser, U, idxName) {
+  const pts = ser.pts; const W = 1000, H = 230; const t0 = pts[0][0], t1 = pts[pts.length - 1][0];
+  const vals = pts.flatMap((p) => [p[1], p[2]]); let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+  const X = (t) => ((t - t0) / ((t1 - t0) || 1)) * W; const Y = (v) => (1 - (v - lo) / (hi - lo)) * H;
+  const path = (k) => pts.map((p, i) => `${i ? 'L' : 'M'}${X(p[0]).toFixed(1)} ${Y(p[k]).toFixed(1)}`).join(' ');
+  const dd = ser.dd; const step = (hi - lo) > 4000 ? 2000 : 1000; const ticks = []; for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) ticks.push(v);
+  el.innerHTML = `<div class="b-chart r6-plot" style="--h:${H}px"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${EN ? 'Chart' : 'Diagram'}">
+    <defs><linearGradient id="r6g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#FF7A33" stop-opacity=".26"/><stop offset="1" stop-color="#FF7A33" stop-opacity="0"/></linearGradient></defs>
+    ${ticks.map((v) => `<line x1="0" x2="${W}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="rgba(255,255,255,.05)" vector-effect="non-scaling-stroke"/>`).join('')}
+    ${dd.a && dd.v < -5 ? `<rect x="${X(dd.a).toFixed(1)}" y="0" width="${(X(dd.b) - X(dd.a)).toFixed(1)}" height="${H}" fill="var(--down)" opacity=".09"/>` : ''}
+    <path d="${path(1)} L${W} ${H} L0 ${H} Z" fill="url(#r6g)"/>
+    <path d="${path(2)}" fill="none" stroke="#9AA0AA" stroke-width="1.5" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>
+    <path d="${path(1)}" fill="none" stroke="#FF7A33" stroke-width="2.2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>
+    ${dd.a && dd.v < -5 ? `<span class="r6-ddl" style="left:${((X(dd.a) + X(dd.b)) / 2 / W * 100).toFixed(1)}%">${pct(dd.v, 1)} ${EN ? 'in' : 'på'} ${Math.max(1, Math.round((dd.b - dd.a) / 604800))} ${EN ? 'weeks' : 'veckor'}</span>` : ''}
+    ${ticks.map((v) => `<span class="r6-yt num" style="top:${(Y(v) / H * 100).toFixed(1)}%">${nf(v, 0)}</span>`).join('')}
+    <span class="chart-cross" hidden></span><span class="chart-dot" hidden style="background:#FF7A33"></span><div class="chart-tip" hidden></div></div>
+    <div class="r6-leg"><span><i style="border-top:2px solid #FF7A33"></i>10 000 ${esc(U)} ${EN ? 'in the stock' : 'i aktien'}</span><span><i style="border-top:2px dashed #9AA0AA"></i>10 000 ${esc(U)} ${EN ? 'in' : 'i'} ${esc(idxName)}</span><span class="b-xt num" style="margin-left:auto">${esc(new Date(t0 * 1000).toLocaleDateString(L, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Stockholm' }))} – ${esc(new Date(t1 * 1000).toLocaleDateString(L, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Stockholm' }))}</span></div>`;
+  const plot = el.querySelector('.r6-plot'); const tipEl = plot.querySelector('.chart-tip'); const cross = plot.querySelector('.chart-cross'); const dot = plot.querySelector('.chart-dot');
+  let fr = 0, lx = 0; const move = () => { fr = 0; const r = plot.getBoundingClientRect(); const t = t0 + Math.min(1, Math.max(0, (lx - r.left) / r.width)) * (t1 - t0);
+    let k = 0; for (let i = 0; i < pts.length; i++) if (Math.abs(pts[i][0] - t) < Math.abs(pts[k][0] - t)) k = i;
+    const px = (X(pts[k][0]) / W) * r.width; const py = (Y(pts[k][1]) / H) * r.height;
+    cross.hidden = false; cross.style.transform = `translateX(${px}px)`; dot.hidden = false; dot.style.transform = `translate(${px}px, ${py}px)`;
+    tipEl.hidden = false; tipEl.innerHTML = `<span class="small muted">${esc(new Date(pts[k][0] * 1000).toLocaleDateString(L, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Stockholm' }))}</span><span class="num" style="color:#FF9A5C">${EN ? 'Stock' : 'Aktien'} <b>${nf(pts[k][1], 0)} ${esc(U)}</b></span><span class="num small muted">${esc(idxName)} ${nf(pts[k][2], 0)} ${esc(U)}</span>`;
+    const tw = tipEl.offsetWidth; tipEl.style.transform = `translateX(${Math.min(r.width - tw, Math.max(0, px - tw / 2))}px)`; };
+  plot.addEventListener('pointermove', (e) => { lx = e.clientX; if (!fr) fr = requestAnimationFrame(move); });
+  plot.addEventListener('pointerleave', () => { tipEl.hidden = true; cross.hidden = true; dot.hidden = true; });
+}
+// Staplar per år, en eller två serier
+function r6Bars(el, groups, fmt, title) {
+  const vals = groups.flatMap(([, s]) => s.map((x) => x[0])).filter((v) => v != null); const mx = Math.max(1e-9, ...vals.map(Math.abs)); const neg = vals.some((v) => v < 0);
+  el.innerHTML = `<div class="r6-bars">${groups.map(([lab, ser], gi) => `<div class="r6-bg"><div class="r6-bb">${ser.map(([v, c]) => `<span class="r6-b" style="--h:${v == null ? 0 : (Math.abs(v) / mx * 100).toFixed(1)}%;--c:${v != null && v < 0 ? 'var(--down)' : c};opacity:${gi === groups.length - 1 ? 1 : 0.7}"><em class="num">${v == null ? '–' : esc(fmt(v))}</em></span>`).join('')}</div><span class="r6-bl">${esc(lab)}</span></div>`).join('')}</div><p class="small muted" style="margin:6px 0 0">${esc(title)}${neg ? (EN ? ' · negative values in red' : ' · negativa värden i rött') : ''}</p>`;
+}
+
+function bRiskOld(panel, ctx) {
   const { s, se, st, get, idxName } = ctx; const sShort = /^0P/.test(s.sym) ? (EN ? 'the fund' : 'fonden') : short(s.sym);
   const f = s.faktorer || []; const lvl = lvlOf(s.poang);
   const U = cur(s.valuta); const miss = `<span class="faint">${EN ? 'Missing' : 'Saknas'}</span>`;
@@ -2300,14 +2635,14 @@ function bRisk(panel, ctx) {
   // Läget på skalan för varje del. Saknas råvärdet ställs markören mitt i nivån.
   const rows = f.map(([n, l, v, t, raw]) => { const c = B_SCALE[n]; const ok = c && raw != null && Number.isFinite(raw);
     const pos = ok ? bPos(raw, c) : (l - 0.5) / 3; const same = ok && (pos < 1 / 3 - 1e-9 ? 1 : pos <= 2 / 3 + 1e-9 ? 2 : 3) === l;
-    const vs = !ok ? String(v).split(' · ')[0] : n === 'Skulder' && raw >= 0 ? `${EN ? 'Debt/equity' : 'Skuld/EK'} ${bn(raw, 2)}` : n === 'Handel' ? `${mny(raw, s.valuta)} ${EN ? 'a day' : 'per dag'}` : n === 'Blankning' ? (raw > 0 ? `${bn(raw, 2)} % ${EN ? 'shorted' : 'blankat'}` : (EN ? 'None reported' : 'Ingen anmäld')) : n === 'Storlek' ? mny(raw, s.valuta) : String(v).split(' · ')[0];
+    const vs = !ok ? String(v).split(' · ')[0] : n === 'Skulder' && raw >= 0 ? `${EN ? 'Debt/equity' : 'Skuld/EK'} ${bn(raw, 2)}` : n === 'Handel' ? `${mny(raw, 'SEK')} ${EN ? 'a day' : 'per dag'}` : n === 'Blankning' ? (raw > 0 ? `${bn(raw, 2)} % ${EN ? 'shorted' : 'blankat'}` : (EN ? 'None reported' : 'Ingen anmäld')) : n === 'Storlek' ? mny(raw, 'SEK') : String(v).split(' · ')[0];
     return { n, l, v: vs, t, raw, c, pos: same || !ok ? pos : (l - 0.5) / 3, same }; });
   // Närmast en ändring: den gräns som ligger närmast, uppåt eller nedåt
   const near = rows.filter((r) => r.same).map((r) => {
     const up = r.l < 3 ? r.l / 3 - r.pos : 9; const dn = r.l > 1 ? r.pos - (r.l - 1) / 3 : 9; const toUp = up <= dn; const dist = Math.min(up, dn); if (dist > 1) return null;
     const lim = r.c.a[toUp ? r.l : r.l - 1]; const asc = r.c.a[3] > r.c.a[0]; const over = toUp === asc;
-    const fm = (x) => (r.c.money ? mny(x, s.valuta) : (r.c.b || r.c.f)(x));
-    return { n: r.n, v: r.v, toUp, dist, w: Math.max(4, (1 - dist / (1 / 3)) * 100), rule: `${EN ? ['', 'Low', 'Medium', 'High'][toUp ? r.l + 1 : r.l - 1] : LV[toUp ? r.l + 1 : r.l - 1].t} ${over ? (EN ? 'above' : 'över') : (EN ? 'below' : 'under')} ${fm(lim)}`, left: `${r.c.money ? mny(Math.abs(r.raw - lim), s.valuta) : r.c.f(Math.abs(r.raw - lim))} ${EN ? 'left' : 'kvar'}` };
+    const fm = (x) => (r.c.money ? mny(x, 'SEK') : (r.c.b || r.c.f)(x));
+    return { n: r.n, v: r.v, toUp, dist, w: Math.max(4, (1 - dist / (1 / 3)) * 100), rule: `${EN ? ['', 'Low', 'Medium', 'High'][toUp ? r.l + 1 : r.l - 1] : LV[toUp ? r.l + 1 : r.l - 1].t} ${over ? (EN ? 'above' : 'över') : (EN ? 'below' : 'under')} ${fm(lim)}`, left: `${r.c.money ? mny(Math.abs(r.raw - lim), 'SEK') : r.c.f(Math.abs(r.raw - lim))} ${EN ? 'left' : 'kvar'}` };
   }).filter(Boolean).sort((a, b) => a.dist - b.dist).slice(0, 3);
   panel.innerHTML = `
   
@@ -4475,7 +4810,9 @@ function mountPortfolj() {
       draw();
     });
     f.belopp.focus();
-  };
+  };  // Från bolagssidans knapp Lägg till köp: öppna formuläret för aktien direkt
+  { const lg = new URLSearchParams(location.search).get('lagg'); if (lg && /^[\w.^=-]{1,25}$/.test(lg)) setTimeout(() => { if ($('#pf-form')) { formFor(lg.toUpperCase(), nameOf(lg.toUpperCase())); $('#pf-form').scrollIntoView({ block: 'center' }); } }, 120); }
+
   bindPicker('pf-q', (sym, namn) => formFor(sym, namn));
 
   /* ---- Import ---- */

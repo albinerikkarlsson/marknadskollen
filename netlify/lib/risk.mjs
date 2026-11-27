@@ -17,7 +17,9 @@ const val = (v) => (v === null || v === undefined || v === '' ? null : Number.is
 
 // m = metric-objektet från Finnhub, price = senaste kurs, cur = valuta, mcapM = börsvärde i miljoner
 // krypto: Yahoo anger kryptovalutors volym i dollar, inte i antal, så den ska inte gångras med kursen
-export function buildFactors({ m = {}, price, cur, mcapM, krypto = false }) {
+// fx: kronor per enhet av aktiens valuta. Gränserna för handel och storlek gäller i kronor, så att en aktie i dollar eller euro bedöms lika.
+export function buildFactors({ m = {}, price, cur, mcapM, krypto = false, fx = 1 }) {
+  const toSek = Number.isFinite(fx) && fx > 0 ? fx : 1;
   const out = [];
   const beta = val(m.beta);
   const hi = val(m['52WeekHigh']); const lo = val(m['52WeekLow']);
@@ -59,14 +61,14 @@ export function buildFactors({ m = {}, price, cur, mcapM, krypto = false }) {
 
   const volM = val(m['10DayAverageTradingVolume']) ?? val(m['3MonthAverageTradingVolume']);
   if (volM != null && price) {
-    const t = volM * 1e6 * (krypto ? 1 : price); const l = t >= 50e6 ? 1 : t >= 5e6 ? 2 : 3;
-    out.push(['Handel', l, `Omsätter ca ${money(t, cur)} per dag`, l === 1 ? 'Lätt att köpa och sälja.' : l === 2 ? 'Går att handla, men stora affärer kan påverka priset.' : 'Liten handel. Det kan vara svårt att sälja när man vill.', t]);
+    const t = volM * 1e6 * (krypto ? 1 : price); const tSek = t * toSek; const l = tSek >= 50e6 ? 1 : tSek >= 5e6 ? 2 : 3;
+    out.push(['Handel', l, `Omsätter ca ${money(t, cur)} per dag`, l === 1 ? 'Lätt att köpa och sälja.' : l === 2 ? 'Går att handla, men stora affärer kan påverka priset.' : 'Liten handel. Det kan vara svårt att sälja när man vill.', tSek]);
   }
 
   const mc = (val(mcapM) ?? val(m.marketCapitalization));
   if (mc != null && mc > 0) {
-    const v = mc * 1e6; const l = v >= 10e9 ? 1 : v >= 1e9 ? 2 : 3;
-    out.push(['Storlek', l, `Börsvärde ${money(v, cur)}`, l === 1 ? 'Stort bolag med många ägare och mycket granskning.' : l === 2 ? 'Medelstort bolag.' : 'Litet bolag. Små bolag svänger mer och granskas mindre.', v]);
+    const v = mc * 1e6; const vSek = v * toSek; const l = vSek >= 10e9 ? 1 : vSek >= 1e9 ? 2 : 3;
+    out.push(['Storlek', l, `Börsvärde ${money(v, cur)}`, l === 1 ? 'Stort bolag med många ägare och mycket granskning.' : l === 2 ? 'Medelstort bolag.' : 'Litet bolag. Små bolag svänger mer och granskas mindre.', vSek]);
   }
   return out;
 }

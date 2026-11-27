@@ -55,7 +55,10 @@ async function fromYahoo(sym) {
   const lo = num(m['52WeekLow']) ?? (pts ? Math.min(...pts.map((p) => p[1])) : null);
   if (hi && lo && m['52WeekHigh'] == null) { m['52WeekHigh'] = hi; m['52WeekLow'] = lo; }
 
-  const faktorer = buildFactors({ m, price: kurs, cur, mcapM, krypto: typ === 'CRYPTOCURRENCY' });
+  // Växelkurs till kronor, så att handel och storlek bedöms med samma gränser oavsett valuta
+  let fx = 1;
+  if (cur && cur !== 'SEK') { const C = cur === 'GBp' || cur === 'GBX' ? 'GBP' : cur.toUpperCase(); try { const q = (await yChart(`${C}SEK=X`, '5d', '1d'))?.quote?.kurs; if (q > 0) fx = C !== cur.toUpperCase() || cur === 'GBp' ? q / 100 : q; } catch { /* utan växelkurs används gamla sättet */ } }
+  const faktorer = buildFactors({ m, price: kurs, cur, mcapM, krypto: typ === 'CRYPTOCURRENCY', fx });
   // Blankning blir en sjunde del när registret svarar och det gäller en aktie
   let blankning = null;
   if (br.status === 'fulfilled' && br.value && (price.quoteType || 'EQUITY') === 'EQUITY') {
