@@ -2568,3 +2568,9 @@ a.c2-nc:hover { border-color: var(--acc-line); }
 .c2-badge.up { color: var(--up); } .c2-badge.down { color: var(--down); }
 .w-tr b { white-space: nowrap; flex: none; }
 .w-det { max-height: calc(100% - 130px); overflow: auto; scrollbar-width: none; } .w-det::-webkit-scrollbar { display: none; }
+/* Översikt C2: kurvan med fast höjd, saldo och nästa händelse till vänster, nyheter till höger */
+.c2 { align-items: start; }
+.c2-left { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.c2-bal .c2-chart { flex: none; min-height: 0; height: 230px; }
+.c2-bal .c2-chart > .n-plot { flex: none; height: 230px !important; min-height: 0; }
+@media (max-width: 560px) { .c2-bal .c2-chart, .c2-bal .c2-chart > .n-plot { height: 200px !important; } }
